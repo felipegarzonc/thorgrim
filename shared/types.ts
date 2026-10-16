@@ -128,6 +128,10 @@ export interface GameState {
   fury: { me: number; opponent: number };
   rage: { me: number; opponent: number };
   tactics: TacticProgress[];
+  /** Fewest VP at the start of the round, or the opponent of whoever seized the initiative. */
+  underdog?: "me" | "opponent" | null;
+  /** Who seized the initiative this round (they can't complete battle tactics this turn). */
+  seizedInitiative?: "me" | "opponent" | null;
   units: Record<string, UnitStatus>; // keyed by "me:<key>" / "opponent:<key>"
   objectives: string;
   notes: string;

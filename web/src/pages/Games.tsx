@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ArmyList, Game, LibraryDoc } from "../../../shared/types.ts";
+import { BATTLEPLANS } from "../../../shared/season.ts";
 import { api } from "../api.ts";
 import { Card, useLoad } from "../ui.tsx";
 
@@ -72,7 +73,10 @@ export function SetupFields({
         </label>
         <label>
           Battleplan
-          <input value={value.battleplan} onChange={(e) => onChange({ battleplan: e.target.value })} placeholder="Name of the battleplan" />
+          <input list="battleplans" value={value.battleplan} onChange={(e) => onChange({ battleplan: e.target.value })} placeholder="Name of the battleplan" />
+          <datalist id="battleplans">
+            {Object.entries(BATTLEPLANS).flatMap(([table, names]) => names.map((n, i) => <option key={n} value={n}>{`${table}, roll ${i + 1}`}</option>))}
+          </datalist>
         </label>
       </div>
       <label>

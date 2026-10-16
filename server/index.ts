@@ -151,6 +151,8 @@ function newState(attacker: GameState["attacker"]): GameState {
     fury: { me: attacker === "me" ? 1 : 2, opponent: attacker === "opponent" ? 1 : 2 },
     rage: { me: 0, opponent: 0 },
     tactics: [],
+    underdog: null,
+    seizedInitiative: null,
     units: {},
     objectives: "",
     notes: "",

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PHASES, type Ability, type ArmyList, type Faction, type Game, type GameState, type Phase, type Unit } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { Card, RulesText, Stepper, useLoad, useMeta } from "../ui.tsx";
+import { BATTLE_ROUNDS, CORE_COMMANDS, SEASON_ABILITIES, SEIZE_EXCEPTION_LEAD, newBattleRound, usableBy } from "../../../shared/season.ts";
 import { CoachChat } from "./CoachChat.tsx";
 import { SetupFields } from "./Games.tsx";
 import { WarscrollCard } from "./Lists.tsx";
@@ -151,24 +152,39 @@ function Tracker({ game, setState }: { game: Game; setState: (p: Partial<GameSta
   const [askPriority, setAskPriority] = useState(false);
 
   const nextPhase = () => {
+    // Deployment over: pick who takes the first turn of round 1.
+    if (s.phase === "Deployment") return setAskPriority(true);
     const i = PHASES.indexOf(s.phase);
-    if (s.phase === "Deployment" || i < PHASES.length - 1) return setState({ phase: PHASES[Math.max(1, i + 1)] });
+    if (i < PHASES.length - 1) return setState({ phase: PHASES[i + 1] });
     // End of turn: hand over, or start a new battle round.
     if (s.activePlayer === s.firstThisRound) setState({ activePlayer: other(s.activePlayer), phase: "Start of Turn" });
     else setAskPriority(true);
   };
+  const firstRound = s.phase === "Deployment";
+  const gameOver = !firstRound && s.round >= BATTLE_ROUNDS;
   const startRound = (first: Side) => {
     setAskPriority(false);
+    const r = firstRound ? { seized: null, underdog: null, cp: { me: 4, opponent: 4 } } : newBattleRound(s, first);
     setState({
-      round: s.round + 1,
+      round: firstRound ? 1 : s.round + 1,
       firstThisRound: first,
       activePlayer: first,
       phase: "Start of Turn",
-      // Season rule (GHB 2026-27): gain rage dice equal to your fury level.
+      underdog: r.underdog,
+      seizedInitiative: r.seized,
+      cp: r.cp,
+      // Simmering Rage: rage dice equal to fury level; unspent ones are lost.
       rage: { me: s.fury.me, opponent: s.fury.opponent },
     });
   };
-  const doubleTurnFor = s.firstThisRound === "me" ? "opponent" : "me";
+  const wentSecond = other(s.firstThisRound);
+  const lead = (side: Side) => s.vp[other(side)] - s.vp[side];
+  const seizeNote = (side: Side) =>
+    firstRound || side !== wentSecond
+      ? ""
+      : lead(side) >= SEIZE_EXCEPTION_LEAD
+        ? " (double turn, but trailing by 11+ VP so battle tactics still allowed)"
+        : " — seizes the initiative: no battle tactics that turn, the other player becomes underdog";
 
   return (
     <Card title={`Round ${s.round} · ${s.activePlayer === "me" ? "My turn" : "Opponent's turn"}`}>
@@ -187,18 +203,34 @@ function Tracker({ game, setState }: { game: Game; setState: (p: Partial<GameSta
           Switch active player
         </button>
       </div>
-      {askPriority && (
+      {(s.underdog || s.seizedInitiative) && !firstRound && (
+        <p className="muted">
+          {s.underdog && <span className="tag">Underdog: {s.underdog === "me" ? "me" : "opponent"}</span>}{" "}
+          {s.seizedInitiative && <span className="tag warning">{s.seizedInitiative === "me" ? "I" : "Opponent"} seized the initiative: no battle tactics that turn</span>}
+        </p>
+      )}
+      {askPriority && gameOver && (
         <div className="callout">
           <p>
-            <strong>Battle round {s.round + 1}: who goes first?</strong> {doubleTurnFor === "me" ? "Going first gives you a double turn" : "Going first gives your opponent a double turn"}
-            {" "}— the player who takes a double turn can't use a battle tactic that round. Ask the coach if unsure.
+            <strong>Battle round {BATTLE_ROUNDS} is over: the game has ended.</strong> Final score {s.vp.me}–{s.vp.opponent}. Open the Coach tab for a post-game review.
+          </p>
+          <button type="button" onClick={() => setAskPriority(false)}>
+            Close
+          </button>
+        </div>
+      )}
+      {askPriority && !gameOver && (
+        <div className="callout">
+          <p>
+            <strong>{firstRound ? "Battle round 1: who takes the first turn?" : `Battle round ${s.round + 1}: who goes first?`}</strong>{" "}
+            {firstRound ? "The player who finished deploying first decides." : "Priority roll winner decides (tie: whoever went first last round)."} CP will be set to 4 each, +1 for the underdog.
           </p>
           <div className="row">
             <button type="button" className="primary" onClick={() => startRound("me")}>
-              I go first
+              I go first{seizeNote("me")}
             </button>
             <button type="button" onClick={() => startRound("opponent")}>
-              Opponent goes first
+              Opponent goes first{seizeNote("opponent")}
             </button>
             <button type="button" onClick={() => setAskPriority(false)}>
               Cancel
@@ -295,13 +327,25 @@ function PhaseChecklist(props: {
       <List items={mine} />
       <h3>Opponent can use</h3>
       <List items={theirs} />
+      <h3>Commands & season abilities</h3>
+      <ul className="checklist">
+        {[...CORE_COMMANDS, ...SEASON_ABILITIES]
+          .flatMap((c) => (["me", "opponent"] as const).filter((o) => usableBy(c, s.phase, o, s.activePlayer)).map((o) => ({ c, o })))
+          .map(({ c, o }) => (
+            <li key={`${c.name}-${o}`}>
+              <strong>{c.name}</strong> <span className="muted">— {o === "me" ? "me" : "opponent"}</span>{" "}
+              {c.cost > 0 && <span className="timing">{c.cost} CP</span>}
+              <p className="muted small">{c.summary}</p>
+            </li>
+          ))}
+      </ul>
       {reactions.length > 0 && (
         <details>
           <summary>Reactions in play ({reactions.length})</summary>
           <List items={reactions} />
         </details>
       )}
-      <p className="muted small">Core abilities (All-out Attack/Defence, Counter-charge, Covering Fire, Redeploy…) come from your core rules, not listed here.</p>
+      <p className="muted small">CP: me {s.cp.me}, opponent {s.cp.opponent}. Summaries only: check your General's Handbook for the exact wording.</p>
     </Card>
   );
 }

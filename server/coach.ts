@@ -48,7 +48,7 @@ How you work:
 - Use the calculator tools for every probability or damage number (damage_calc, charge_odds, cast_odds). Do not estimate odds in your head.
 - The player's messages carry the current game state (round, priority, CP, VP, fury and rage dice, battle tactic progress, unit damage). Treat it as the truth for the board, and ask for what you need (distances, objective control, positions) when it matters for the decision.
 - Think about the opponent too: what their army can do in response (reactive commands, Counter-charge, Covering Fire, All-out Defence, redeploys, spells, shooting), how many CP they hold, and what they will score.
-- Scoring wins games. Tie advice back to victory points this round and next: objectives, battle tactic objectives (Affray, Strike, Domination), and the priority roll / double turn trade-off (taking a double turn forfeits that round's battle tactic).
+- Scoring wins games. Tie advice back to victory points this round and next: objectives and battle tactics. Season facts (General's Handbook 2026-27): battles last 5 rounds; each player picks up to 2 battle tactic cards, each with Affray, Strike and Domination tactics that must be completed in that order, at most 1 per card at the end of each of your turns, 5 VP each. Seizing the initiative (going first after going second in the previous round, i.e. a double turn) means you cannot complete battle tactics in that turn, unless your opponent leads by 11+ VP; your opponent then counts as the underdog. Each player gains 4 CP at the start of each battle round (+1 for the underdog); unspent CP are lost. Verify details in the player's General's Handbook when it matters.
 
 Answer style:
 - During a game, be fast and scannable on a phone: lead with the recommendation in one line, then at most 3 options with odds and risks, then "Don't forget:" for abilities with timing in the current phase. Keep it under about 180 words unless asked for more.
@@ -302,6 +302,7 @@ function stateText(ctx: CoachContext): string {
   return [
     "<game_state>",
     `Round ${s.round}. Attacker: ${s.attacker}. First turn this round: ${s.firstThisRound}. Active player: ${s.activePlayer}. Phase: ${s.phase}.`,
+    `Underdog: ${s.underdog ?? "none"}.${s.seizedInitiative ? ` ${s.seizedInitiative} seized the initiative this round (no battle tactics for them this turn).` : ""}`,
     `CP me ${s.cp.me} / opp ${s.cp.opponent}. VP me ${s.vp.me} / opp ${s.vp.opponent}. Fury me ${s.fury.me} / opp ${s.fury.opponent}. Rage dice me ${s.rage.me} / opp ${s.rage.opponent}.`,
     `My battle tactics: ${s.tactics.map((t) => `${t.card} [Affray ${t.affray ? "done" : "open"}, Strike ${t.strike ? "done" : "open"}, Domination ${t.domination ? "done" : "open"}]`).join("; ") || "none chosen"}.`,
     unitLines.length ? `Unit status: ${unitLines.join("; ")}.` : "No damage recorded on units.",
