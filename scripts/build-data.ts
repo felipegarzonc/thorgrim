@@ -1,6 +1,6 @@
 // Builds data/aos.json from the community BSData "age-of-sigmar-4th" files.
 //
-//   npm run data                 # clones/updates BSData into .cache/bsdata
+//   npm run data                 # downloads BSData into .cache/bsdata (git pull if it is a git checkout)
 //   BSDATA_DIR=/path npm run data  # use an existing checkout
 //
 // The output is a normalised view of every faction: units (stats, weapons,
@@ -19,16 +19,39 @@ const root = process.cwd();
 const bsDir = process.env.BSDATA_DIR ?? path.join(root, ".cache", "bsdata");
 const outFile = path.join(root, "data", "aos.json");
 
-function ensureCheckout() {
-  if (process.env.BSDATA_DIR) return;
-  if (fs.existsSync(path.join(bsDir, ".git"))) {
-    console.log("Updating BSData checkout…");
-    execFileSync("git", ["-C", bsDir, "pull", "--ff-only", "-q"], { stdio: "inherit" });
-  } else {
-    console.log("Cloning BSData…");
-    fs.mkdirSync(path.dirname(bsDir), { recursive: true });
-    execFileSync("git", ["clone", "-q", "--depth", "1", REPO, bsDir], { stdio: "inherit" });
+const TARBALL = process.env.BSDATA_TARBALL_URL ?? "https://codeload.github.com/BSData/age-of-sigmar-4th/tar.gz/HEAD";
+
+/**
+ * Get the BSData files. An existing git checkout is updated with git;
+ * otherwise the latest archive is downloaded and unpacked, so git is not
+ * required (a fresh Mac has no git until the developer tools are installed).
+ * Returns a short id for the data version.
+ */
+async function ensureCheckout(): Promise<string> {
+  if (process.env.BSDATA_DIR || fs.existsSync(path.join(bsDir, ".git"))) {
+    if (!process.env.BSDATA_DIR) {
+      console.log("Updating BSData checkout…");
+      execFileSync("git", ["-C", bsDir, "pull", "--ff-only", "-q"], { stdio: "inherit" });
+    }
+    try {
+      return execFileSync("git", ["-C", bsDir, "rev-parse", "--short", "HEAD"]).toString().trim();
+    } catch {
+      return "local";
+    }
   }
+  console.log("Downloading BSData…");
+  const res = await fetch(TARBALL);
+  if (!res.ok) throw new Error(`BSData download failed: ${res.status} ${res.statusText}`);
+  const archive = path.join(path.dirname(bsDir), "bsdata.tar.gz");
+  fs.mkdirSync(path.dirname(bsDir), { recursive: true });
+  fs.writeFileSync(archive, Buffer.from(await res.arrayBuffer()));
+  const top = execFileSync("tar", ["-tzf", archive]).toString().split("\n")[0].replace(/\/.*$/, "");
+  fs.rmSync(bsDir, { recursive: true, force: true });
+  fs.mkdirSync(bsDir, { recursive: true });
+  execFileSync("tar", ["-xzf", archive, "-C", bsDir, "--strip-components=1"]);
+  fs.rmSync(archive);
+  // The archive's top folder is "<repo>-<commit sha>".
+  return /-([0-9a-f]{7,40})$/.exec(top)?.[1].slice(0, 7) ?? "download";
 }
 
 const clean = (s: string | null | undefined) =>
@@ -90,9 +113,8 @@ function toWeapon(profile: Element): Weapon {
 const isAbilityType = (t: string | null) =>
   !!t && (t.startsWith("Ability") || t === "Manifestation" || t === "Battle Tactic Card");
 
-function main() {
-  ensureCheckout();
-  const commit = execFileSync("git", ["-C", bsDir, "rev-parse", "--short", "HEAD"]).toString().trim();
+async function main() {
+  const commit = await ensureCheckout();
   const files = fs.readdirSync(bsDir).filter((f) => f.endsWith(".cat") || f.endsWith(".gst"));
   const parser = new DOMParser();
 
@@ -270,4 +292,7 @@ function main() {
   );
 }
 
-main();
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+});
