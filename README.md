@@ -14,9 +14,19 @@ A personal Age of Sigmar (4th edition) coach for competitive Ogor Mawtribes play
   - charge and casting odds
 - **AI coach** (Claude): pre-game brief, in-game advice per phase, priority-roll decisions, rules questions and a post-game review. It sees both lists, the battleplan, map images and the live game state, uses the calculator for every number, and searches your books (then Wahapedia) for rules. It can also check Listhammer and Woehammer for meta and matchup data.
 
-## Setup
+## Quick install on a Mac (one command)
 
-Requires Node 22+ and git.
+Open **Terminal** (Cmd+Space, type "Terminal") and paste:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/felipegarzonc/7kingdomslabs/claude/vibrant-goldberg-10cise/aos-coach/setup-mac.sh | bash
+```
+
+It installs everything into `~/aos-coach` (including its own copy of Node if needed, no admin password), asks for your Claude API key (optional), and opens the app at http://localhost:8787. Next time, double-click **`~/aos-coach/Start AoS Coach.command`**. Run the same command again to update.
+
+## Manual setup (for development)
+
+Requires Node 22+.
 
 ```bash
 cd aos-coach
