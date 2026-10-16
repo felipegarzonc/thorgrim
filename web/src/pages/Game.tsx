@@ -8,6 +8,14 @@ import { SetupFields } from "./Games.tsx";
 import { WarscrollCard } from "./Lists.tsx";
 
 type Side = "me" | "opponent";
+type Tab = "play" | "coach" | "armies" | "setup";
+
+const TABS: [Tab, string, string][] = [
+  ["play", "Play", "M4 20V10l8-6 8 6v10z"],
+  ["coach", "Coach", "M4 5h16v11H9l-5 4z"],
+  ["armies", "Armies", "M12 3l8 4v6c0 4-3.5 7-8 8-4.5-1-8-4-8-8V7z"],
+  ["setup", "Setup", "M4 7h10M18 7h2M4 17h4M12 17h8"],
+];
 
 const PHASE_MATCH: Record<Phase, RegExp> = {
   Deployment: /deployment/,
@@ -49,7 +57,7 @@ function useUnits(lists: (ArmyList | undefined)[]) {
 export function GamePage({ id }: { id: string }) {
   const [game, setGame] = useState<Game>();
   const [lists] = useLoad<ArmyList[]>("/lists");
-  const [tab, setTab] = useState<"play" | "coach" | "armies" | "setup">("play");
+  const [tab, setTab] = useState<Tab>("play");
 
   useEffect(() => {
     api<Game>(`/games/${id}`).then(setGame);
@@ -77,17 +85,20 @@ export function GamePage({ id }: { id: string }) {
           {myList?.faction ?? "?"} vs {oppList?.faction ?? "?"} · {game.battleplan || "battleplan not set"}
         </span>
       </div>
-      <div className="tabs">
-        {(["play", "coach", "armies", "setup"] as const).map((t) => (
-          <button key={t} type="button" className={tab === t ? "active" : ""} onClick={() => setTab(t)}>
-            {t === "play" ? "Play" : t === "coach" ? "Coach" : t === "armies" ? "Armies" : "Setup"}
+      <nav className="tabs" aria-label="Game sections">
+        {TABS.map(([t, label, icon]) => (
+          <button key={t} type="button" className={tab === t ? "active" : ""} aria-current={tab === t ? "page" : undefined} onClick={() => setTab(t)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d={icon} />
+            </svg>
+            {label}
           </button>
         ))}
-      </div>
+      </nav>
 
       {tab === "play" && (
         <>
-          <Tracker game={game} setState={setState} />
+          <Tracker game={game} setState={setState} onAsk={() => setTab("coach")} />
           <PhaseChecklist game={game} myList={myList} oppList={oppList} units={units} myFaction={myFaction} oppFaction={oppFaction} />
           <TacticsCard state={game.state} setState={setState} />
           <UnitStatusCard game={game} myList={myList} oppList={oppList} units={units} setState={setState} />
@@ -146,10 +157,11 @@ export function GamePage({ id }: { id: string }) {
   );
 }
 
-function Tracker({ game, setState }: { game: Game; setState: (p: Partial<GameState>) => void }) {
+function Tracker({ game, setState, onAsk }: { game: Game; setState: (p: Partial<GameState>) => void; onAsk: () => void }) {
   const s = game.state;
   const other = (side: Side): Side => (side === "me" ? "opponent" : "me");
   const [askPriority, setAskPriority] = useState(false);
+  const [editing, setEditing] = useState<StatEdit | null>(null);
 
   const nextPhase = () => {
     // Deployment over: pick who takes the first turn of round 1.
@@ -186,29 +198,73 @@ function Tracker({ game, setState }: { game: Game; setState: (p: Partial<GameSta
         ? " (double turn, but trailing by 11+ VP so battle tactics still allowed)"
         : " — seizes the initiative: no battle tactics that turn, the other player becomes underdog";
 
+  const phaseIndex = PHASES.indexOf(s.phase);
+  const nextLabel =
+    s.phase === "Deployment"
+      ? "Start round 1"
+      : phaseIndex < PHASES.length - 1
+        ? `Next: ${PHASES[phaseIndex + 1]}`
+        : s.activePlayer === s.firstThisRound
+          ? `End turn → ${other(s.activePlayer) === "me" ? "my" : "their"} turn`
+          : gameOver
+            ? "End game"
+            : `Start round ${s.round + 1}`;
+
   return (
-    <Card title={`Round ${s.round} · ${s.activePlayer === "me" ? "My turn" : "Opponent's turn"}`}>
-      <div className="phase-bar">
-        {PHASES.map((p) => (
-          <button key={p} type="button" className={p === s.phase ? "active" : ""} onClick={() => setState({ phase: p })}>
-            {p}
+    <Card>
+      <div className="round-line">
+        <span className="round">
+          {firstRound ? "Deployment" : <>Round {s.round} <span>/ {BATTLE_ROUNDS}</span></>}
+        </span>
+        {!firstRound && (
+          <button type="button" className={`pill ${s.activePlayer === "me" ? "" : "opponent"}`} style={{ minHeight: 0, border: 0 }} onClick={() => setState({ activePlayer: other(s.activePlayer) })} title="Switch active player">
+            {s.activePlayer === "me" ? "MY TURN" : "THEIR TURN"}
           </button>
-        ))}
+        )}
       </div>
-      <div className="row">
-        <button type="button" className="primary" onClick={nextPhase}>
-          Next phase →
-        </button>
-        <button type="button" onClick={() => setState({ activePlayer: other(s.activePlayer) })}>
-          Switch active player
-        </button>
+
+      <div className="scoreboard">
+        <SidePanel side="me" label="Me" s={s} setState={setState} editing={editing} onEdit={setEditing} />
+        <SidePanel side="opponent" label="Opponent" s={s} setState={setState} editing={editing} onEdit={setEditing} />
       </div>
-      {(s.underdog || s.seizedInitiative) && !firstRound && (
-        <p className="muted">
-          {s.underdog && <span className="tag">Underdog: {s.underdog === "me" ? "me" : "opponent"}</span>}{" "}
-          {s.seizedInitiative && <span className="tag warning">{s.seizedInitiative === "me" ? "I" : "Opponent"} seized the initiative: no battle tactics that turn</span>}
-        </p>
+      {editing && (
+        <div className="stat-editor">
+          <span>
+            {editing.side === "me" ? "My" : "Their"} {STAT_NAMES[editing.stat]}
+          </span>
+          <Stepper
+            label=""
+            value={s[editing.stat][editing.side]}
+            onChange={(v) => setState({ [editing.stat]: { ...s[editing.stat], [editing.side]: Math.max(0, v) } })}
+          />
+          <button type="button" className="small" onClick={() => setEditing(null)}>
+            Done
+          </button>
+        </div>
       )}
+      {s.seizedInitiative && !firstRound && (
+        <p className="small warning">{s.seizedInitiative === "me" ? "You" : "Your opponent"} seized the initiative: no battle tactics that turn.</p>
+      )}
+
+      <nav className="phase-strip" aria-label="Phases">
+        {PHASES.filter((p) => p !== "Deployment" || firstRound).map((p) => {
+          const i = PHASES.indexOf(p);
+          const cls = i < phaseIndex ? "past" : i === phaseIndex ? "current" : "";
+          return (
+            <button key={p} type="button" className={cls} aria-current={i === phaseIndex ? "step" : undefined} onClick={() => setState({ phase: p })}>
+              {p}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="turn-actions">
+        <button type="button" className="primary next-btn" onClick={nextPhase}>
+          {nextLabel} →
+        </button>
+        <button type="button" className="secondary" onClick={onAsk}>
+          Ask coach
+        </button>
+      </div>
       {askPriority && gameOver && (
         <div className="callout">
           <p>
@@ -238,14 +294,6 @@ function Tracker({ game, setState }: { game: Game; setState: (p: Partial<GameSta
           </div>
         </div>
       )}
-      <div className="score-grid">
-        <div />
-        <strong>Me</strong>
-        <strong>Opp</strong>
-        {(["vp", "cp", "fury", "rage"] as const).map((k) => (
-          <ScoreRow key={k} label={k === "vp" ? "VP" : k === "cp" ? "CP" : k === "fury" ? "Fury" : "Rage dice"} value={s[k]} onChange={(v) => setState({ [k]: v })} />
-        ))}
-      </div>
       <label>
         Objectives
         <input value={s.objectives} onChange={(e) => setState({ objectives: e.target.value })} placeholder="e.g. I hold A and C, B contested, they hold D" />
@@ -258,13 +306,52 @@ function Tracker({ game, setState }: { game: Game; setState: (p: Partial<GameSta
   );
 }
 
-function ScoreRow({ label, value, onChange }: { label: string; value: { me: number; opponent: number }; onChange: (v: { me: number; opponent: number }) => void }) {
+type Stat = "cp" | "fury" | "rage";
+type StatEdit = { side: Side; stat: Stat };
+const STAT_NAMES: Record<Stat, string> = { cp: "command points", fury: "fury level", rage: "rage dice" };
+
+/** One player's half of the scoreboard: big VP plus CP / Fury / Rage (tap one to edit it). */
+function SidePanel(props: { side: Side; label: string; s: GameState; setState: (p: Partial<GameState>) => void; editing: StatEdit | null; onEdit: (e: StatEdit | null) => void }) {
+  const { side, label, s, setState, editing, onEdit } = props;
+  const setVp = (v: number) => setState({ vp: { ...s.vp, [side]: Math.max(0, v) } });
+  const who = side === "me" ? "my" : "their";
   return (
-    <>
-      <span>{label}</span>
-      <Stepper label="" value={value.me} onChange={(v) => onChange({ ...value, me: v })} />
-      <Stepper label="" value={value.opponent} onChange={(v) => onChange({ ...value, opponent: v })} />
-    </>
+    <div className={`side ${side}`}>
+      <span className="side-label">
+        {label}
+        {s.underdog === side && s.phase !== "Deployment" && <span className="badge">Underdog</span>}
+      </span>
+      <div className="vp">
+        <button type="button" aria-label={`Remove 1 from ${who} VP`} onClick={() => setVp(s.vp[side] - 1)}>
+          −
+        </button>
+        <span className="vp-value" aria-live="polite">
+          {s.vp[side]}
+          <small> VP</small>
+        </span>
+        <button type="button" aria-label={`Add 1 to ${who} VP`} onClick={() => setVp(s.vp[side] + 1)}>
+          +
+        </button>
+      </div>
+      <div className="mini-stats">
+        {(["cp", "fury", "rage"] as const).map((k) => {
+          const active = editing?.side === side && editing.stat === k;
+          return (
+            <button
+              key={k}
+              type="button"
+              className={`mini-stat ${active ? "active" : ""}`}
+              aria-pressed={active}
+              aria-label={`${who} ${STAT_NAMES[k]}: ${s[k][side]}. Tap to change.`}
+              onClick={() => onEdit(active ? null : { side, stat: k })}
+            >
+              <span>{k === "cp" ? "CP" : k === "fury" ? "Fury" : "Rage"}</span>
+              <b>{s[k][side]}</b>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -302,50 +389,76 @@ function PhaseChecklist(props: {
   const mine = now.filter((x) => x.owner === "me");
   const theirs = now.filter((x) => x.owner === "opponent");
 
-  const List = ({ items }: { items: Source[] }) =>
-    items.length ? (
-      <ul className="checklist">
-        {items.map((x, i) => (
-          <li key={i}>
-            <details>
-              <summary>
-                <strong>{x.ability.name}</strong> <span className="muted">— {x.from}</span> <span className="timing">{x.ability.timing}</span>
-              </summary>
-              {x.ability.declare && <RulesText text={`*Declare:* ${x.ability.declare}`} />}
-              <RulesText text={x.ability.effect} />
-            </details>
-          </li>
-        ))}
-      </ul>
-    ) : (
-      <p className="muted">Nothing specific.</p>
-    );
+  const commands = [...CORE_COMMANDS, ...SEASON_ABILITIES];
+  const commandsFor = (o: Side) => commands.filter((c) => usableBy(c, s.phase, o, s.activePlayer) && (c.cost === 0 || c.cost <= s.cp[o]));
+
+  const AbilityItem = ({ x }: { x: Source }) => (
+    <li>
+      <details>
+        <summary>
+          <span className="name">
+            <b>{x.ability.name}</b>
+            <span>
+              {x.from} · {x.ability.timing}
+            </span>
+          </span>
+          <span className={`who ${x.owner}`}>{x.owner === "me" ? "YOU" : "THEM"}</span>
+        </summary>
+        <div className="body">
+          {x.ability.declare && <RulesText text={`*Declare:* ${x.ability.declare}`} />}
+          <RulesText text={x.ability.effect} />
+        </div>
+      </details>
+    </li>
+  );
+  const CommandItem = ({ c, o }: { c: (typeof commands)[number]; o: Side }) => (
+    <li>
+      <details>
+        <summary>
+          <span className="name">
+            <b>{c.name}</b>
+            <span>{c.cost > 0 ? "Command" : "Season ability"}</span>
+          </span>
+          <span className={`who ${o}`}>
+            {o === "me" ? "YOU" : "THEM"}
+            {c.cost > 0 ? ` · ${c.cost} CP` : ""}
+          </span>
+        </summary>
+        <div className="body">{c.summary}</div>
+      </details>
+    </li>
+  );
 
   return (
-    <Card title={`${s.phase}: don't forget`}>
-      <h3>My abilities</h3>
-      <List items={mine} />
-      <h3>Opponent can use</h3>
-      <List items={theirs} />
-      <h3>Commands & season abilities</h3>
-      <ul className="checklist">
-        {[...CORE_COMMANDS, ...SEASON_ABILITIES]
-          .flatMap((c) => (["me", "opponent"] as const).filter((o) => usableBy(c, s.phase, o, s.activePlayer)).map((o) => ({ c, o })))
-          .map(({ c, o }) => (
-            <li key={`${c.name}-${o}`}>
-              <strong>{c.name}</strong> <span className="muted">— {o === "me" ? "me" : "opponent"}</span>{" "}
-              {c.cost > 0 && <span className="timing">{c.cost} CP</span>}
-              <p className="muted small">{c.summary}</p>
-            </li>
-          ))}
+    <Card title={`${s.phase} — don't forget`}>
+      <ul className="forget">
+        {mine.map((x, i) => (
+          <AbilityItem key={`m${i}`} x={x} />
+        ))}
+        {commandsFor("me").map((c) => (
+          <CommandItem key={`mc${c.name}`} c={c} o="me" />
+        ))}
+        {(theirs.length > 0 || commandsFor("opponent").length > 0) && <hr className="divider" />}
+        {theirs.map((x, i) => (
+          <AbilityItem key={`t${i}`} x={x} />
+        ))}
+        {commandsFor("opponent").map((c) => (
+          <CommandItem key={`tc${c.name}`} c={c} o="opponent" />
+        ))}
       </ul>
       {reactions.length > 0 && (
         <details>
-          <summary>Reactions in play ({reactions.length})</summary>
-          <List items={reactions} />
+          <summary className="muted small" style={{ padding: "0.5rem 0", cursor: "pointer" }}>
+            Reactions in play ({reactions.length})
+          </summary>
+          <ul className="forget">
+            {reactions.map((x, i) => (
+              <AbilityItem key={`r${i}`} x={x} />
+            ))}
+          </ul>
         </details>
       )}
-      <p className="muted small">CP: me {s.cp.me}, opponent {s.cp.opponent}. Summaries only: check your General's Handbook for the exact wording.</p>
+      <p className="muted small">Commands you can't afford are hidden. Tap a line for details; command summaries are short versions of the General's Handbook rules.</p>
     </Card>
   );
 }
@@ -364,27 +477,49 @@ function TacticsCard({ state, setState }: { state: GameState; setState: (p: Part
         const card = meta?.battleTactics.find((c) => c.name === t.card);
         const toggle = (k: "affray" | "strike" | "domination") =>
           setState({ tactics: state.tactics.map((x, j) => (j === i ? { ...x, [k]: !x[k] } : x)) });
+        const steps = ["affray", "strike", "domination"] as const;
+        const nextStep = steps.find((k) => !t[k]);
+        const cap = (k: string) => k[0].toUpperCase() + k.slice(1);
+        // First line of each objective's text is its name, e.g. "Master of Arms:".
+        const title = (k: (typeof steps)[number]) => card?.[cap(k) as "Affray" | "Strike" | "Domination"]?.split("\n")[0].replace(/:\s*$/, "");
         return (
           <div key={t.card} className="tactic">
-            <div className="row spread">
-              <strong>{t.card}</strong>
-              <button type="button" className="small" onClick={() => setState({ tactics: state.tactics.filter((_, j) => j !== i) })}>
-                Remove
-              </button>
+            <div className="row spread" style={{ margin: 0 }}>
+              <h2>{t.card}</h2>
+              <span className="muted small">5 VP each</span>
             </div>
-            {card?.Card && <RulesText text={card.Card} />}
-            {(["affray", "strike", "domination"] as const).map((k) => {
-              const text = card?.[(k[0].toUpperCase() + k.slice(1)) as "Affray" | "Strike" | "Domination"];
-              return (
-                <label key={k} className="inline tactic-step">
-                  <input type="checkbox" checked={t[k]} onChange={() => toggle(k)} />
-                  <span>
-                    <strong>{k[0].toUpperCase() + k.slice(1)}</strong>
-                    {text && <RulesText text={text} />}
-                  </span>
-                </label>
-              );
-            })}
+            <div className="tiles">
+              {steps.map((k) => {
+                const status = t[k] ? "done" : k === nextStep ? "next" : "locked";
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    className={`tile ${status}`}
+                    aria-pressed={t[k]}
+                    disabled={status === "locked"}
+                    onClick={() => toggle(k)}
+                    title={status === "next" ? "Mark as completed" : t[k] ? "Undo" : "Complete the earlier objective first"}
+                  >
+                    <b>{cap(k)}</b>
+                    <span>{t[k] ? "Done" : status === "locked" ? "Locked" : (title(k) ?? "Next")}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <details>
+              <summary className="muted small" style={{ cursor: "pointer" }}>
+                Card rules
+              </summary>
+              {card?.Card && <RulesText text={card.Card} />}
+              {steps.map((k) => {
+                const text = card?.[cap(k) as "Affray" | "Strike" | "Domination"];
+                return text ? <RulesText key={k} text={`**${cap(k)}** — ${text}`} /> : null;
+              })}
+              <button type="button" className="small" onClick={() => setState({ tactics: state.tactics.filter((_, j) => j !== i) })}>
+                Remove card
+              </button>
+            </details>
           </div>
         );
       })}
@@ -421,11 +556,20 @@ function UnitStatusCard(props: { game: Game; myList?: ArmyList; oppList?: ArmyLi
           const total = u?.stats ? Number(u.stats.health) * u.models * (lu.reinforced ? 2 : 1) : undefined;
           return (
             <div key={key} className={`unit-row ${st.destroyed ? "destroyed" : ""}`}>
-              <span className="unit-name">
-                {lu.name}
-                {lu.reinforced ? " (R)" : ""}
-                {total ? <span className="muted"> {Math.max(0, total - st.damage)}/{total}</span> : null}
-              </span>
+              <div className="unit-main">
+                <div className="unit-top">
+                  <span>
+                    {lu.name}
+                    {lu.reinforced ? " (R)" : ""}
+                  </span>
+                  {total ? <span className="muted">{st.destroyed ? 0 : Math.max(0, total - st.damage)} / {total}</span> : null}
+                </div>
+                {total ? (
+                  <div className={`hp ${owner}`} aria-hidden="true">
+                    <div style={{ width: `${st.destroyed ? 0 : Math.max(0, ((total - st.damage) / total) * 100)}%` }} />
+                  </div>
+                ) : null}
+              </div>
               <Stepper label="dmg" value={st.damage} onChange={(v) => update(key, { damage: v })} />
               <label className="inline">
                 <input type="checkbox" checked={st.destroyed} onChange={(e) => update(key, { destroyed: e.target.checked })} /> dead

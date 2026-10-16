@@ -102,26 +102,14 @@ export function LibraryPage() {
       </Card>
 
       <Card title="Your rules library">
-        {!docs?.length && <p className="muted">Nothing uploaded yet.</p>}
-        <ul className="rows">
-          {docs?.map((d) => (
-            <li key={d.id}>
-              <a href={`/api/library/${d.id}/file`} target="_blank" rel="noreferrer">
-                <strong>{d.title}</strong>
-              </a>
-              <span className="tag">{CATEGORIES.find(([v]) => v === d.category)?.[1]}</span>
-              <span className="muted">{d.kind === "pdf" ? `${d.pages} pages` : d.kind}</span>
-              {d.transcription && <TranscriptionStatus doc={d} onStart={() => transcribe(d)} />}
-              <button type="button" className="small" onClick={() => remove(d)}>
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
+        {!docs?.length && <p className="muted">Nothing uploaded yet: add your core rules, General's Handbook and battletome above.</p>}
         {docs?.some((d) => d.kind === "pdf") && (
           <>
-            <div className="row">
-              <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} placeholder="Search the rules, e.g. Counter-charge" />
+            <div className="row" style={{ marginTop: 0 }}>
+              <label style={{ flex: 1, margin: 0 }}>
+                <span className="muted small">Search the rules</span>
+                <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search()} placeholder="e.g. Counter-charge" />
+              </label>
               <button type="button" onClick={search} disabled={!query.trim()}>
                 Search
               </button>
@@ -129,37 +117,75 @@ export function LibraryPage() {
             {hits && !hits.length && <p className="muted">No matches.</p>}
             {hits?.map((h, i) => (
               <div key={i} className="hit">
-                <strong>
-                  {h.title} — p.{h.page}
-                </strong>
-                <p>{h.text.slice(0, 600)}…</p>
+                <span className="muted small">
+                  {h.title} · <b style={{ color: "var(--text)" }}>p.{h.page}</b>
+                </span>
+                <p>
+                  <Highlight text={`${h.text.slice(0, 600)}…`} query={query} />
+                </p>
               </div>
             ))}
           </>
         )}
+        <div className="stack" style={{ gap: "0.6rem", marginTop: "0.75rem" }}>
+          {docs?.map((d) => (
+            <BookCard key={d.id} doc={d} category={CATEGORIES.find(([v]) => v === d.category)?.[1] ?? d.category} onStart={() => transcribe(d)} onRemove={() => remove(d)} />
+          ))}
+        </div>
       </Card>
     </div>
   );
 }
 
-function TranscriptionStatus({ doc, onStart }: { doc: LibraryDoc; onStart: () => void }) {
-  const t = doc.transcription!;
-  const total = t.pages.length;
-  if (t.status === "done") return <span className="tag">{total} scanned pages read</span>;
-  if (t.status === "running")
-    return (
-      <span className="tag warning">
-        Reading scanned pages… {t.done}/{total}
-      </span>
-    );
+function Highlight({ text, query }: { text: string; query: string }) {
+  const words = query.trim().split(/\s+/).filter((w) => w.length > 2).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (!words.length) return <>{text}</>;
+  const re = new RegExp(`(${words.join("|")})`, "gi");
   return (
     <>
-      <span className={t.status === "failed" ? "error" : "warning"}>
-        {total} page{total > 1 ? "s" : ""} without text{t.status === "failed" ? ` — failed: ${t.error ?? ""}` : ""}
-      </span>
-      <button type="button" className="small" onClick={onStart}>
-        {t.status === "failed" || t.done > 0 ? "Resume reading" : "Read with Claude"}
-      </button>
+      {text.split(re).map((part, i) => (i % 2 ? <mark key={i}>{part}</mark> : part))}
     </>
+  );
+}
+
+function BookCard({ doc, category, onStart, onRemove }: { doc: LibraryDoc; category: string; onStart: () => void; onRemove: () => void }) {
+  const t = doc.transcription;
+  const total = t?.pages.length ?? 0;
+  const size = doc.kind === "pdf" ? `${doc.pages} pages` : doc.kind;
+  let status: [string, string];
+  if (!t || t.status === "done") status = ["done", "Searchable"];
+  else if (t.status === "running") status = ["busy", `Reading ${t.done} / ${total}`];
+  else if (t.status === "failed") status = ["failed", "Reading failed"];
+  else status = ["todo", `${total} page${total > 1 ? "s" : ""} to read`];
+  return (
+    <div className={`book ${t?.status === "running" ? "reading" : ""}`}>
+      <div className="book-head">
+        <a href={`/api/library/${doc.id}/file`} target="_blank" rel="noreferrer">
+          <b>{doc.title}</b>
+        </a>
+        <span className={`status ${status[0]}`}>{status[1]}</span>
+      </div>
+      {t?.status === "running" && (
+        <div className="progress" aria-hidden="true">
+          <div style={{ width: `${Math.round((t.done / Math.max(1, total)) * 100)}%` }} />
+        </div>
+      )}
+      <span className="muted small">
+        {category} · {size}
+        {t?.status === "done" ? ` · ${total} scanned page${total > 1 ? "s" : ""} read` : ""}
+        {t?.status === "running" ? " · photos and scans are read once, then searchable" : ""}
+        {t?.status === "failed" && t.error ? ` · ${t.error}` : ""}
+      </span>
+      <div className="row" style={{ margin: 0 }}>
+        {t && (t.status === "pending" || t.status === "failed") && (
+          <button type="button" className="small primary" onClick={onStart}>
+            {t.status === "failed" || t.done > 0 ? "Resume reading" : "Read with Claude"}
+          </button>
+        )}
+        <button type="button" className="small" onClick={onRemove}>
+          Remove
+        </button>
+      </div>
+    </div>
   );
 }

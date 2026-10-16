@@ -44,9 +44,9 @@ export function Stepper({ label, value, onChange, min = 0 }: { label: string; va
   );
 }
 
-export function Card({ title, children, actions }: { title?: ReactNode; children: ReactNode; actions?: ReactNode }) {
+export function Card({ title, children, actions, className }: { title?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string }) {
   return (
-    <section className="card">
+    <section className={`card ${className ?? ""}`}>
       {(title || actions) && (
         <header className="card-header">
           {title && <h2>{title}</h2>}

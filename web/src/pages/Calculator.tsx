@@ -116,7 +116,7 @@ export function CalculatorPage() {
 
   return (
     <div className="stack">
-      <Card title="Attacker">
+      <Card title="Attacker" className="attacker">
         <UnitPicker label="Attacker" defaultFaction="Ogor Mawtribes" onPick={(u, p) => pickAttacker(u, p)} />
         {attacker && (
           <p className="muted">
@@ -203,7 +203,7 @@ export function CalculatorPage() {
         </button>
       </Card>
 
-      <Card title="Target">
+      <Card title="Target" className="target">
         <UnitPicker label="Target" onPick={pickTarget} />
         <div className="grid3">
           <label>
@@ -256,7 +256,7 @@ export function CalculatorPage() {
 
       {result && (
         <Card
-          title={`Expected damage: ${fmt(total)}`}
+          title="Results"
           actions={
             <button type="button" className="small" onClick={() => setPinned([...pinned, { label: attacker?.name ?? `Profile ${pinned.length + 1}`, bySave: result.bySave }].slice(-3))}>
               Pin to compare
@@ -264,6 +264,10 @@ export function CalculatorPage() {
           }
         >
           <div className="kpis">
+            <div>
+              <span className="kpi accent">{fmt(total)}</span>
+              <span className="muted">average damage vs {target.save ? `${target.save}+` : "no"} save{target.ward ? `, ${target.ward}+ ward` : ""}</span>
+            </div>
             {result.simulation.killChance !== undefined && (
               <div>
                 <span className="kpi">{Math.round(result.simulation.killChance * 100)}%</span>
@@ -318,7 +322,7 @@ export function CalculatorPage() {
               <div key={b.save} className="bar-row">
                 <span className="bar-label">{b.save}</span>
                 <div className="bar-stack">
-                  <div className="bar" style={{ width: `${(b.damage / maxBySave) * 100}%` }}>
+                  <div className={`bar ${b.save === (target.save ? `${target.save}+` : "-") ? "highlight" : ""}`} style={{ width: `${(b.damage / maxBySave) * 100}%` }}>
                     <span>{fmt(b.damage)}</span>
                   </div>
                   {pinned.map((p, j) => (
