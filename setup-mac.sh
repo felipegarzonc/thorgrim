@@ -47,9 +47,8 @@ src="$(find "$tmp" -maxdepth 2 -type d -name aos-coach | head -n 1)"
 [ -n "$src" ] || die "The download does not contain the aos-coach folder."
 mkdir -p "$APP"
 # Keep the user's data: storage (lists, games, books), .env, army data, installs.
-rsync -a --delete \
-  --exclude storage --exclude .env --exclude data --exclude .cache --exclude node_modules --exclude dist \
-  "$src/" "$APP/"
+(cd "$src" && tar -cf - --exclude ./storage --exclude ./.env --exclude ./data --exclude ./.cache --exclude ./node_modules --exclude ./dist .) |
+  (cd "$APP" && tar -xf -)
 
 cd "$APP"
 say "Installing (takes a minute the first time)…"
