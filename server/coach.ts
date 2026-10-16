@@ -14,6 +14,7 @@ import { castChance, chargeChance, damageBySave, expectedDamage, parseCrit, pars
 import type { ArmyList, Game } from "../shared/types.ts";
 import { factionRulesText, findUnit, gameData, listDossier, matchedPlayRule, norm, warscrollText } from "./data.ts";
 import { docFile, getPages, libraryDocs, parsePageRange, searchLibrary } from "./library.ts";
+import { anthropic } from "./anthropic.ts";
 import { Collection } from "./store.ts";
 
 type Msg = Anthropic.Beta.BetaMessageParam;
@@ -37,7 +38,6 @@ export interface Conversation {
 export const conversations = new Collection<Conversation>("conversations");
 
 const MODEL = process.env.COACH_MODEL ?? "claude-opus-5-5";
-const client = new Anthropic();
 
 // ---------- system prompt (frozen) ----------
 
@@ -349,7 +349,7 @@ export async function askCoach(
   let finalText = "";
 
   for (let iteration = 0; iteration < 12; iteration++) {
-    const response = await client.beta.messages.create({
+    const response = await anthropic().beta.messages.create({
       model: MODEL,
       max_tokens: 16000,
       system: SYSTEM,

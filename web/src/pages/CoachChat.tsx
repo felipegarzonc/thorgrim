@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../api.ts";
 import { Card, Markdown, useMeta } from "../ui.tsx";
 
@@ -20,6 +20,8 @@ export function CoachChat(props: {
   placeholder: string;
   presets?: [string, "pregame" | "review"][];
   quick?: string[];
+  /** Shown while the conversation is empty. */
+  intro?: ReactNode;
 }) {
   const meta = useMeta();
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -68,7 +70,8 @@ export function CoachChat(props: {
         )
       }
     >
-      {meta && !meta.coachReady && <p className="warning">Set ANTHROPIC_API_KEY in .env on the server to enable the coach.</p>}
+      {meta && (!meta.coachReady || error?.includes("API key")) && <ApiKeySetup />}
+      {entries.length === 0 && props.intro}
       <div className="chat">
         {entries.map((e, i) => (
           <div key={i} className={`bubble ${e.role}`}>
@@ -109,5 +112,45 @@ export function CoachChat(props: {
         </button>
       </div>
     </Card>
+  );
+}
+
+/** Paste the Claude API key once; the server saves it to .env. */
+export function ApiKeySetup() {
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const save = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api("/settings/api-key", { method: "POST", json: { key } });
+      window.location.reload();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="key-setup">
+      <h3 style={{ marginTop: 0 }}>Turn on the coach</h3>
+      <p className="small">
+        The coach runs on Claude and needs your API key (it starts with <code>sk-ant-</code>). Get one at{" "}
+        <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noreferrer">
+          platform.claude.com
+        </a>
+        , then paste it here. It's saved only on this computer.
+      </p>
+      <div className="row" style={{ margin: 0 }}>
+        <label style={{ flex: 1, margin: 0 }}>
+          <span className="muted small">Claude API key</span>
+          <input type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => e.key === "Enter" && key && save()} placeholder="sk-ant-…" />
+        </label>
+        <button type="button" className="primary" disabled={!key.trim() || busy} onClick={save}>
+          {busy ? "Saving…" : "Save key"}
+        </button>
+      </div>
+      {error && <p className="error small">{error}</p>}
+    </div>
   );
 }

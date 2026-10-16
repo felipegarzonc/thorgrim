@@ -1069,3 +1069,21 @@ p .kpi {
     padding-bottom: 5.5rem;
   }
 }
+
+.key-setup {
+  border: 1px solid var(--me-line);
+  background: var(--me-soft);
+  border-radius: 14px;
+  padding: 0.8rem 0.9rem;
+  margin-bottom: 0.75rem;
+}
+.key-setup p {
+  margin: 0.2rem 0 0.6rem;
+}
+.ask-intro p {
+  margin: 0.2rem 0 0.5rem;
+}
+.ask-intro ul {
+  margin: 0.2rem 0 0.6rem;
+  padding-left: 1.1rem;
+}

@@ -3,8 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
+import Anthropic from "@anthropic-ai/sdk";
 import { damageBySave, expectedDamage, simulate, type AttackProfile, type TargetProfile, chargeChance, castChance } from "../engine/dice.ts";
 import type { ArmyList, Game, GameState, LibraryDoc } from "../shared/types.ts";
+import { hasCredentials, saveApiKey } from "./anthropic.ts";
 import { askCoach, conversations, PROMPTS, resetConversation } from "./coach.ts";
 import { gameData, warscrollText } from "./data.ts";
 import { addDocument, deleteDocument, docFile, getPages, libraryDocs, searchLibrary } from "./library.ts";
@@ -14,8 +16,6 @@ import { Collection, newId } from "./store.ts";
 
 const lists = new Collection<ArmyList>("lists");
 const games = new Collection<Game>("games");
-
-const hasCredentials = () => Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
@@ -45,6 +45,20 @@ app.get("/api/meta", (_req, res) => {
     battleTactics: d.core.filter((r) => r.ability.kind === "Battle Tactic Card").map((r) => ({ name: r.ability.name, ...r.ability.extra })),
     coachReady: hasCredentials(),
   });
+});
+
+// Paste the Claude API key from the app instead of editing .env by hand.
+// Only from this computer (or with the access key when hosted).
+app.post("/api/settings/api-key", (req, res) => {
+  const local = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "");
+  if (!local && !(accessKey && req.get("x-access-key") === accessKey)) {
+    return res.status(403).json({ error: "Set the API key from the computer running the app." });
+  }
+  const key = String(req.body.key ?? "").trim();
+  if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(key)) return res.status(400).json({ error: "That doesn't look like a Claude API key (it starts with sk-ant-)." });
+  saveApiKey(key);
+  resumePendingTranscriptions();
+  res.json({ ok: true });
 });
 
 app.get("/api/factions/:name", (req, res) => {
@@ -252,7 +266,10 @@ if (fs.existsSync(dist)) {
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (/authentication method/i.test(err.message)) {
-    return res.status(503).json({ error: "The coach needs ANTHROPIC_API_KEY in .env (see README)." });
+    return res.status(503).json({ error: "The coach needs your Claude API key.", needsKey: true });
+  }
+  if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
+    return res.status(502).json({ error: "Claude rejected the API key. Paste a valid one below.", needsKey: true });
   }
   console.error(err);
   res.status(500).json({ error: err.message });

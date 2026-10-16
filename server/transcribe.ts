@@ -7,11 +7,11 @@ import fs from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
 import { PDFDocument } from "pdf-lib";
 import type { LibraryDoc } from "../shared/types.ts";
+import { anthropic, hasCredentials } from "./anthropic.ts";
 import { docFile, libraryDocs, setPageText } from "./library.ts";
 
 const MODEL = process.env.COACH_MODEL ?? "claude-opus-5-5";
 const PAGES_PER_REQUEST = 4;
-let client: Anthropic | null = null;
 
 const INSTRUCTIONS = `Transcribe the Warhammer Age of Sigmar rules on these pages so they can be searched later. The images may be photos of a printed book (angled, curled, glare) or screenshots.
 
@@ -37,8 +37,7 @@ export function splitPages(text: string, pageNumbers: number[]): Map<number, str
 }
 
 async function transcribeBatch(blocks: Anthropic.Beta.BetaContentBlockParam[], pageNumbers: number[]) {
-  client ??= new Anthropic();
-  const response = await client.beta.messages.create({
+  const response = await anthropic().beta.messages.create({
     model: MODEL,
     max_tokens: 16000,
     output_config: { effort: "low" },
@@ -109,7 +108,7 @@ export async function transcribeDocument(id: string): Promise<void> {
 
 /** On startup, resume anything that was interrupted. */
 export function resumePendingTranscriptions() {
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) return;
+  if (!hasCredentials()) return;
   for (const doc of libraryDocs.list()) {
     if (doc.transcription && (doc.transcription.status === "pending" || doc.transcription.status === "running")) {
       void transcribeDocument(doc.id);
