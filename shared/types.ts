@@ -96,6 +96,13 @@ export interface LibraryDoc {
   mime: string;
   pages: number;
   createdAt: string;
+  /** Pages with no text layer (photos/scans) are read by Claude and transcribed. */
+  transcription?: {
+    status: "pending" | "running" | "done" | "failed";
+    pages: number[]; // 1-based page numbers that need it
+    done: number;
+    error?: string;
+  };
 }
 
 export interface TacticProgress {

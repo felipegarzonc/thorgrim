@@ -45,10 +45,30 @@ export async function addDocument(input: {
   } else if (!isImage) {
     pages = [input.buffer.toString("utf8")];
   }
+  if (isImage) {
+    // Battleplan cards, maps or photos of rules: transcribe so they are searchable too.
+    pages = [""];
+    doc.transcription = { status: "pending", pages: [1], done: 0 };
+  }
+  if (isPdf) {
+    const scanned = pages.flatMap((t, i) => (t.length < MIN_PAGE_TEXT ? [i + 1] : []));
+    if (scanned.length) doc.transcription = { status: "pending", pages: scanned, done: 0 };
+  }
   fs.writeFileSync(pagesFile(id), JSON.stringify(pages));
   libraryDocs.save(doc);
   invalidateIndex();
   return doc;
+}
+
+/** Pages with less text than this are treated as images (photos, scans). */
+export const MIN_PAGE_TEXT = 50;
+
+export function setPageText(id: string, page: number, text: string) {
+  const pages = getPages(id);
+  while (pages.length < page) pages.push("");
+  pages[page - 1] = text;
+  fs.writeFileSync(pagesFile(id), JSON.stringify(pages));
+  invalidateIndex();
 }
 
 export function deleteDocument(id: string) {

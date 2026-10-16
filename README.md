@@ -48,4 +48,4 @@ npm run typecheck
 
 - The coach uses `claude-opus-5-5` by default (`COACH_MODEL` overrides it). In-game questions run at medium effort, briefs and reviews at high effort. Server-side refusal fallback is on (`fallbacks: "default"`).
 - Rules text belongs to Games Workshop. Keep this app private and for personal use, and only upload books you own.
-- Scanned PDFs without a text layer can't be searched. Upload a text PDF, or add the key pages as images and attach them to the game.
+- Photos of book pages, scanned PDFs and images are read by Claude once after upload: it transcribes the rules on pages that have no text layer, so they become searchable. This takes about a minute per 10 pages and needs the API key. Progress shows on the Rules page, and an interrupted read resumes when the server restarts.

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LibraryDoc } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { Card, useLoad } from "../ui.tsx";
@@ -48,13 +48,31 @@ export function LibraryPage() {
     reload();
   };
 
+  // Poll while scanned pages are being read.
+  const reading = docs?.some((d) => d.transcription?.status === "running");
+  useEffect(() => {
+    if (!reading) return;
+    const t = setInterval(reload, 4000);
+    return () => clearInterval(t);
+  }, [reading]);
+
+  const transcribe = async (d: LibraryDoc) => {
+    try {
+      await api(`/library/${d.id}/transcribe`, { method: "POST" });
+      setTimeout(reload, 500);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   const search = async () => setHits(await api(`/library/search?q=${encodeURIComponent(query)}`));
 
   return (
     <div className="stack">
       <Card title="Upload rules you own">
         <p className="muted">
-          PDFs (core rules, General's Handbook, battletomes, FAQs) are indexed page by page so the coach can search them and cite pages. Images (battleplan cards,
+          PDFs (core rules, General's Handbook, battletomes, FAQs) are indexed page by page so the coach can search them and cite pages. Photos of
+          book pages and scanned PDFs work too: Claude reads those pages once after upload (about a minute per 10 pages). Images (battleplan cards,
           maps, a photo of the table) are shown to the coach when you attach them to a game. Files stay on your server.
         </p>
         <div className="grid2">
@@ -93,6 +111,7 @@ export function LibraryPage() {
               </a>
               <span className="tag">{CATEGORIES.find(([v]) => v === d.category)?.[1]}</span>
               <span className="muted">{d.kind === "pdf" ? `${d.pages} pages` : d.kind}</span>
+              {d.transcription && <TranscriptionStatus doc={d} onStart={() => transcribe(d)} />}
               <button type="button" className="small" onClick={() => remove(d)}>
                 Remove
               </button>
@@ -107,7 +126,7 @@ export function LibraryPage() {
                 Search
               </button>
             </div>
-            {hits && !hits.length && <p className="muted">No matches. Scanned PDFs without a text layer can't be searched.</p>}
+            {hits && !hits.length && <p className="muted">No matches.</p>}
             {hits?.map((h, i) => (
               <div key={i} className="hit">
                 <strong>
@@ -120,5 +139,27 @@ export function LibraryPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+function TranscriptionStatus({ doc, onStart }: { doc: LibraryDoc; onStart: () => void }) {
+  const t = doc.transcription!;
+  const total = t.pages.length;
+  if (t.status === "done") return <span className="tag">{total} scanned pages read</span>;
+  if (t.status === "running")
+    return (
+      <span className="tag warning">
+        Reading scanned pages… {t.done}/{total}
+      </span>
+    );
+  return (
+    <>
+      <span className={t.status === "failed" ? "error" : "warning"}>
+        {total} page{total > 1 ? "s" : ""} without text{t.status === "failed" ? ` — failed: ${t.error ?? ""}` : ""}
+      </span>
+      <button type="button" className="small" onClick={onStart}>
+        {t.status === "failed" || t.done > 0 ? "Resume reading" : "Read with Claude"}
+      </button>
+    </>
   );
 }

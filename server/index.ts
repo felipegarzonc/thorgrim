@@ -9,10 +9,13 @@ import { askCoach, conversations, PROMPTS, resetConversation } from "./coach.ts"
 import { gameData, warscrollText } from "./data.ts";
 import { addDocument, deleteDocument, docFile, getPages, libraryDocs, searchLibrary } from "./library.ts";
 import { parseList } from "./listParser.ts";
+import { resumePendingTranscriptions, transcribeDocument } from "./transcribe.ts";
 import { Collection, newId } from "./store.ts";
 
 const lists = new Collection<ArmyList>("lists");
 const games = new Collection<Game>("games");
+
+const hasCredentials = () => Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
@@ -40,7 +43,7 @@ app.get("/api/meta", (_req, res) => {
     builtAt: d.builtAt,
     factions: Object.keys(d.factions).sort(),
     battleTactics: d.core.filter((r) => r.ability.kind === "Battle Tactic Card").map((r) => ({ name: r.ability.name, ...r.ability.extra })),
-    coachReady: Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN),
+    coachReady: hasCredentials(),
   });
 });
 
@@ -98,9 +101,17 @@ app.post(
       mime: req.file.mimetype,
       buffer: req.file.buffer,
     });
+    if (doc.transcription && hasCredentials()) void transcribeDocument(doc.id);
     res.json(doc);
   }),
 );
+app.post("/api/library/:id/transcribe", (req, res) => {
+  const doc = libraryDocs.get(param(req, "id"));
+  if (!doc?.transcription) return res.status(404).json({ error: "Nothing to transcribe" });
+  if (!hasCredentials()) return res.status(503).json({ error: "Reading scanned pages needs ANTHROPIC_API_KEY in .env" });
+  void transcribeDocument(doc.id);
+  res.json({ ok: true });
+});
 app.post(
   "/api/library/text",
   wrap(async (req, res) => {
@@ -246,4 +257,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 const port = Number(process.env.PORT ?? 8787);
-app.listen(port, () => console.log(`AoS Coach server on http://localhost:${port}`));
+app.listen(port, () => {
+  console.log(`AoS Coach server on http://localhost:${port}`);
+  resumePendingTranscriptions();
+});
