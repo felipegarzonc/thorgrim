@@ -123,11 +123,11 @@ Design principles:
 ### 3.2 Tech stack (proposal)
 
 - **TypeScript everywhere.** The repo already has a React `.jsx` app, so this keeps it consistent.
-- **Vite + React + Tailwind, PWA** (installable on the phone, works offline for the tracker and math).
+- **Vite + React** web app with plain CSS (works on desktop and phone browsers).
 - **Node script** (`fast-xml-parser`) for the BSData parser.
 - **Vitest** for the math engine.
 - **Claude API** from a tiny backend or serverless function, so the API key never ships in the client.
-- Storage: IndexedDB locally first; a cloud DB only if multi-device sync is needed.
+- Storage: JSON files on the server (`storage/`), so desktop and phone see the same data.
 
 ---
 
@@ -160,13 +160,32 @@ Each milestone is useful on its own. Ship, play a game with it, adjust.
 
 ---
 
-## 6. Open questions for me (Felipe)
+## 6. Decisions (answered)
 
-1. **Which army** do I play (and which battletome/army of renown)? This decides what gets built first in M1.
-2. Do I play mostly **tournaments/matched play** (GHB 2026-27) or casual/narrative?
-3. **Where** do I want it: phone at the table (PWA), or also a desktop prep tool?
-4. Language for the coach's answers: **English, Spanish, or both**?
-5. OK to use the **Claude API** (needs an API key and a small backend), or should v1 stay fully offline (data + math + checklists only)?
+1. **Army:** Ogor Mawtribes.
+2. **Play style:** competitive matched play (current General's Handbook).
+3. **Where:** a web app used on both desktop (prep) and phone (at the table). No native app.
+4. **Language:** English.
+5. **Claude API:** yes, with a small Node server.
+6. **Per-game context:** the coach always sees my list, the opponent's list, the battleplan, and the rules pages and maps attached to that game. I upload the rules I own (PDFs and images).
+7. **Reference sources:**
+   - AoS Statshammer (calculator features to mirror: damage against every save, comparisons, re-rolls, distributions).
+   - Listhammer (recent competitive lists and the meta: the coach can read it, and its lists can be pasted in).
+   - Wahapedia (core rules, General's Handbook and faction pages: the coach can read it as a fallback after my own books).
+
+## 7. Status
+
+v1 is built in this folder (see README.md):
+
+| Milestone | Status |
+|---|---|
+| M1 Data: BSData parser, all factions, battle tactic cards | ✅ |
+| M1 Rules library: PDF/image upload, page-level search | ✅ |
+| M2 Math engine + calculator UI (Statshammer-style) | ✅ tested |
+| M3 Lists (paste and match), game tracker, phase checklist | ✅ |
+| M4 AI coach with tools (rules search, warscrolls, calculators, web research) | ✅ loop tested with a mocked API, not yet run against the live API |
+| M5 Pre-game brief and post-game review prompts | ✅ (lessons memory across games still to do) |
+| Next | Stream coach answers; save lessons across games; core abilities in the checklist (from the uploaded core rules); deploy online |
 
 ---
 
