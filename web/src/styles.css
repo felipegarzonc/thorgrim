@@ -2372,3 +2372,88 @@ button.small-icon {
   height: 1.2rem;
   margin-top: 0.1rem;
 }
+
+/* mid-turn input: what happened, voice, photo */
+.happened-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.happened-bar .outline {
+  min-height: 42px;
+}
+.happened {
+  background: #22262e;
+  border-radius: 14px;
+  padding: 0.7rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.happened .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.happened .chip {
+  min-height: 34px;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  background: #3a3d43;
+}
+.happened-input {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+}
+.happened-input textarea {
+  flex: 1;
+  min-width: 0;
+}
+.happened-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.photo-btn {
+  cursor: pointer;
+  margin: 0;
+  flex-direction: row;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.photo-thumb {
+  width: 3.2rem;
+  height: 3.2rem;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.voice {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+button.mic {
+  width: 48px;
+  min-height: 48px;
+  background: #3a3d43;
+  border-radius: 999px;
+}
+button.mic.on {
+  background: #c0392b;
+  color: #fff;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.listening {
+  color: var(--bad);
+  white-space: nowrap;
+}
+.replan {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex: none;
+}

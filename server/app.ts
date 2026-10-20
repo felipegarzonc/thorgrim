@@ -301,8 +301,10 @@ app.post("/api/games/:id/log", async (req, res) => {
   res.json(await games.save(g));
 });
 app.delete("/api/games/:id", async (req, res) => {
-  await games.delete(param(req, "id"));
-  await resetConversation(param(req, "id"));
+  const id = param(req, "id");
+  await games.delete(id);
+  await resetConversation(id);
+  for (const name of await blobs().list(`game-photos/${id}`)) await blobs().remove(`game-photos/${id}/${name}`);
   res.json({ ok: true });
 });
 
@@ -320,14 +322,31 @@ app.post("/api/games/:id/tips", async (req, res) => {
   const side = req.body.side === "opponent" ? "opponent" : "me";
   const round = Number(req.body.round) || game.state.round;
   const [myList, opponentList] = await Promise.all([lists.get(game.myListId), lists.get(game.opponentListId)]);
-  res.json(await turnTips({ game, myList, opponentList }, round, side));
+  const event = req.body.event ? { text: String(req.body.event).slice(0, 2000), phase: String(req.body.phase ?? game.state.phase), previous: req.body.previous } : undefined;
+  res.json(await turnTips({ game, myList, opponentList }, round, side, event));
 });
 // The coach's strategy for the game. The page stores it with the game.
 app.post("/api/games/:id/plan", async (req, res) => {
   const game = await games.get(param(req, "id"));
   if (!game) return res.status(404).json({ error: "Game not found" });
   const [myList, opponentList] = await Promise.all([lists.get(game.myListId), lists.get(game.opponentListId)]);
-  res.json(await gamePlan({ game, myList, opponentList }));
+  res.json(await gamePlan({ game, myList, opponentList }, { replan: !!req.body?.replan }));
+});
+// A photo of the table (the page shrinks it first). The page stores the path in the game.
+app.post("/api/games/:id/photo", express.raw({ type: "image/*", limit: "8mb" }), async (req, res) => {
+  const id = param(req, "id");
+  if (!(await games.get(id))) return res.status(404).json({ error: "Game not found" });
+  const body = req.body as Buffer;
+  if (!Buffer.isBuffer(body) || !body.length) return res.status(400).json({ error: "No photo received" });
+  const path = `game-photos/${id}/${Date.now()}.jpg`;
+  await blobs().write(path, body, "image/jpeg");
+  res.json({ path });
+});
+app.get("/api/games/:id/photo", async (req, res) => {
+  const p = String(req.query.path ?? "");
+  if (!p.startsWith(`game-photos/${param(req, "id")}/`)) return res.status(400).end();
+  const data = await blobs().read(p);
+  return data ? res.type("image/jpeg").send(data) : res.status(404).end();
 });
 app.post("/api/coach/:id", async (req, res) => {
   const id = param(req, "id");

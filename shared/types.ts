@@ -190,6 +190,8 @@ export interface GameState {
   notes: string;
   /** Per-round record of priority, scoring and CP. VP and tactic progress are derived from it. */
   rounds?: RoundRecord[];
+  /** Latest photo of the table, shown to the coach. */
+  tablePhoto?: { path: string; at: string; round: number; phase: Phase };
   /** Coach tips per turn, keyed "round:side". */
   tips?: Record<string, TurnTips>;
 }

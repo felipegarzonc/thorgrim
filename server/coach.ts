@@ -34,6 +34,7 @@ export interface Conversation {
   transcript: TranscriptEntry[];
   dossierHash?: string;
   referencesHash?: string;
+  photoHash?: string;
 }
 
 export const conversations = new Collection<Conversation>("conversations");
@@ -304,6 +305,18 @@ async function referenceImages(game?: Game): Promise<Block[]> {
   return blocks;
 }
 
+/** The latest photo of the table, so the coach sees real positions. */
+async function tablePhoto(game?: Game): Promise<Block[]> {
+  const photo = game?.state.tablePhoto;
+  if (!photo) return [];
+  const data = await blobs().read(photo.path);
+  if (!data) return [];
+  return [
+    { type: "text", text: `Photo of the table, taken in battle round ${photo.round}, ${photo.phase} phase. Use it for positions and distances; say when something is unclear in it.` },
+    { type: "image", source: { type: "base64", media_type: "image/jpeg", data: data.toString("base64") } },
+  ];
+}
+
 function stateText(ctx: CoachContext): string {
   const g = ctx.game;
   if (!g) return "";
@@ -362,6 +375,11 @@ export async function askCoach(
   if (refHash !== convo.referencesHash) {
     content.push(...(await referenceImages(ctx.game)));
     convo.referencesHash = refHash;
+  }
+  const photoHash = hash(ctx.game?.state.tablePhoto?.path ?? "");
+  if (ctx.game?.state.tablePhoto && photoHash !== convo.photoHash) {
+    content.push(...(await tablePhoto(ctx.game)));
+    convo.photoHash = photoHash;
   }
   const state = stateText(ctx);
   if (state) content.push({ type: "text", text: state });
@@ -470,15 +488,27 @@ const tipsSchema = {
   additionalProperties: false,
 };
 
-export async function turnTips(ctx: CoachContext, round: number, side: "me" | "opponent"): Promise<TurnTips> {
-  const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game))];
+/** Something that happened mid-turn: the plan for the rest of the turn is rewritten around it. */
+export interface TurnEvent {
+  text: string;
+  phase: string;
+  previous?: TurnTips;
+}
+
+export async function turnTips(ctx: CoachContext, round: number, side: "me" | "opponent", event?: TurnEvent): Promise<TurnTips> {
+  const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game)), ...(await tablePhoto(ctx.game))];
   content.push({ type: "text", text: stateText(ctx) });
+  const ask =
+    side === "me"
+      ? `Battle round ${round}, my turn. Write my plan for this turn.`
+      : `Battle round ${round}, my opponent's turn. Write what to expect from them in each phase and how I should respond.`;
   content.push({
     type: "text",
-    text:
-      side === "me"
-        ? `Battle round ${round}, my turn. Write my plan for this turn.`
-        : `Battle round ${round}, my opponent's turn. Write what to expect from them in each phase and how I should respond.`,
+    text: event
+      ? `${ask}\n\nUpdate: we are in the ${event.phase} phase and this just happened: "${event.text}".${
+          event.previous ? ` The plan so far was: ${JSON.stringify({ headline: event.previous.headline, phases: event.previous.phases })}.` : ""
+        } Rewrite the plan for the rest of this turn (the ${event.phase} phase and the phases after it) around what happened; leave earlier phases empty. The headline says what changes.`
+      : ask,
   });
   const response = await anthropic().beta.messages.create({
     model: MODEL,
@@ -535,10 +565,17 @@ const planSchema = {
   additionalProperties: false,
 };
 
-export async function gamePlan(ctx: CoachContext): Promise<Omit<GamePlan, "basis">> {
-  const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game))];
+export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {}): Promise<Omit<GamePlan, "basis">> {
+  const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game)), ...(await tablePhoto(ctx.game))];
   content.push({ type: "text", text: stateText(ctx) });
-  content.push({ type: "text", text: "Write my game plan for this game." });
+  const s = ctx.game?.state;
+  content.push({
+    type: "text",
+    text:
+      opts.replan && s
+        ? `The game is under way: battle round ${s.round}, ${s.vp.me}-${s.vp.opponent} VP (me-opponent). Rewrite my game plan from here, using the game state, the log and the table photo if there is one: what has changed, the threats that are left, and a new plan for rounds ${s.round}-5. For rounds already played, one line on what happened.`
+        : "Write my game plan for this game.",
+  });
   const response = await anthropic()
     .beta.messages.stream({
       model: MODEL,

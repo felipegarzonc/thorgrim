@@ -8,6 +8,7 @@ import { derive, emptyRound, nextTacticStep, planBasis, result, sideRoundVp, sta
 import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TurnTips } from "../../../shared/types.ts";
 import { api, withKey } from "../api.ts";
 import { gameDate, sideInfo } from "../gameView.tsx";
+import { shrinkPhoto, VoiceButton } from "../media.tsx";
 import { Avatar, Counter, FactionPicker, Group, Icon, RulesText, Seg, Sheet, useLoad, useMeta } from "../ui.tsx";
 import { CoachChat } from "./CoachChat.tsx";
 import { BoardInfo, LogCard, OddsCard, other, PhaseChecklist, UnitsCard, useUnits, type Army, type Side, type Update } from "./gameTools.tsx";
@@ -574,6 +575,146 @@ function TacticsStep({ game, side, mutate }: { game: Game; side: Side; mutate: M
   );
 }
 
+// ---------- what happened (mid-turn input) ----------
+
+const QUICK_EVENTS = ["Failed a charge", "Lost a unit", "Destroyed a unit", "Objective changed hands", "Opponent did something unexpected"];
+
+/** Tell the coach what happened (typed, dictated or as a photo of the table); it re-plans the rest of the turn. */
+function WhatHappened(props: {
+  game: Game;
+  n: number;
+  mutate: Mutate;
+  update: Update;
+  saved: () => Promise<unknown>;
+  coachReady: boolean;
+  onBusy: (b: boolean) => void;
+  onTips: (t: TurnTips) => Promise<void>;
+}) {
+  const { game, n, mutate, update, saved, coachReady, onBusy, onTips } = props;
+  const s = game.state;
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string>();
+  const [busy, setBusy] = useState<string | false>(false);
+  const [error, setError] = useState<string>();
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (!photo) return setPreview(undefined);
+    const url = URL.createObjectURL(photo);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+
+  const add = (t: string) => setText((cur) => (cur ? `${cur.replace(/\s+$/, "")}. ${t}` : t));
+
+  // Note and photo are saved first; if the coach call then fails, "Try again" only repeats that call.
+  const [pending, setPending] = useState<string | null>(null);
+  const replan = async (note: string) => {
+    setBusy("Re-planning the rest of the turn…");
+    await saved();
+    const key = `${n}:${s.activePlayer}`;
+    const t = await api<TurnTips>(`/games/${game.id}/tips`, {
+      method: "POST",
+      json: { round: n, side: s.activePlayer, event: note, phase: s.phase, previous: s.tips?.[key] },
+    });
+    await onTips(t);
+  };
+  const run = async (fn: () => Promise<void>) => {
+    setError(undefined);
+    onBusy(true);
+    try {
+      await fn();
+      setPending(null);
+      setDone(true);
+      setOpen(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      onBusy(false);
+    }
+  };
+  const send = () =>
+    run(async () => {
+      const note = text.trim();
+      if (!note && !photo) return;
+      if (photo) {
+        setBusy("Sending the photo…");
+        const body = await shrinkPhoto(photo);
+        const { path } = await api<{ path: string }>(`/games/${game.id}/photo`, { method: "POST", body, headers: { "content-type": "image/jpeg" } });
+        await mutate((g) => ({ ...g, state: { ...g.state, tablePhoto: { path, at: new Date().toISOString(), round: n, phase: g.state.phase } } }), "Photo of the table.");
+        setPhoto(null);
+      }
+      if (note) update({}, `What happened: ${note}`);
+      setText("");
+      const event = note || "New photo of the table: check positions.";
+      setPending(event);
+      if (coachReady) await replan(event);
+    });
+
+  if (!open)
+    return (
+      <div className="happened-bar">
+        <button type="button" className="outline" onClick={() => (setOpen(true), setDone(false))}>
+          <Icon name="pencil" /> What happened?
+        </button>
+        {done && <span className="small muted">{coachReady ? "Plan updated." : "Noted in the log."}</span>}
+      </div>
+    );
+
+  return (
+    <div className="happened">
+      <div className="row spread" style={{ margin: 0 }}>
+        <b>What happened?</b>
+        <button type="button" className="icon small-icon" aria-label="Close" onClick={() => setOpen(false)}>
+          <Icon name="close" />
+        </button>
+      </div>
+      <div className="chips">
+        {QUICK_EVENTS.map((q) => (
+          <button key={q} type="button" className="chip" onClick={() => add(q)}>
+            {q}
+          </button>
+        ))}
+      </div>
+      <div className="happened-input">
+        <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder='e.g. "Failed the 7" charge with the Stonehorn, they killed my Gnoblars and hold the centre"' />
+        <VoiceButton label="Dictate what happened" onText={add} />
+      </div>
+      <div className="happened-actions">
+        <label className="button ghost photo-btn">
+          <Icon name="camera" /> {photo ? "Change photo" : "Photo of the table"}
+          <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => setPhoto(e.target.files?.[0] ?? null)} />
+        </label>
+        {preview && <img className="photo-thumb" src={preview} alt="Table photo to send" />}
+        <span className="grow" />
+        <button type="button" className="primary" disabled={!!busy || (!text.trim() && !photo)} onClick={send}>
+          <Icon name="send" /> {coachReady ? "Update plan" : "Save"}
+        </button>
+      </div>
+      {busy && <p className="small muted thinking">{busy}</p>}
+      {error && (
+        <p className="small error">
+          {error}{" "}
+          {pending && coachReady && (
+            <button type="button" className="small" onClick={() => run(() => replan(pending))}>
+              Try again
+            </button>
+          )}
+        </p>
+      )}
+      {pending && !busy && <p className="small muted" style={{ margin: 0 }}>Saved in the game log.</p>}
+      {s.tablePhoto && !photo && (
+        <p className="small muted" style={{ margin: 0 }}>
+          The coach has your photo from round {s.tablePhoto.round} ({s.tablePhoto.phase}).
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ---------- the game plan ----------
 
 function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; saved: () => Promise<unknown>; go: (s: Step) => void }) {
@@ -592,7 +733,8 @@ function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; sav
     try {
       await saved(); // the server reads the saved game
       const basis = planBasis(game);
-      const p = await api<Omit<GamePlan, "basis">>(`/games/${game.id}/plan`, { method: "POST" });
+      const started = (game.state.rounds?.length ?? 0) > 0 && game.state.phase !== "Deployment";
+      const p = await api<Omit<GamePlan, "basis">>(`/games/${game.id}/plan`, { method: "POST", json: { replan: started } });
       await mutate((g) => ({ ...g, plan: { ...p, basis } }), "Coach wrote the game plan.");
     } catch (e) {
       setError((e as Error).message);
@@ -695,6 +837,37 @@ function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; sav
   );
 }
 
+/** Rewrite the game plan from the current round when the game has turned. */
+function Replan({ game, mutate, saved }: { game: Game; mutate: Mutate; saved: () => Promise<unknown> }) {
+  const meta = useMeta();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  if (!meta?.coachReady) return null;
+  const run = async () => {
+    if (!confirm("Rewrite the game plan from this round, using the score, the log and the table photo?")) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await saved();
+      const basis = planBasis(game);
+      const p = await api<Omit<GamePlan, "basis">>(`/games/${game.id}/plan`, { method: "POST", json: { replan: true } });
+      await mutate((g) => ({ ...g, plan: { ...p, basis } }), `Coach re-planned the game in round ${game.state.round}.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <span className="replan">
+      <button type="button" className="small ghost accent" disabled={busy} onClick={run}>
+        <Icon name="refresh" /> {busy ? "Re-planning…" : "Re-plan"}
+      </button>
+      {error && <span className="small error">{error}</span>}
+    </span>
+  );
+}
+
 // ---------- a battle round ----------
 
 function RoundStep(props: {
@@ -771,12 +944,13 @@ function RoundStep(props: {
       </Group>
 
       {game.plan?.rounds.find((r) => r.round === n) && (
-        <p className="round-plan">
+        <div className="round-plan">
           <Icon name="spark" />
-          <span>
+          <span className="grow">
             <b>Plan for round {n}:</b> {game.plan.rounds.find((r) => r.round === n)!.plan}
           </span>
-        </p>
+          {isLive && <Replan game={game} mutate={mutate} saved={props.saved} />}
+        </div>
       )}
 
       {isLive && <TurnCard {...props} />}
@@ -915,6 +1089,27 @@ function TurnCard(props: Parameters<typeof RoundStep>[0]) {
           Ask the coach
         </button>
       </div>
+
+      <WhatHappened
+        game={game}
+        n={n}
+        mutate={mutate}
+        update={update}
+        saved={saved}
+        coachReady={!!meta?.coachReady}
+        onBusy={setBusy}
+        onTips={async (t) => {
+          // Keep the earlier phases of this turn, take the new plan from the current phase on.
+          await mutate((g) => {
+            const old = g.state.tips?.[key];
+            const phases = { ...(old?.phases ?? {}) };
+            PLAY_PHASES.forEach((p, i) => {
+              if (i >= phaseIndex) phases[p] = t.phases[p] ?? [];
+            });
+            return { ...g, state: { ...g.state, tips: { ...(g.state.tips ?? {}), [key]: { ...t, phases } } } };
+          });
+        }}
+      />
 
       <details className="forget-wrap">
         <summary>

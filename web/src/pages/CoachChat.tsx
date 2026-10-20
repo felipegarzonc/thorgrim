@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../api.ts";
+import { VoiceButton } from "../media.tsx";
 import { Card, Markdown, useMeta } from "../ui.tsx";
 
 interface Entry {
@@ -107,6 +108,7 @@ export function CoachChat(props: {
           }}
           placeholder={props.placeholder}
         />
+        <VoiceButton label="Dictate a question" onText={(t) => setQuestion((q) => (q ? `${q} ${t}` : t))} />
         <button type="button" className="primary" disabled={busy || !question.trim()} onClick={() => send({ question })}>
           Ask
         </button>

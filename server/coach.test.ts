@@ -155,3 +155,35 @@ describe.skipIf(!hasData)("gamePlan", () => {
     expect(req.system).toContain("game plan");
   });
 });
+
+describe.skipIf(!hasData)("re-planning", () => {
+  const game = () =>
+    ({
+      id: "g4", name: "", myListId: "", opponentListId: "", battleplan: "Into the Fire", battleplanNotes: "", references: [], log: [], createdAt: "2026-10-20",
+      state: {
+        round: 3, attacker: "me", firstThisRound: "me", activePlayer: "me", phase: "Charge",
+        cp: { me: 2, opponent: 3 }, vp: { me: 20, opponent: 31 }, fury: { me: 1, opponent: 2 }, rage: { me: 0, opponent: 0 },
+        tactics: [], opponentTactics: [], units: {}, objectives: "", notes: "",
+      },
+    }) as any;
+
+  it("rewrites the rest of the turn around what happened", async () => {
+    const { turnTips } = await import("./coach.ts");
+    replies.push({ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ headline: "Fall back to B.", phases: { "Start of Turn": [], Hero: [], Movement: [], Shooting: [], Charge: ["Charge the Clanrats instead."], Combat: [], "End of Turn": [] } }) }] });
+    const before = calls.length;
+    await turnTips({ game: game() }, 3, "me", { text: "Failed the charge with the Stonehorn", phase: "Charge" });
+    const prompt = JSON.stringify(calls[before].messages[0].content);
+    expect(prompt).toContain("Failed the charge with the Stonehorn");
+    expect(prompt).toContain("rest of this turn");
+  });
+
+  it("re-plans from the current round with the score", async () => {
+    const { gamePlan } = await import("./coach.ts");
+    const plan = { summary: "Catch up.", ourStrengths: [], theirThreats: [], deployment: [], rounds: [], tactics: [], priority: [], avoid: [] };
+    replies.push({ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(plan) }] });
+    const before = calls.length;
+    await gamePlan({ game: game() }, { replan: true });
+    const prompt = JSON.stringify(calls[before].messages[0].content);
+    expect(prompt).toContain("battle round 3, 20-31 VP");
+  });
+});
