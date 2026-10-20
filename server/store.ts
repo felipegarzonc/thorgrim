@@ -22,6 +22,7 @@ export class Collection<T extends { id: string }> {
     return path.join(this.dir, `${id}.json`);
   }
   list(): T[] {
+    if (!fs.existsSync(this.dir)) return [];
     return fs
       .readdirSync(this.dir)
       .filter((f) => f.endsWith(".json"))
@@ -32,6 +33,7 @@ export class Collection<T extends { id: string }> {
     return fs.existsSync(f) ? (JSON.parse(fs.readFileSync(f, "utf8")) as T) : undefined;
   }
   save(item: T): T {
+    fs.mkdirSync(this.dir, { recursive: true });
     const f = this.file(item.id);
     fs.writeFileSync(`${f}.tmp`, JSON.stringify(item, null, 2));
     fs.renameSync(`${f}.tmp`, f);
