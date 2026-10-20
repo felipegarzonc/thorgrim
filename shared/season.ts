@@ -157,3 +157,11 @@ export function allianceOf(faction: string): Alliance | undefined {
   const base = baseFaction(faction);
   return (Object.keys(ALLIANCES) as Alliance[]).find((a) => (ALLIANCES[a] as readonly string[]).includes(base));
 }
+
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+
+/** Is this rules-library file the card or map for this battleplan? (matched by title) */
+export function isBattleplanDoc(doc: { title: string; category: string }, battleplan: string): boolean {
+  if (!battleplan || (doc.category !== "battleplan" && doc.category !== "map")) return false;
+  return squash(doc.title).includes(squash(battleplan));
+}

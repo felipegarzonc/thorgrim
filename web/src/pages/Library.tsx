@@ -115,7 +115,7 @@ export function LibraryPage() {
         <p className="muted">
           PDFs (core rules, General's Handbook, battletomes, FAQs) are indexed page by page so the coach can search them and cite pages. Photos of
           book pages and scanned PDFs work too: Claude reads those pages once after upload (about a minute per 10 pages). Images (battleplan cards,
-          maps, a photo of the table) are shown to the coach when you attach them to a game. Files stay private: on your computer, or in your own storage when the app is online.
+          maps) are shown to the coach automatically in games with that battleplan: put the battleplan's name in the title, e.g. "Into the Fire". Files stay private: on your computer, or in your own storage when the app is online.
         </p>
         <div className="grid2">
           <label>

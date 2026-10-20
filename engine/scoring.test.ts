@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allianceOf, NUMBERED_BATTLEPLANS } from "../shared/season.ts";
+import { allianceOf, isBattleplanDoc, NUMBERED_BATTLEPLANS } from "../shared/season.ts";
 import { derive, emptyRound, nextTacticStep, result, startRound, totalVp } from "../shared/scoring.ts";
 import type { GameState } from "../shared/types.ts";
 
@@ -86,5 +86,11 @@ describe("season lookups", () => {
     expect(allianceOf("Ogor Mawtribes - Beastclaw Alfrostun")).toBe("Destruction");
     expect(allianceOf("Bonesplitterz [LEGENDS]")).toBe("Destruction");
     expect(allianceOf("Helsmiths of Hashut")).toBe("Chaos");
+  });
+  it("matches battleplan cards and maps by title", () => {
+    expect(isBattleplanDoc({ title: "Into the Fire - map", category: "map" }, "Into the Fire")).toBe(true);
+    expect(isBattleplanDoc({ title: "What's Yours Is Ours card", category: "battleplan" }, "What's Yours is Ours")).toBe(true);
+    expect(isBattleplanDoc({ title: "Into the Fire", category: "battletome" }, "Into the Fire")).toBe(false);
+    expect(isBattleplanDoc({ title: "Warped Ruins", category: "map" }, "Into the Fire")).toBe(false);
   });
 });

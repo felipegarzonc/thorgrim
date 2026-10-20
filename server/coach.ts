@@ -11,6 +11,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { castChance, chargeChance, damageBySave, expectedDamage, parseCrit, parseTarget, simulate, type AttackProfile } from "../engine/dice.ts";
 import type { ArmyList, Game, TurnTips } from "../shared/types.ts";
+import { isBattleplanDoc } from "../shared/season.ts";
 import { factionRulesText, findUnit, gameData, listDossier, matchedPlayRule, norm, warscrollText } from "./data.ts";
 import { blobs } from "./blobs.ts";
 import { docPath, getPages, libraryDocs, listDocuments, parsePageRange, searchLibrary } from "./library.ts";
@@ -255,12 +256,28 @@ function battleTacticsText(game?: Game): string {
   return lines.join("\n");
 }
 
+/**
+ * The library files the coach gets for a game: the battleplan's card and map
+ * (found by title, so nothing needs setting up per game) plus any attached by hand.
+ */
+async function gameReferences(game?: Game): Promise<{ docId: string; pages?: string }[]> {
+  if (!game) return [];
+  const auto = (await listDocuments()).filter((d) => isBattleplanDoc(d, game.battleplan)).map((d) => ({ docId: d.id }));
+  const manual = game.references.filter((r) => !auto.some((a) => a.docId === r.docId));
+  return [...auto, ...manual];
+}
+
 async function dossier(ctx: CoachContext): Promise<string> {
   const parts = ["<dossier>", "## Rules library (search with search_rules)", await libraryCatalogue(), ""];
   if (ctx.game) {
     const g = ctx.game;
     parts.push(`## Game: ${g.name}`, `Battleplan: ${g.battleplan || "(not set)"}`, g.battleplanNotes ? `Battleplan / map notes: ${g.battleplanNotes}` : "");
-    for (const ref of g.references) {
+    // The battleplan's rules from the books (e.g. the General's Handbook page), found by name.
+    if (g.battleplan) {
+      const hits = await searchLibrary(g.battleplan, 3);
+      for (const h of hits) parts.push(`### From ${h.title} p.${h.page} (search: "${g.battleplan}")`, h.text);
+    }
+    for (const ref of await gameReferences(g)) {
       const doc = await libraryDocs.get(ref.docId);
       if (!doc || doc.kind === "image") continue;
       const pages = await getPages(doc.id);
@@ -276,7 +293,7 @@ async function dossier(ctx: CoachContext): Promise<string> {
 
 async function referenceImages(game?: Game): Promise<Block[]> {
   const blocks: Block[] = [];
-  for (const ref of game?.references ?? []) {
+  for (const ref of await gameReferences(game)) {
     const doc = await libraryDocs.get(ref.docId);
     if (!doc || doc.kind !== "image") continue;
     const media = doc.mime as "image/png" | "image/jpeg" | "image/gif" | "image/webp";
@@ -340,7 +357,7 @@ export async function askCoach(
     content.push({ type: "text", text: convo.dossierHash ? `Updated dossier (replaces the earlier one):\n${dos}` : dos });
     convo.dossierHash = dosHash;
   }
-  const refHash = hash(JSON.stringify(ctx.game?.references ?? []));
+  const refHash = hash(JSON.stringify(await gameReferences(ctx.game)));
   if (refHash !== convo.referencesHash) {
     content.push(...(await referenceImages(ctx.game)));
     convo.referencesHash = refHash;

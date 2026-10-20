@@ -3,7 +3,7 @@
 // screen also runs the live turn (phases) with the coach's plan for it.
 
 import { useEffect, useRef, useState } from "react";
-import { BATTLE_ROUNDS, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
+import { BATTLE_ROUNDS, isBattleplanDoc, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
 import { derive, emptyRound, nextTacticStep, result, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
 import { PHASES, type ArmyList, type FactionRule, type Game, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TurnTips } from "../../../shared/types.ts";
 import { api, withKey } from "../api.ts";
@@ -395,12 +395,7 @@ function PasteList({ side, onClose, onSaved }: { side: Side; onClose: () => void
 // ---------- setup ----------
 
 function SetupStep({ game, mutate }: { game: Game; mutate: Mutate }) {
-  const [docs] = useLoad<LibraryDoc[]>("/library");
   const [name, setName] = useState(game.name);
-  const refFor = (id: string) => game.references.find((r) => r.docId === id);
-  const toggleRef = (id: string, on: boolean) =>
-    mutate((g) => ({ ...g, references: on ? [...g.references, { docId: id }] : g.references.filter((r) => r.docId !== id) }));
-  const setPages = (id: string, pages: string) => mutate((g) => ({ ...g, references: g.references.map((r) => (r.docId === id ? { ...r, pages } : r)) }));
   return (
     <div className="stack">
       <label className="field">
@@ -439,34 +434,6 @@ function SetupStep({ game, mutate }: { game: Game; mutate: Mutate }) {
         </label>
       </div>
 
-      <h3>Rules & maps for the coach</h3>
-      <div className="card list-card">
-        {!docs?.length && (
-          <p className="muted small list-item">
-            Upload your General's Handbook, battleplan cards or a map under <a href="#/library">Rules</a> to attach them here.
-          </p>
-        )}
-        {docs?.map((d) => {
-          const r = refFor(d.id);
-          return (
-            <div key={d.id} className="list-item">
-              <label className="inline grow" style={{ margin: 0 }}>
-                <input type="checkbox" checked={!!r} onChange={(e) => toggleRef(d.id, e.target.checked)} />
-                <span>
-                  {d.title}
-                  <small className="muted">
-                    {d.category} · {d.kind === "pdf" ? `${d.pages} pages` : d.kind}
-                  </small>
-                </span>
-              </label>
-              {r && d.kind === "pdf" && (
-                <input className="pages-input" defaultValue={r.pages ?? ""} onBlur={(e) => setPages(d.id, e.target.value)} placeholder="pages, e.g. 34-35" aria-label={`Pages of ${d.title}`} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
       <button
         type="button"
         className="card danger delete-game"
@@ -488,8 +455,8 @@ function BattleplanStep({ game, mutate }: { game: Game; mutate: Mutate }) {
   const [docs] = useLoad<LibraryDoc[]>("/library");
   const [notes, setNotes] = useState(game.battleplanNotes);
   const pick = (name: string) => mutate((g) => ({ ...g, battleplan: name }), `Battleplan: ${name}.`);
-  const images = (docs ?? []).filter((d) => d.kind === "image" && (d.category === "map" || d.category === "battleplan"));
-  const attached = new Set(game.references.map((r) => r.docId));
+  // The battleplan card / map from the rules library, matched by title: nothing to set up.
+  const images = (docs ?? []).filter((d) => d.kind === "image" && isBattleplanDoc(d, game.battleplan));
   const setAttacker = (a: Side) =>
     mutate((g) => ({
       ...g,
@@ -529,28 +496,16 @@ function BattleplanStep({ game, mutate }: { game: Game; mutate: Mutate }) {
       {images.length ? (
         <div className="map-grid">
           {images.map((d) => (
-            <figure key={d.id} className={attached.has(d.id) ? "on" : ""}>
-              <img src={withKey(`/api/library/${d.id}/file`)} alt={d.title} loading="lazy" />
-              <figcaption>
-                <label className="inline" style={{ margin: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={attached.has(d.id)}
-                    onChange={(e) =>
-                      mutate((g) => ({ ...g, references: e.target.checked ? [...g.references, { docId: d.id }] : g.references.filter((r) => r.docId !== d.id) }))
-                    }
-                  />
-                  {d.title}
-                </label>
-              </figcaption>
+            <figure key={d.id}>
+              <a href={withKey(`/api/library/${d.id}/file`)} target="_blank" rel="noreferrer">
+                <img src={withKey(`/api/library/${d.id}/file`)} alt={d.title} loading="lazy" />
+              </a>
+              <figcaption>{d.title}</figcaption>
             </figure>
           ))}
         </div>
       ) : (
-        <p className="map-empty muted small">
-          No map yet. Upload a photo of the battleplan card or the table under <a href="#/library">Rules</a> (type "Battleplan" or "Map") and tick it here: the coach
-          sees it.
-        </p>
+        <p className="map-empty muted small">{game.battleplan ? `No map for ${game.battleplan} in the rules library yet.` : "Pick a battleplan to see its map."}</p>
       )}
       <label>
         Notes for the coach
