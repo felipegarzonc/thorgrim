@@ -1,7 +1,7 @@
 #!/bin/bash
 # One-step install for AoS Coach on a Mac (also works on Linux).
 #
-#   curl -fsSL https://raw.githubusercontent.com/felipegarzonc/7kingdomslabs/claude/vibrant-goldberg-10cise/aos-coach/setup-mac.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/felipegarzonc/thorgrim/main/setup-mac.sh | bash
 #
 # Installs into ~/aos-coach: a private copy of Node (only if yours is missing
 # or older than 22), the app, and the army data. No admin password needed.
@@ -10,8 +10,8 @@
 
 set -euo pipefail
 
-REPO="felipegarzonc/7kingdomslabs"
-BRANCH="${AOS_BRANCH:-claude/vibrant-goldberg-10cise}"
+REPO="felipegarzonc/thorgrim"
+BRANCH="${AOS_BRANCH:-main}"
 HOME_DIR="${AOS_HOME:-$HOME/aos-coach}"
 APP="$HOME_DIR/app"
 NODE_VERSION="22.22.0"
@@ -52,8 +52,8 @@ say "Downloading AoS Coach ($BRANCH)…"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 curl -fsSL "https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH" | tar -xz -C "$tmp"
-src="$(find "$tmp" -maxdepth 2 -type d -name aos-coach | head -n 1)"
-[ -n "$src" ] || die "The download does not contain the aos-coach folder."
+src="$(dirname "$(find "$tmp" -maxdepth 2 -name package.json | head -n 1)")"
+[ -f "$src/package.json" ] || die "The download does not look like the app."
 mkdir -p "$APP"
 # Keep the user's data: storage (lists, games, books), .env, army data, installs.
 (cd "$src" && tar -cf - --exclude ./storage --exclude ./.env --exclude ./data --exclude ./.cache --exclude ./node_modules --exclude ./dist .) |

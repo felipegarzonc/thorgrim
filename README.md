@@ -1,4 +1,4 @@
-# AoS Coach
+# Thorgrim — AoS Coach
 
 A personal Age of Sigmar (4th edition) coach for competitive Ogor Mawtribes play. It's a web app you can open on a computer to prepare and on your phone at the table.
 
@@ -19,21 +19,21 @@ A personal Age of Sigmar (4th edition) coach for competitive Ogor Mawtribes play
 Open **Terminal** (Cmd+Space, type "Terminal") and paste:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/felipegarzonc/7kingdomslabs/claude/vibrant-goldberg-10cise/aos-coach/setup-mac.sh | bash
+curl -fsSL https://raw.githubusercontent.com/felipegarzonc/thorgrim/main/setup-mac.sh | bash
 ```
 
 It installs everything into `~/aos-coach` (including its own copy of Node if needed, no admin password), asks for your Claude API key (optional), and opens the app at http://localhost:8787. Next time, double-click **`~/aos-coach/Start AoS Coach.command`**. Run the same command again to update.
 
 ## Put it online (Render)
 
-The repository includes a Dockerfile and a Render blueprint (`render.yaml` at the repository root), so the app can run on the internet and be opened from any phone or computer.
+The repository includes a Dockerfile and a Render blueprint (`render.yaml`), so the app can run on the internet and be opened from any phone or computer.
 
 1. Create an account at [render.com](https://render.com) (sign in with GitHub) and add a payment card. A plan with a persistent disk is needed so your lists, games and books are kept: Starter (about $7/month) plus about $0.25 per GB of disk.
-2. In Render: **New → Blueprint**, pick the `felipegarzonc/7kingdomslabs` repository. Render reads `render.yaml`.
+2. In Render: **New → Blueprint**, pick the `felipegarzonc/thorgrim` repository. Render reads `render.yaml`.
 3. When asked, fill in:
    - `APP_ACCESS_KEY`: the password for the app (at least 8 characters). Required: without it the server refuses to start.
    - `ANTHROPIC_API_KEY`: your Claude API key (optional here; it can be pasted later on the Ask page).
-4. Wait for the first build (a few minutes), then open the `https://aos-coach-….onrender.com` address Render shows and sign in with your password.
+4. Wait for the first build (a few minutes), then open the `https://thorgrim-….onrender.com` address Render shows and sign in with your password.
 
 Each push to the deployed branch redeploys automatically. Data lives on the Render disk at `/data`; uploaded books from your Mac copy need to be uploaded again online.
 
@@ -42,7 +42,6 @@ Each push to the deployed branch redeploys automatically. Data lives on the Rend
 Requires Node 22+.
 
 ```bash
-cd aos-coach
 npm install
 npm run data          # downloads BSData and builds data/aos.json (re-run after each Battlescroll)
 cp .env.example .env  # then put your Claude API key in ANTHROPIC_API_KEY

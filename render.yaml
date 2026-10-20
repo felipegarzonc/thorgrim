@@ -1,0 +1,23 @@
+# Render blueprint for Thorgrim (AoS Coach) — https://render.com/docs/blueprint-spec
+# In Render: New → Blueprint → pick this repository. You'll be asked for
+# APP_ACCESS_KEY (the password for the app) and, optionally, ANTHROPIC_API_KEY
+# (it can also be pasted later on the app's Ask page).
+services:
+  - type: web
+    name: thorgrim
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    region: frankfurt
+    branch: main
+    healthCheckPath: /healthz
+    envVars:
+      - key: APP_ACCESS_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+    disk:
+      name: thorgrim-data
+      mountPath: /data
+      sizeGB: 1
