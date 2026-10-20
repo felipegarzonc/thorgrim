@@ -8,6 +8,9 @@ export interface Meta {
   factions: string[];
   battleTactics: { name: string; Card?: string; Affray?: string; Strike?: string; Domination?: string }[];
   coachReady: boolean;
+  /** False online: the Rules page drives the reading of scanned pages. */
+  backgroundJobs?: boolean;
+  storage?: "file" | "supabase";
 }
 
 export const MetaContext = createContext<Meta | null>(null);

@@ -61,8 +61,8 @@ describe("transcribeDocument", () => {
     const sent = await PDFDocument.load(Buffer.from(calls[0].messages[0].content[0].source.data, "base64"));
     expect(sent.getPageCount()).toBe(4);
     expect(calls[0].fallbacks).toBe("default");
-    expect(libraryDocs.get(doc.id)?.transcription).toMatchObject({ status: "done", done: 6 });
-    expect(getPages(doc.id)[5]).toBe("RULE 6: Gutbuster charge ability");
-    expect(searchLibrary("Gutbuster charge")[0]).toMatchObject({ docId: doc.id });
+    expect((await libraryDocs.get(doc.id))?.transcription).toMatchObject({ status: "done", done: 6 });
+    expect((await getPages(doc.id))[5]).toBe("RULE 6: Gutbuster charge ability");
+    expect((await searchLibrary("Gutbuster charge"))[0]).toMatchObject({ docId: doc.id });
   });
 });

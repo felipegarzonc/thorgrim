@@ -99,6 +99,8 @@ export interface LibraryDoc {
   mime: string;
   pages: number;
   createdAt: string;
+  /** Set while the browser is still sending the file to storage. */
+  uploading?: boolean;
   /** Pages with no text layer (photos/scans) are read by Claude and transcribed. */
   transcription?: {
     status: "pending" | "running" | "done" | "failed";

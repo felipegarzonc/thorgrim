@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm ci",
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/index.mjs": {
+      "maxDuration": 300,
+      "includeFiles": "{data/aos.json,dist-server/**}"
+    }
+  },
+  "rewrites": [{ "source": "/api/:path*", "destination": "/api?__path=:path*" }]
+}

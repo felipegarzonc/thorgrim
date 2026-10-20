@@ -4,3 +4,5 @@ data/
 storage/
 .cache/
 .env
+dist-server/
+.vercel/

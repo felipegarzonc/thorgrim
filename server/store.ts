@@ -1,46 +1,35 @@
-// Tiny JSON-file store. One user, a handful of records: no database needed.
-// Everything lives under STORAGE_DIR (default ./storage), which is gitignored.
+// Records (lists, games, conversations, library entries) stored as one JSON
+// file each, at "<collection>/<id>.json" in the blob store: a folder on your
+// computer (STORAGE_DIR, default ./storage), or Supabase Storage online.
 
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-
-export const storageDir = path.resolve(process.env.STORAGE_DIR ?? "storage");
+import { blobs } from "./blobs.ts";
 
 export function newId() {
   return crypto.randomBytes(6).toString("hex");
 }
 
 export class Collection<T extends { id: string }> {
-  private dir: string;
-  constructor(name: string) {
-    this.dir = path.join(storageDir, name);
-    fs.mkdirSync(this.dir, { recursive: true });
-  }
+  constructor(private name: string) {}
   private file(id: string) {
     if (!/^[a-z0-9-]+$/i.test(id)) throw new Error("bad id");
-    return path.join(this.dir, `${id}.json`);
+    return `${this.name}/${id}.json`;
   }
-  list(): T[] {
-    if (!fs.existsSync(this.dir)) return [];
-    return fs
-      .readdirSync(this.dir)
-      .filter((f) => f.endsWith(".json"))
-      .map((f) => JSON.parse(fs.readFileSync(path.join(this.dir, f), "utf8")) as T);
+  async list(): Promise<T[]> {
+    const names = (await blobs().list(this.name)).filter((n) => n.endsWith(".json"));
+    const items = await Promise.all(names.map((n) => blobs().read(`${this.name}/${n}`)));
+    return items.filter((b): b is Buffer => Boolean(b)).map((b) => JSON.parse(b.toString("utf8")) as T);
   }
-  get(id: string): T | undefined {
-    const f = this.file(id);
-    return fs.existsSync(f) ? (JSON.parse(fs.readFileSync(f, "utf8")) as T) : undefined;
+  async get(id: string): Promise<T | undefined> {
+    if (!/^[a-z0-9-]+$/i.test(id)) return undefined;
+    const b = await blobs().read(this.file(id));
+    return b ? (JSON.parse(b.toString("utf8")) as T) : undefined;
   }
-  save(item: T): T {
-    fs.mkdirSync(this.dir, { recursive: true });
-    const f = this.file(item.id);
-    fs.writeFileSync(`${f}.tmp`, JSON.stringify(item, null, 2));
-    fs.renameSync(`${f}.tmp`, f);
+  async save(item: T): Promise<T> {
+    await blobs().write(this.file(item.id), JSON.stringify(item, null, 2), "application/json");
     return item;
   }
-  delete(id: string) {
-    const f = this.file(id);
-    if (fs.existsSync(f)) fs.unlinkSync(f);
+  async delete(id: string) {
+    await blobs().remove(this.file(id));
   }
 }

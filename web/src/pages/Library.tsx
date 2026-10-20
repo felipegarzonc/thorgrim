@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LibraryDoc } from "../../../shared/types.ts";
 import { api, withKey } from "../api.ts";
-import { Card, useLoad } from "../ui.tsx";
+import { Card, useLoad, useMeta } from "../ui.tsx";
 
 const CATEGORIES: [LibraryDoc["category"], string][] = [
   ["core", "Core rules"],
@@ -17,24 +17,36 @@ export function LibraryPage() {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<LibraryDoc["category"]>("battletome");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | false>(false);
+  const meta = useMeta();
   const [error, setError] = useState<string>();
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<{ docId: string; title: string; page: number; text: string }[]>();
 
   const uploadFile = async () => {
     if (!file) return;
-    setBusy(true);
+    setBusy("Starting…");
     setError(undefined);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("title", title || file.name.replace(/\.[^.]+$/, ""));
-      form.append("category", category);
-      await api("/library", { method: "POST", body: form });
+      // 1) reserve, 2) send the file straight to storage, 3) let the server read it.
+      setBusy("Uploading…");
+      const mime = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream");
+      const { doc, target } = await api<{ doc: LibraryDoc; target: { url: string; viaApi: boolean; headers: Record<string, string> } }>("/library/uploads", {
+        method: "POST",
+        json: { title: title || file.name.replace(/\.[^.]+$/, ""), category, filename: file.name, mime },
+      });
+      if (target.viaApi) {
+        await api(target.url.replace(/^\/api/, ""), { method: "PUT", body: file, headers: target.headers });
+      } else {
+        const sent = await fetch(target.url, { method: "PUT", body: file, headers: target.headers });
+        if (!sent.ok) throw new Error(`Upload failed (${sent.status}). Try again.`);
+      }
+      setBusy("Reading the file…");
+      const finished = await api<LibraryDoc>(`/library/${doc.id}/finish`, { method: "POST" });
       setFile(null);
       setTitle("");
       reload();
+      if (finished.transcription && meta?.coachReady && !meta.backgroundJobs) void drive(finished);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -48,15 +60,45 @@ export function LibraryPage() {
     reload();
   };
 
-  // Poll while scanned pages are being read.
+  // On your computer the server reads scanned pages in the background: poll.
   const reading = docs?.some((d) => d.transcription?.status === "running");
   useEffect(() => {
-    if (!reading) return;
+    if (!reading || !meta?.backgroundJobs) return;
     const t = setInterval(reload, 4000);
     return () => clearInterval(t);
-  }, [reading]);
+  }, [reading, meta?.backgroundJobs]);
+
+  // Online there's no background worker: this page reads one batch of pages
+  // per request while it's open, and stops when you leave it.
+  const driving = useRef<string | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => () => void (mounted.current = false), []);
+  const drive = async (d: LibraryDoc) => {
+    if (driving.current) return;
+    driving.current = d.id;
+    try {
+      for (;;) {
+        const r = await api<{ transcription?: LibraryDoc["transcription"] }>(`/library/${d.id}/transcribe`, { method: "POST" });
+        reload();
+        const status = r.transcription?.status;
+        if (!mounted.current || !status || status === "done" || status === "failed") break;
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      driving.current = null;
+    }
+  };
+
+  // Pick up a read that stopped when the page was closed.
+  useEffect(() => {
+    if (meta?.backgroundJobs !== false || !meta.coachReady || driving.current) return;
+    const next = docs?.find((d) => d.transcription?.status === "running" || d.transcription?.status === "pending");
+    if (next) void drive(next);
+  }, [docs, meta?.backgroundJobs, meta?.coachReady]);
 
   const transcribe = async (d: LibraryDoc) => {
+    if (!meta?.backgroundJobs) return drive(d);
     try {
       await api(`/library/${d.id}/transcribe`, { method: "POST" });
       setTimeout(reload, 500);
@@ -73,7 +115,7 @@ export function LibraryPage() {
         <p className="muted">
           PDFs (core rules, General's Handbook, battletomes, FAQs) are indexed page by page so the coach can search them and cite pages. Photos of
           book pages and scanned PDFs work too: Claude reads those pages once after upload (about a minute per 10 pages). Images (battleplan cards,
-          maps, a photo of the table) are shown to the coach when you attach them to a game. Files stay on your server.
+          maps, a photo of the table) are shown to the coach when you attach them to a game. Files stay private: on your computer, or in your own storage when the app is online.
         </p>
         <div className="grid2">
           <label>
@@ -95,8 +137,8 @@ export function LibraryPage() {
             </select>
           </label>
         </div>
-        <button type="button" className="primary" onClick={uploadFile} disabled={!file || busy}>
-          {busy ? "Uploading and indexing…" : "Upload"}
+        <button type="button" className="primary" onClick={uploadFile} disabled={!file || !!busy}>
+          {busy || "Upload"}
         </button>
         {error && <p className="error">{error}</p>}
       </Card>
@@ -149,6 +191,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 }
 
 function BookCard({ doc, category, onStart, onRemove }: { doc: LibraryDoc; category: string; onStart: () => void; onRemove: () => void }) {
+  const backgroundJobs = useMeta()?.backgroundJobs;
   const t = doc.transcription;
   const total = t?.pages.length ?? 0;
   const size = doc.kind === "pdf" ? `${doc.pages} pages` : doc.kind;
@@ -173,7 +216,7 @@ function BookCard({ doc, category, onStart, onRemove }: { doc: LibraryDoc; categ
       <span className="muted small">
         {category} · {size}
         {t?.status === "done" ? ` · ${total} scanned page${total > 1 ? "s" : ""} read` : ""}
-        {t?.status === "running" ? " · photos and scans are read once, then searchable" : ""}
+        {t?.status === "running" ? (backgroundJobs === false ? " · keep this page open while it reads" : " · photos and scans are read once, then searchable") : ""}
         {t?.status === "failed" && t.error ? ` · ${t.error}` : ""}
       </span>
       <div className="row" style={{ margin: 0 }}>

@@ -3,12 +3,12 @@
 // so the coach can search and cite them like any other page. Runs once per
 // upload, in the background, a few pages per request.
 
-import fs from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
 import { PDFDocument } from "pdf-lib";
 import type { LibraryDoc } from "../shared/types.ts";
 import { anthropic, hasCredentials } from "./anthropic.ts";
-import { docFile, libraryDocs, setPageText } from "./library.ts";
+import { blobs } from "./blobs.ts";
+import { docPath, libraryDocs, setPageText } from "./library.ts";
 
 const MODEL = process.env.COACH_MODEL ?? "claude-opus-5-5";
 const PAGES_PER_REQUEST = 4;
@@ -58,58 +58,69 @@ async function transcribeBatch(blocks: Anthropic.Beta.BetaContentBlockParam[], p
   return splitPages(text, pageNumbers);
 }
 
-const running = new Set<string>();
-
-function update(doc: LibraryDoc, patch: Partial<NonNullable<LibraryDoc["transcription"]>>) {
-  const fresh = libraryDocs.get(doc.id);
-  if (!fresh?.transcription) return;
-  fresh.transcription = { ...fresh.transcription, ...patch };
-  libraryDocs.save(fresh);
-}
-
-/** Transcribe the doc's text-less pages. Safe to call again to resume. */
-export async function transcribeDocument(id: string): Promise<void> {
-  const doc = libraryDocs.get(id);
-  if (!doc?.transcription || doc.transcription.status === "done" || running.has(id)) return;
-  running.add(id);
+/**
+ * Read the next batch of text-less pages (at most PAGES_PER_REQUEST) and
+ * save them. Short enough to fit in one online request; call it again until
+ * the status is "done". Returns the document's progress.
+ */
+export async function transcribeStep(id: string): Promise<LibraryDoc["transcription"]> {
+  const doc = await libraryDocs.get(id);
+  const t = doc?.transcription;
+  if (!doc || !t || t.status === "done") return t;
   try {
-    update(doc, { status: "running", error: undefined });
-    const buffer = fs.readFileSync(docFile(doc));
-    const todo = doc.transcription.pages.slice(doc.transcription.done);
-    let done = doc.transcription.done;
-
+    const buffer = await blobs().read(docPath(doc));
+    if (!buffer) throw new Error("The file is missing from storage. Upload it again.");
+    let batch: number[];
+    let pages: Map<number, string>;
     if (doc.kind === "image") {
       const media = doc.mime as "image/png" | "image/jpeg" | "image/gif" | "image/webp";
-      const pages = await transcribeBatch([{ type: "image", source: { type: "base64", media_type: media, data: buffer.toString("base64") } }], [1]);
-      setPageText(id, 1, pages.get(1) ?? "");
-      update(doc, { status: "done", done: 1 });
-      return;
-    }
-
-    const source = await PDFDocument.load(buffer, { ignoreEncryption: true });
-    for (let i = 0; i < todo.length; i += PAGES_PER_REQUEST) {
-      const batch = todo.slice(i, i + PAGES_PER_REQUEST);
+      batch = [1];
+      pages = await transcribeBatch([{ type: "image", source: { type: "base64", media_type: media, data: buffer.toString("base64") } }], batch);
+    } else {
+      batch = t.pages.slice(t.done, t.done + PAGES_PER_REQUEST);
+      const source = await PDFDocument.load(buffer, { ignoreEncryption: true });
       const part = await PDFDocument.create();
       for (const page of await part.copyPages(source, batch.map((n) => n - 1))) part.addPage(page);
       const data = Buffer.from(await part.save()).toString("base64");
-      const pages = await transcribeBatch([{ type: "document", source: { type: "base64", media_type: "application/pdf", data } }], batch);
-      for (const n of batch) setPageText(id, n, pages.get(n) ?? "");
-      done += batch.length;
-      update(doc, { done });
+      pages = await transcribeBatch([{ type: "document", source: { type: "base64", media_type: "application/pdf", data } }], batch);
     }
-    update(doc, { status: "done" });
+    for (const n of batch) await setPageText(id, n, pages.get(n) ?? "");
+    const done = t.done + batch.length;
+    doc.transcription = { ...t, done, status: done >= t.pages.length ? "done" : "running", error: undefined };
   } catch (err) {
     console.error(`Transcription failed for ${doc.title}:`, err);
-    update(doc, { status: "failed", error: (err as Error).message });
+    doc.transcription = { ...t, status: "failed", error: (err as Error).message };
+  }
+  await libraryDocs.save(doc);
+  return doc.transcription;
+}
+
+const running = new Set<string>();
+
+/** Read all text-less pages in the background (on your own computer). */
+export async function transcribeDocument(id: string): Promise<void> {
+  if (running.has(id)) return;
+  running.add(id);
+  try {
+    for (;;) {
+      const t = await transcribeStep(id);
+      if (!t || t.status === "done" || t.status === "failed") return;
+    }
   } finally {
     running.delete(id);
   }
 }
 
+/**
+ * Online (Vercel) there is no long-running server: the Rules page drives
+ * the reading one step at a time while it is open.
+ */
+export const backgroundJobs = () => !process.env.VERCEL;
+
 /** On startup, resume anything that was interrupted. */
-export function resumePendingTranscriptions() {
-  if (!hasCredentials()) return;
-  for (const doc of libraryDocs.list()) {
+export async function resumePendingTranscriptions() {
+  if (!hasCredentials() || !backgroundJobs()) return;
+  for (const doc of await libraryDocs.list()) {
     if (doc.transcription && (doc.transcription.status === "pending" || doc.transcription.status === "running")) {
       void transcribeDocument(doc.id);
     }

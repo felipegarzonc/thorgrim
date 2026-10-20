@@ -24,18 +24,21 @@ curl -fsSL https://raw.githubusercontent.com/felipegarzonc/thorgrim/main/setup-m
 
 It installs everything into `~/aos-coach` (including its own copy of Node if needed, no admin password), asks for your Claude API key (optional), and opens the app at http://localhost:8787. Next time, double-click **`~/aos-coach/Start AoS Coach.command`**. Run the same command again to update.
 
-## Put it online (Render)
+## Put it online (Vercel + Supabase)
 
-The repository includes a Dockerfile and a Render blueprint (`render.yaml`), so the app can run on the internet and be opened from any phone or computer.
+The app runs on [Vercel](https://vercel.com) (free Hobby plan) and keeps your lists, games, books and settings in a private [Supabase](https://supabase.com) Storage bucket (free plan: 1 GB). Use a Supabase project of its own for Thorgrim, not one shared with another app.
 
-1. Create an account at [render.com](https://render.com) (sign in with GitHub) and add a payment card. A plan with a persistent disk is needed so your lists, games and books are kept: Starter (about $7/month) plus about $0.25 per GB of disk.
-2. In Render: **New → Blueprint**, pick the `felipegarzonc/thorgrim` repository. Render reads `render.yaml`.
-3. When asked, fill in:
-   - `APP_ACCESS_KEY`: the password for the app (at least 8 characters). Required: without it the server refuses to start.
-   - `ANTHROPIC_API_KEY`: your Claude API key (optional here; it can be pasted later on the Ask page).
-4. Wait for the first build (a few minutes), then open the `https://thorgrim-….onrender.com` address Render shows and sign in with your password.
+1. **Supabase**: create a new project named `thorgrim` (any region close to you; the database password is not needed by the app). In **Project Settings → API**, copy the **Project URL** and the **`service_role`** secret key. The app creates its private bucket (`thorgrim`) on first use.
+2. **Vercel**: **Add New → Project**, import the `felipegarzonc/thorgrim` repository. Leave the framework preset as "Other"; `vercel.json` sets the build. Before deploying, add these **Environment Variables**:
+   - `APP_ACCESS_KEY`: the password for the app (at least 8 characters). Required: without it the app stays locked.
+   - `SUPABASE_URL`: the Project URL from step 1.
+   - `SUPABASE_SERVICE_ROLE_KEY`: the `service_role` key from step 1. Keep it secret: it only lives in Vercel, never in the browser.
+   - `ANTHROPIC_API_KEY`: your Claude API key (optional here; it can be pasted later on the Ask page, and is then kept in your Supabase bucket).
+3. Deploy, open the `https://thorgrim-….vercel.app` address and sign in with your password.
 
-Each push to the deployed branch redeploys automatically. Data lives on the Render disk at `/data`; uploaded books from your Mac copy need to be uploaded again online.
+Each push to `main` redeploys automatically. Online, big files are uploaded from the browser straight to Supabase, and scanned pages are read while the Rules page is open (keep it open until it says "Searchable"). Books uploaded on your Mac need to be uploaded again online.
+
+Alternative: the repository also has a Dockerfile and a Render blueprint (`render.yaml`) for a server with a persistent disk (Render Starter, about $7/month plus disk). Set `APP_ACCESS_KEY` there too.
 
 ## Manual setup (for development)
 
@@ -57,7 +60,7 @@ npm run build
 npm start             # http://localhost:8787
 ```
 
-To use it away from home, host it on any small Node server with a persistent disk (uploads, lists and games are stored as files under `storage/`). Set `APP_ACCESS_KEY` so only you can use it.
+To use it away from home, use Vercel + Supabase as above, or any small Node server with a persistent disk (uploads, lists and games are stored as files under `storage/`, or `STORAGE_DIR`). Set `APP_ACCESS_KEY` so only you can use it.
 
 ## Tests
 
@@ -70,4 +73,4 @@ npm run typecheck
 
 - The coach uses `claude-opus-5-5` by default (`COACH_MODEL` overrides it). In-game questions run at medium effort, briefs and reviews at high effort. Server-side refusal fallback is on (`fallbacks: "default"`).
 - Rules text belongs to Games Workshop. Keep this app private and for personal use, and only upload books you own.
-- Photos of book pages, scanned PDFs and images are read by Claude once after upload: it transcribes the rules on pages that have no text layer, so they become searchable. This takes about a minute per 10 pages and needs the API key. Progress shows on the Rules page, and an interrupted read resumes when the server restarts.
+- Photos of book pages, scanned PDFs and images are read by Claude once after upload: it transcribes the rules on pages that have no text layer, so they become searchable. This takes about a minute per 10 pages and needs the API key. Progress shows on the Rules page, and on your computer an interrupted read resumes when the server restarts (online it continues when you open the Rules page again).

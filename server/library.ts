@@ -1,87 +1,114 @@
 // Rules library: the PDFs, images and notes the user owns (core rules,
 // General's Handbook, battletomes, battleplan cards, maps). PDFs are split
 // into page text so the coach can search them and cite page numbers.
+//
+// Files live in the blob store (a folder locally, Supabase Storage online).
+// Large files are uploaded by the browser straight to storage, then
+// finished here, so online body-size limits don't apply.
 
-import fs from "node:fs";
 import path from "node:path";
 import { extractText, getDocumentProxy } from "unpdf";
 import type { LibraryDoc } from "../shared/types.ts";
-import { Collection, newId, storageDir } from "./store.ts";
+import { blobs } from "./blobs.ts";
+import { Collection, newId } from "./store.ts";
 
 export const libraryDocs = new Collection<LibraryDoc>("library");
-const filesDir = path.join(storageDir, "library-files");
-fs.mkdirSync(filesDir, { recursive: true });
 
-const pagesFile = (id: string) => path.join(filesDir, `${id}.pages.json`);
-export const docFile = (doc: LibraryDoc) => path.join(filesDir, `${doc.id}${path.extname(doc.filename) || ""}`);
-
-export async function addDocument(input: {
-  title: string;
-  category: LibraryDoc["category"];
-  filename: string;
-  mime: string;
-  buffer: Buffer;
-}): Promise<LibraryDoc> {
-  const id = newId();
-  const isPdf = input.mime === "application/pdf" || input.filename.toLowerCase().endsWith(".pdf");
-  const isImage = input.mime.startsWith("image/");
-  const doc: LibraryDoc = {
-    id,
-    title: input.title || input.filename,
-    kind: isPdf ? "pdf" : isImage ? "image" : "text",
-    category: input.category,
-    filename: input.filename,
-    mime: input.mime,
-    pages: 1,
-    createdAt: new Date().toISOString(),
-  };
-  fs.writeFileSync(docFile(doc), input.buffer);
-  let pages: string[] = [];
-  if (isPdf) {
-    const pdf = await getDocumentProxy(new Uint8Array(input.buffer));
-    const { totalPages, text } = await extractText(pdf, { mergePages: false });
-    doc.pages = totalPages;
-    pages = (text as string[]).map((t) => t.replace(/[ \t]+/g, " ").trim());
-  } else if (!isImage) {
-    pages = [input.buffer.toString("utf8")];
-  }
-  if (isImage) {
-    // Battleplan cards, maps or photos of rules: transcribe so they are searchable too.
-    pages = [""];
-    doc.transcription = { status: "pending", pages: [1], done: 0 };
-  }
-  if (isPdf) {
-    const scanned = pages.flatMap((t, i) => (t.length < MIN_PAGE_TEXT ? [i + 1] : []));
-    if (scanned.length) doc.transcription = { status: "pending", pages: scanned, done: 0 };
-  }
-  fs.writeFileSync(pagesFile(id), JSON.stringify(pages));
-  libraryDocs.save(doc);
-  invalidateIndex();
-  return doc;
-}
+const pagesPath = (id: string) => `library-files/${id}.pages.json`;
+export const docPath = (doc: Pick<LibraryDoc, "id" | "filename">) => `library-files/${doc.id}${path.extname(doc.filename).toLowerCase() || ""}`;
 
 /** Pages with less text than this are treated as images (photos, scans). */
 export const MIN_PAGE_TEXT = 50;
 
-export function setPageText(id: string, page: number, text: string) {
-  const pages = getPages(id);
+const isPdfFile = (mime: string, filename: string) => mime === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
+
+type NewDoc = { title: string; category: LibraryDoc["category"]; filename: string; mime: string };
+
+function newDoc(input: NewDoc): LibraryDoc {
+  const isPdf = isPdfFile(input.mime, input.filename);
+  return {
+    id: newId(),
+    title: input.title || input.filename.replace(/\.[^.]+$/, ""),
+    kind: isPdf ? "pdf" : input.mime.startsWith("image/") ? "image" : "text",
+    category: input.category,
+    filename: input.filename,
+    mime: input.mime || "application/octet-stream",
+    pages: 1,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** Read the file's text and decide which pages need Claude to read them. */
+async function process(doc: LibraryDoc, buffer: Buffer): Promise<LibraryDoc> {
+  let pages: string[] = [];
+  delete doc.uploading;
+  if (doc.kind === "pdf") {
+    const pdf = await getDocumentProxy(new Uint8Array(buffer));
+    const { totalPages, text } = await extractText(pdf, { mergePages: false });
+    doc.pages = totalPages;
+    pages = (text as string[]).map((t) => t.replace(/[ \t]+/g, " ").trim());
+    const scanned = pages.flatMap((t, i) => (t.length < MIN_PAGE_TEXT ? [i + 1] : []));
+    if (scanned.length) doc.transcription = { status: "pending", pages: scanned, done: 0 };
+  } else if (doc.kind === "image") {
+    // Battleplan cards, maps or photos of rules: transcribe so they are searchable too.
+    pages = [""];
+    doc.transcription = { status: "pending", pages: [1], done: 0 };
+  } else {
+    pages = [buffer.toString("utf8")];
+  }
+  await blobs().write(pagesPath(doc.id), JSON.stringify(pages), "application/json");
+  await libraryDocs.save(doc);
+  return doc;
+}
+
+/** Upload in one request (small files, notes, or the local multipart form). */
+export async function addDocument(input: NewDoc & { buffer: Buffer }): Promise<LibraryDoc> {
+  const doc = newDoc(input);
+  await blobs().write(docPath(doc), input.buffer, doc.mime);
+  return process(doc, input.buffer);
+}
+
+/** Step 1 of a direct upload: reserve the document and say where to send the file. */
+export async function startUpload(input: NewDoc, apiPathFor: (id: string) => string) {
+  const doc = { ...newDoc(input), uploading: true };
+  await libraryDocs.save(doc);
+  const target = await blobs().uploadTarget(docPath(doc), doc.mime, apiPathFor(doc.id));
+  return { doc, target };
+}
+
+/** Step 2: the file is in storage, read it. */
+export async function finishUpload(id: string): Promise<LibraryDoc> {
+  const doc = await libraryDocs.get(id);
+  if (!doc) throw new Error("No such document");
+  if (!doc.uploading) return doc;
+  const buffer = await blobs().read(docPath(doc));
+  if (!buffer) throw new Error("The file did not arrive. Try uploading it again.");
+  return process(doc, buffer);
+}
+
+export async function setPageText(id: string, page: number, text: string) {
+  const pages = await getPages(id);
   while (pages.length < page) pages.push("");
   pages[page - 1] = text;
-  fs.writeFileSync(pagesFile(id), JSON.stringify(pages));
-  invalidateIndex();
+  await blobs().write(pagesPath(id), JSON.stringify(pages), "application/json");
 }
 
-export function deleteDocument(id: string) {
-  const doc = libraryDocs.get(id);
+export async function deleteDocument(id: string) {
+  const doc = await libraryDocs.get(id);
   if (!doc) return;
-  for (const f of [docFile(doc), pagesFile(id)]) if (fs.existsSync(f)) fs.unlinkSync(f);
-  libraryDocs.delete(id);
-  invalidateIndex();
+  await blobs().remove(docPath(doc));
+  await blobs().remove(pagesPath(id));
+  await libraryDocs.delete(id);
 }
 
-export function getPages(id: string): string[] {
-  const f = pagesFile(id);
-  return fs.existsSync(f) ? (JSON.parse(fs.readFileSync(f, "utf8")) as string[]) : [];
+export async function getPages(id: string): Promise<string[]> {
+  const b = await blobs().read(pagesPath(id));
+  return b ? (JSON.parse(b.toString("utf8")) as string[]) : [];
+}
+
+/** Documents ready to use (uploads still in progress are left out). */
+export async function listDocuments(): Promise<LibraryDoc[]> {
+  return (await libraryDocs.list()).filter((d) => !d.uploading);
 }
 
 /** "3-5,9" -> [3,4,5,9] (1-based, clamped to the document). */
@@ -107,8 +134,16 @@ interface Chunk {
   length: number;
 }
 
-let index: { chunks: Chunk[]; df: Map<string, number>; avgLen: number } | null = null;
-const invalidateIndex = () => (index = null);
+interface Index {
+  signature: string;
+  chunks: Chunk[];
+  df: Map<string, number>;
+  avgLen: number;
+}
+
+// Rebuilt whenever the set of documents or their transcription progress
+// changes (online, several server instances may each hold their own copy).
+let index: Index | null = null;
 
 const STOP = new Set("the a an of to and or in on for is are be this that it its with as at by from if any each your you can cannot not their them they".split(" "));
 const tokenize = (s: string) =>
@@ -118,10 +153,17 @@ const tokenize = (s: string) =>
     .split(" ")
     .filter((t) => t.length > 1 && !STOP.has(t));
 
-function buildIndex() {
+async function currentIndex(): Promise<Index> {
+  const docs = await listDocuments();
+  const signature = docs
+    .map((d) => `${d.id}:${d.transcription?.done ?? 0}:${d.transcription?.status ?? ""}`)
+    .sort()
+    .join("|");
+  if (index?.signature === signature) return index;
   const chunks: Chunk[] = [];
-  for (const doc of libraryDocs.list()) {
-    getPages(doc.id).forEach((pageText, i) => {
+  const allPages = await Promise.all(docs.map((d) => getPages(d.id)));
+  docs.forEach((doc, di) => {
+    allPages[di].forEach((pageText, i) => {
       // Split long pages so a hit points at a focused passage.
       for (let start = 0; start < pageText.length; start += 1500) {
         const text = pageText.slice(Math.max(0, start - 200), start + 1500);
@@ -131,16 +173,16 @@ function buildIndex() {
         chunks.push({ docId: doc.id, title: doc.title, page: i + 1, text, terms, length: toks.length });
       }
     });
-  }
+  });
   const df = new Map<string, number>();
   for (const c of chunks) for (const t of c.terms.keys()) df.set(t, (df.get(t) ?? 0) + 1);
   const avgLen = chunks.reduce((s, c) => s + c.length, 0) / Math.max(1, chunks.length);
-  index = { chunks, df, avgLen };
+  index = { signature, chunks, df, avgLen };
   return index;
 }
 
-export function searchLibrary(query: string, limit = 6, docIds?: string[]) {
-  const { chunks, df, avgLen } = index ?? buildIndex();
+export async function searchLibrary(query: string, limit = 6, docIds?: string[]) {
+  const { chunks, df, avgLen } = await currentIndex();
   const q = [...new Set(tokenize(query))];
   const N = chunks.length;
   const k1 = 1.4;

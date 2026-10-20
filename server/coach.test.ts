@@ -73,7 +73,7 @@ describe.skipIf(!hasData)("askCoach loop", () => {
     const lastUser = next.messages.at(-1).content;
     expect(lastUser.some((b: any) => b.type === "text" && b.text.includes("<dossier>"))).toBe(false);
 
-    expect(conversations.get("g1")?.transcript.map((t) => t.role)).toEqual(["user", "coach", "user", "coach"]);
+    expect((await conversations.get("g1"))?.transcript.map((t) => t.role)).toEqual(["user", "coach", "user", "coach"]);
   });
 
   it("returns a tool error instead of crashing on bad input", async () => {

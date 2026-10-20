@@ -7,13 +7,13 @@
 // battleplan change an updated dossier is appended rather than edited in.
 
 import crypto from "node:crypto";
-import fs from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { castChance, chargeChance, damageBySave, expectedDamage, parseCrit, parseTarget, simulate, type AttackProfile } from "../engine/dice.ts";
 import type { ArmyList, Game } from "../shared/types.ts";
 import { factionRulesText, findUnit, gameData, listDossier, matchedPlayRule, norm, warscrollText } from "./data.ts";
-import { docFile, getPages, libraryDocs, parsePageRange, searchLibrary } from "./library.ts";
+import { blobs } from "./blobs.ts";
+import { docPath, getPages, libraryDocs, listDocuments, parsePageRange, searchLibrary } from "./library.ts";
 import { anthropic } from "./anthropic.ts";
 import { Collection } from "./store.ts";
 
@@ -160,15 +160,15 @@ async function runTool(name: string, input: unknown): Promise<string> {
   switch (name as ToolName) {
     case "search_rules": {
       const { query, limit } = args as z.infer<typeof toolSchemas.search_rules>;
-      const hits = searchLibrary(query, Math.min(limit ?? 6, 10));
+      const hits = await searchLibrary(query, Math.min(limit ?? 6, 10));
       if (!hits.length) return "No matches in the rules library. (The player may not have uploaded that book yet.)";
       return hits.map((h) => `[${h.title} p.${h.page} | doc_id=${h.docId}]\n${h.text}`).join("\n\n---\n\n");
     }
     case "read_rules_pages": {
       const { doc_id, pages } = args as z.infer<typeof toolSchemas.read_rules_pages>;
-      const doc = libraryDocs.get(doc_id);
+      const doc = await libraryDocs.get(doc_id);
       if (!doc) return "No document with that id.";
-      const text = getPages(doc_id);
+      const text = await getPages(doc_id);
       const wanted = parsePageRange(pages, text.length).slice(0, 8);
       return wanted.map((p) => `[${doc.title} p.${p}]\n${text[p - 1] ?? ""}`).join("\n\n");
     }
@@ -238,8 +238,8 @@ export interface CoachContext {
   opponentList?: ArmyList;
 }
 
-function libraryCatalogue(): string {
-  const docs = libraryDocs.list();
+async function libraryCatalogue(): Promise<string> {
+  const docs = await listDocuments();
   if (!docs.length) return "The rules library is empty: the player has not uploaded any rules yet. Say so when a rules question needs a book.";
   return docs.map((d) => `- ${d.title} [${d.category}, ${d.kind}${d.kind === "pdf" ? `, ${d.pages} pages` : ""}] doc_id=${d.id}`).join("\n");
 }
@@ -255,15 +255,15 @@ function battleTacticsText(game?: Game): string {
   return lines.join("\n");
 }
 
-function dossier(ctx: CoachContext): string {
-  const parts = ["<dossier>", "## Rules library (search with search_rules)", libraryCatalogue(), ""];
+async function dossier(ctx: CoachContext): Promise<string> {
+  const parts = ["<dossier>", "## Rules library (search with search_rules)", await libraryCatalogue(), ""];
   if (ctx.game) {
     const g = ctx.game;
     parts.push(`## Game: ${g.name}`, `Battleplan: ${g.battleplan || "(not set)"}`, g.battleplanNotes ? `Battleplan / map notes: ${g.battleplanNotes}` : "");
     for (const ref of g.references) {
-      const doc = libraryDocs.get(ref.docId);
+      const doc = await libraryDocs.get(ref.docId);
       if (!doc || doc.kind === "image") continue;
-      const pages = getPages(doc.id);
+      const pages = await getPages(doc.id);
       for (const p of parsePageRange(ref.pages, pages.length).slice(0, 6)) parts.push(`### Reference: ${doc.title} p.${p}`, pages[p - 1] ?? "");
     }
     parts.push("", battleTacticsText(g), "");
@@ -274,15 +274,15 @@ function dossier(ctx: CoachContext): string {
   return parts.filter((p) => p !== undefined).join("\n");
 }
 
-function referenceImages(game?: Game): Block[] {
+async function referenceImages(game?: Game): Promise<Block[]> {
   const blocks: Block[] = [];
   for (const ref of game?.references ?? []) {
-    const doc = libraryDocs.get(ref.docId);
+    const doc = await libraryDocs.get(ref.docId);
     if (!doc || doc.kind !== "image") continue;
     const media = doc.mime as "image/png" | "image/jpeg" | "image/gif" | "image/webp";
     if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(media)) continue;
     blocks.push({ type: "text", text: `Map / battleplan image: ${doc.title}` });
-    blocks.push({ type: "image", source: { type: "base64", media_type: media, data: fs.readFileSync(docFile(doc)).toString("base64") } });
+    blocks.push({ type: "image", source: { type: "base64", media_type: media, data: ((await blobs().read(docPath(doc))) ?? Buffer.alloc(0)).toString("base64") } });
   }
   return blocks;
 }
@@ -330,11 +330,11 @@ export async function askCoach(
   question: string,
   opts: { effort?: "low" | "medium" | "high" } = {},
 ): Promise<TranscriptEntry> {
-  const convo = conversations.get(convoId) ?? { id: convoId, messages: [], transcript: [] };
+  const convo = (await conversations.get(convoId)) ?? { id: convoId, messages: [], transcript: [] };
 
   // Build this turn's user content: dossier/images only when new or changed.
   const content: Block[] = [];
-  const dos = dossier(ctx);
+  const dos = await dossier(ctx);
   const dosHash = hash(dos);
   if (dosHash !== convo.dossierHash) {
     content.push({ type: "text", text: convo.dossierHash ? `Updated dossier (replaces the earlier one):\n${dos}` : dos });
@@ -342,7 +342,7 @@ export async function askCoach(
   }
   const refHash = hash(JSON.stringify(ctx.game?.references ?? []));
   if (refHash !== convo.referencesHash) {
-    content.push(...referenceImages(ctx.game));
+    content.push(...(await referenceImages(ctx.game)));
     convo.referencesHash = refHash;
   }
   const state = stateText(ctx);
@@ -405,12 +405,12 @@ export async function askCoach(
   const answer: TranscriptEntry = { role: "coach", text: finalText, tools: [...new Set(toolsUsed)], at: now };
   convo.messages = messages;
   convo.transcript.push({ role: "user", text: question, at: now }, answer);
-  conversations.save(convo);
+  await conversations.save(convo);
   return answer;
 }
 
-export function resetConversation(convoId: string) {
-  conversations.delete(convoId);
+export async function resetConversation(convoId: string) {
+  await conversations.delete(convoId);
 }
 
 export const PROMPTS = {

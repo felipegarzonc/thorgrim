@@ -2,9 +2,14 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Ability, ArmyList, FactionRule, GameData, Unit } from "../shared/types.ts";
 
-const dataFile = path.resolve("data", "aos.json");
+// data/aos.json next to the project (local, Docker), or next to the bundled
+// server file (Vercel: dist-server/app.mjs -> ../data/aos.json).
+const dataFile = [path.resolve("data", "aos.json"), path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data", "aos.json")].find((f) =>
+  fs.existsSync(f),
+) ?? path.resolve("data", "aos.json");
 let cached: GameData | null = null;
 
 export function gameData(): GameData {
