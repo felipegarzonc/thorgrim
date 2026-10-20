@@ -23,7 +23,15 @@ die() { printf '\n\033[1;31mError:\033[0m %s\n' "$1" >&2; exit 1; }
 mkdir -p "$HOME_DIR"
 cd "$HOME_DIR"
 
+# Keep a copy of everything in a log, and say which step failed.
+LOG="$HOME_DIR/install.log"
+exec > >(tee "$LOG") 2>&1
+STEP="starting"
+trap 'printf "\n\033[1;31mInstall failed\033[0m during: %s\nA full log is in %s — send a screenshot of this window.\n" "$STEP" "$LOG"' ERR
+echo "AoS Coach installer — $(date) — $(uname -sm) — macOS $(sw_vers -productVersion 2>/dev/null || echo n/a)"
+
 # ---- Node ----------------------------------------------------------------
+STEP="getting Node"
 node_ok() { command -v node >/dev/null 2>&1 && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]; }
 if [ -x "$HOME_DIR/node/bin/node" ]; then export PATH="$HOME_DIR/node/bin:$PATH"; fi
 if [ -n "${AOS_FORCE_NODE:-}" ] || ! node_ok; then
@@ -39,6 +47,7 @@ node_ok || die "Node 22+ is still not available."
 echo "Using Node $(node -v)"
 
 # ---- App -----------------------------------------------------------------
+STEP="downloading the app"
 say "Downloading AoS Coach ($BRANCH)…"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
@@ -51,10 +60,12 @@ mkdir -p "$APP"
   (cd "$APP" && tar -xf -)
 
 cd "$APP"
+STEP="installing packages (npm install)"
 say "Installing (takes a minute the first time)…"
 npm install --no-audit --no-fund --loglevel=error
 
 if [ ! -f data/aos.json ] || [ -n "${AOS_UPDATE_DATA:-}" ]; then
+  STEP="downloading the army data"
   say "Downloading the army data…"
   npm run --silent data
 fi
@@ -73,6 +84,7 @@ if [ ! -f .env ]; then
   fi
 fi
 
+STEP="building the web app"
 say "Building the web app…"
 npm run --silent build >/dev/null
 
@@ -83,6 +95,12 @@ cat >"$launcher" <<EOF
 # Double-click to start AoS Coach. Close this window (or press Ctrl+C) to stop it.
 export PATH="$HOME_DIR/node/bin:\$PATH"
 cd "$APP"
+# Already running (e.g. an earlier window is still open)? Just open it.
+if curl -s -o /dev/null "http://localhost:$PORT/api/meta"; then
+  echo "AoS Coach is already running: http://localhost:$PORT"
+  command -v open >/dev/null && open "http://localhost:$PORT"
+  exit 0
+fi
 ( for i in \$(seq 1 60); do curl -s -o /dev/null "http://localhost:$PORT/api/meta" && break; sleep 0.5; done
   command -v open >/dev/null && open "http://localhost:$PORT" ) &
 ip=\$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print \$1}')
@@ -95,6 +113,7 @@ PORT=$PORT npm start
 EOF
 chmod +x "$launcher"
 
+STEP="starting the app"
 say "Done. Starting AoS Coach…"
 if [ -n "${AOS_NO_START:-}" ]; then
   echo "Start it any time by double-clicking: $launcher"
