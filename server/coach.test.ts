@@ -16,6 +16,10 @@ vi.mock("@anthropic-ai/sdk", () => {
           calls.push(structuredClone(params));
           return replies.shift();
         },
+        stream: (params: any) => {
+          calls.push(structuredClone(params));
+          return { finalMessage: async () => replies.shift() };
+        },
       },
     };
   }
@@ -117,5 +121,37 @@ describe.skipIf(!hasData)("turnTips", () => {
     expect(req.output_config.format.schema.properties.phases.required).toContain("Combat");
     expect(req.fallbacks).toBe("default");
     expect(JSON.stringify(req.messages[0].content)).toContain("my opponent's turn");
+  });
+});
+
+describe.skipIf(!hasData)("gamePlan", () => {
+  it("streams a high-effort JSON plan and returns it", async () => {
+    const { gamePlan } = await import("./coach.ts");
+    const plan = {
+      summary: "Win the objective game early, then hold.",
+      ourStrengths: ["Stonehorn charges."],
+      theirThreats: ["Warp Lightning Cannon."],
+      deployment: ["Screen the Huskard."],
+      rounds: [1, 2, 3, 4, 5].map((round) => ({ round, plan: `Round ${round} plan.` })),
+      tactics: ["Affray in round 1."],
+      priority: ["Give them the first turn in round 1."],
+      avoid: ["Overextending the Mournfangs."],
+    };
+    replies.push({ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(plan) }] });
+    const before = calls.length;
+    const game = {
+      id: "g3", name: "", myListId: "", opponentListId: "", battleplan: "Into the Fire", battleplanNotes: "", references: [], log: [], createdAt: "2026-10-20",
+      state: {
+        round: 1, attacker: "me", firstThisRound: "me", activePlayer: "me", phase: "Deployment",
+        cp: { me: 0, opponent: 0 }, vp: { me: 0, opponent: 0 }, fury: { me: 1, opponent: 2 }, rage: { me: 0, opponent: 0 },
+        tactics: [], opponentTactics: [], units: {}, objectives: "", notes: "",
+      },
+    } as any;
+    const out = await gamePlan({ game });
+    expect(out.summary).toBe(plan.summary);
+    expect(out.rounds).toHaveLength(5);
+    const req = calls[before];
+    expect(req.output_config).toMatchObject({ effort: "high", format: { type: "json_schema" } });
+    expect(req.system).toContain("game plan");
   });
 });

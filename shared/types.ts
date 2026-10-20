@@ -147,6 +147,21 @@ export interface TurnTips {
   generatedAt: string;
 }
 
+/** The coach's strategy for a game, written once the armies, battleplan and tactics are set. */
+export interface GamePlan {
+  summary: string;
+  ourStrengths: string[];
+  theirThreats: string[];
+  deployment: string[];
+  rounds: { round: number; plan: string }[];
+  tactics: string[];
+  priority: string[];
+  avoid: string[];
+  generatedAt: string;
+  /** What the plan was based on (lists, battleplan, tactics), to spot changes. */
+  basis: string;
+}
+
 export interface UnitStatus {
   damage: number;
   destroyed: boolean;
@@ -202,6 +217,7 @@ export interface Game {
   points?: number;
   /** YYYY-MM-DD */
   date?: string;
+  plan?: GamePlan;
   finished?: { conclusion: "played" | "conceded-me" | "conceded-opponent" | "time"; at: string };
   myListId: string;
   opponentListId: string;

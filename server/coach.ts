@@ -10,7 +10,7 @@ import crypto from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { castChance, chargeChance, damageBySave, expectedDamage, parseCrit, parseTarget, simulate, type AttackProfile } from "../engine/dice.ts";
-import type { ArmyList, Game, TurnTips } from "../shared/types.ts";
+import type { ArmyList, Game, GamePlan, TurnTips } from "../shared/types.ts";
 import { isBattleplanDoc } from "../shared/season.ts";
 import { factionRulesText, findUnit, gameData, listDossier, matchedPlayRule, norm, warscrollText } from "./data.ts";
 import { blobs } from "./blobs.ts";
@@ -327,6 +327,7 @@ function stateText(ctx: CoachContext): string {
     s.objectives ? `Objectives: ${s.objectives}` : "",
     s.notes ? `Notes: ${s.notes}` : "",
     g.log.length ? `Recent log: ${g.log.slice(-6).map((l) => l.text).join(" | ")}` : "",
+    g.plan ? `Our game plan: ${g.plan.summary} This round: ${g.plan.rounds.find((r) => r.round === s.round)?.plan ?? "-"}` : "",
     "</game_state>",
   ]
     .filter(Boolean)
@@ -451,7 +452,8 @@ You are now writing the in-game turn plan shown on the player's phone at the tab
 - In the player's own turn: concrete actions with unit names (moves, targets, spells, commands with CP cost) that score VP or protect the lead, and what to hold back.
 - In the opponent's turn: what they will most likely do in that phase, and how the player should respond (reactive commands, CP to keep, units to screen or protect).
 - Name abilities and commands exactly as in the army data. No odds you have not calculated: qualitative is fine.
-- headline: the one-sentence aim of this turn.`;
+- headline: the one-sentence aim of this turn.
+- If the state includes our game plan, follow it, and say so when the board calls for changing it.`;
 
 const tipsSchema = {
   type: "object",
@@ -495,4 +497,65 @@ export async function turnTips(ctx: CoachContext, round: number, side: "me" | "o
     .join("");
   const parsed = JSON.parse(text) as { headline: string; phases: Record<string, string[]> };
   return { headline: parsed.headline, phases: parsed.phases, generatedAt: new Date().toISOString() };
+}
+
+// ---------- the game plan ----------
+// Written once both armies, the battleplan and the battle tactics are known:
+// the overall strategy the turn tips then follow.
+
+const PLAN_SYSTEM = `${SYSTEM}
+
+You are now writing the player's game plan, read on a phone right before deployment. Study both army lists (warscrolls, points, abilities, faction rules), the battleplan and its scoring, the map if provided, and both players' battle tactic cards. Rules for it:
+- summary: 2-3 sentences: how this matchup is won and lost, and the overall approach.
+- ourStrengths / theirThreats: 3-5 items each, naming units and the abilities or combos that matter, with ranges where relevant.
+- deployment: 2-4 concrete points (what goes where, what to hold in reserve or screen, who to keep out of reach of what).
+- rounds: one entry per battle round 1-5: what to achieve (objectives, battle tactic steps, trades), in at most 35 words each.
+- tactics: when and how to complete each of the player's battle tactic cards (Affray, Strike, Domination), and which of the opponent's to deny.
+- priority: when to take or give the first turn, and when a double turn is worth it.
+- avoid: the 3 mistakes most likely to lose this game.
+Each list item at most 30 words. Name units, abilities and commands exactly as in the army data. No odds you have not calculated.`;
+
+const list = { type: "array", items: { type: "string" } };
+const planSchema = {
+  type: "object",
+  properties: {
+    summary: { type: "string" },
+    ourStrengths: list,
+    theirThreats: list,
+    deployment: list,
+    rounds: {
+      type: "array",
+      items: { type: "object", properties: { round: { type: "integer" }, plan: { type: "string" } }, required: ["round", "plan"], additionalProperties: false },
+    },
+    tactics: list,
+    priority: list,
+    avoid: list,
+  },
+  required: ["summary", "ourStrengths", "theirThreats", "deployment", "rounds", "tactics", "priority", "avoid"],
+  additionalProperties: false,
+};
+
+export async function gamePlan(ctx: CoachContext): Promise<Omit<GamePlan, "basis">> {
+  const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game))];
+  content.push({ type: "text", text: stateText(ctx) });
+  content.push({ type: "text", text: "Write my game plan for this game." });
+  const response = await anthropic()
+    .beta.messages.stream({
+      model: MODEL,
+      max_tokens: 32000,
+      system: PLAN_SYSTEM,
+      messages: [{ role: "user", content }],
+      cache_control: { type: "ephemeral" },
+      output_config: { effort: "high", format: { type: "json_schema", schema: planSchema } },
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+    })
+    .finalMessage();
+  if (response.stop_reason === "refusal") throw new Error("The coach couldn't write a plan for this game.");
+  if (response.stop_reason === "max_tokens") throw new Error("The plan came out too long. Try again.");
+  const text = response.content
+    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+  return { ...(JSON.parse(text) as Omit<GamePlan, "basis" | "generatedAt">), generatedAt: new Date().toISOString() };
 }

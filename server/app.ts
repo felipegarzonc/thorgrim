@@ -13,7 +13,7 @@ import { castChance, chargeChance, damageBySave, expectedDamage, simulate, type 
 import type { ArmyList, Game, GameState, LibraryDoc } from "../shared/types.ts";
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
-import { askCoach, conversations, PROMPTS, resetConversation, turnTips } from "./coach.ts";
+import { askCoach, conversations, gamePlan, PROMPTS, resetConversation, turnTips } from "./coach.ts";
 import { gameData, listRules, warscrollText } from "./data.ts";
 import { addDocument, deleteDocument, docPath, finishUpload, getPages, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
@@ -321,6 +321,13 @@ app.post("/api/games/:id/tips", async (req, res) => {
   const round = Number(req.body.round) || game.state.round;
   const [myList, opponentList] = await Promise.all([lists.get(game.myListId), lists.get(game.opponentListId)]);
   res.json(await turnTips({ game, myList, opponentList }, round, side));
+});
+// The coach's strategy for the game. The page stores it with the game.
+app.post("/api/games/:id/plan", async (req, res) => {
+  const game = await games.get(param(req, "id"));
+  if (!game) return res.status(404).json({ error: "Game not found" });
+  const [myList, opponentList] = await Promise.all([lists.get(game.myListId), lists.get(game.opponentListId)]);
+  res.json(await gamePlan({ game, myList, opponentList }));
 });
 app.post("/api/coach/:id", async (req, res) => {
   const id = param(req, "id");

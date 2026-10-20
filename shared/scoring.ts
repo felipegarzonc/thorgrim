@@ -107,3 +107,9 @@ export function result(game: Pick<Game, "state" | "finished">): "win" | "loss" |
   const { me, opponent } = game.state.vp;
   return me > opponent ? "win" : me < opponent ? "loss" : "draw";
 }
+
+/** What a game plan depends on: when this changes, the plan is out of date. */
+export function planBasis(game: Pick<Game, "myListId" | "opponentListId" | "battleplan" | "state">): string {
+  const cards = (ts?: TacticProgress[]) => (ts ?? []).map((t) => t.card).sort();
+  return JSON.stringify([game.myListId, game.opponentListId, game.battleplan, game.state.attacker, cards(game.state.tactics), cards(game.state.opponentTactics)]);
+}

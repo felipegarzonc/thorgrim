@@ -4,8 +4,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { BATTLE_ROUNDS, isBattleplanDoc, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
-import { derive, emptyRound, nextTacticStep, result, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
-import { PHASES, type ArmyList, type FactionRule, type Game, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TurnTips } from "../../../shared/types.ts";
+import { derive, emptyRound, nextTacticStep, planBasis, result, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
+import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TurnTips } from "../../../shared/types.ts";
 import { api, withKey } from "../api.ts";
 import { gameDate, sideInfo } from "../gameView.tsx";
 import { Avatar, Counter, FactionPicker, Group, Icon, RulesText, Seg, Sheet, useLoad, useMeta } from "../ui.tsx";
@@ -15,13 +15,14 @@ import { WarscrollCard } from "./Lists.tsx";
 
 type Step = string;
 const ROUND_STEPS = Array.from({ length: BATTLE_ROUNDS }, (_, i) => `round-${i + 1}`);
-const STEPS: Step[] = ["players", "setup", "battleplan", "tactics-me", "tactics-opponent", ...ROUND_STEPS, "results"];
+const STEPS: Step[] = ["players", "setup", "battleplan", "tactics-me", "tactics-opponent", "plan", ...ROUND_STEPS, "results"];
 const STEP_TITLE: Record<string, string> = {
   players: "Players",
   setup: "Game Setup",
   battleplan: "Battleplan",
   "tactics-me": "Your Battle Tactics",
   "tactics-opponent": "Opponent's Battle Tactics",
+  plan: "Game Plan",
   results: "Results",
 };
 const stepTitle = (s: Step) => STEP_TITLE[s] ?? `Round ${s.split("-")[1]}`;
@@ -136,6 +137,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
         {current === "battleplan" && <BattleplanStep game={game} mutate={mutate} />}
         {current === "tactics-me" && <TacticsStep game={game} side="me" mutate={mutate} />}
         {current === "tactics-opponent" && <TacticsStep game={game} side="opponent" mutate={mutate} />}
+        {current === "plan" && <PlanStep game={game} mutate={mutate} saved={() => saving.current} go={go} />}
         {current.startsWith("round-") && (
           <RoundStep
             key={current}
@@ -572,6 +574,127 @@ function TacticsStep({ game, side, mutate }: { game: Game; side: Side; mutate: M
   );
 }
 
+// ---------- the game plan ----------
+
+function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; saved: () => Promise<unknown>; go: (s: Step) => void }) {
+  const meta = useMeta();
+  const plan = game.plan;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const asked = useRef(false);
+  const ready = !!game.battleplan && !!(game.myListId || game.myFaction) && !!(game.opponentListId || game.opponentFaction);
+  const stale = !!plan && plan.basis !== planBasis(game);
+
+  const make = async () => {
+    asked.current = true;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await saved(); // the server reads the saved game
+      const basis = planBasis(game);
+      const p = await api<Omit<GamePlan, "basis">>(`/games/${game.id}/plan`, { method: "POST" });
+      await mutate((g) => ({ ...g, plan: { ...p, basis } }), "Coach wrote the game plan.");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  useEffect(() => {
+    if (!plan && ready && meta?.coachReady && !asked.current) void make();
+  }, [meta?.coachReady]);
+
+  const section = (title: string, items: string[], tone = "") =>
+    items.length > 0 && (
+      <section className={`plan-section ${tone}`}>
+        <h3>{title}</h3>
+        <ul>
+          {items.map((t, i) => (
+            <li key={i}>{t}</li>
+          ))}
+        </ul>
+      </section>
+    );
+
+  return (
+    <div className="stack">
+      <div className="row spread" style={{ margin: 0 }}>
+        <h1 className="step-heading">Game Plan</h1>
+        {plan && (
+          <button type="button" className="small ghost accent" disabled={busy} onClick={make}>
+            <Icon name="refresh" /> {busy ? "Writing…" : "New plan"}
+          </button>
+        )}
+      </div>
+
+      {!meta?.coachReady ? (
+        <p className="notice">
+          Add your Claude API key on the <a href="#/ask">Coach</a> page and the coach writes a plan for this game here.
+        </p>
+      ) : !ready && !plan ? (
+        <p className="notice">Pick both armies and the battleplan first: the plan is built from them (and from the battle tactics and the map).</p>
+      ) : busy && !plan ? (
+        <div className="card plan-wait">
+          <Icon name="spark" />
+          <p className="thinking">Studying both armies, the battleplan and your battle tactics…</p>
+          <p className="muted small">About a minute. You can keep this page open.</p>
+        </div>
+      ) : error ? (
+        <p className="error">
+          {error}{" "}
+          <button type="button" className="small" onClick={make}>
+            Try again
+          </button>
+        </p>
+      ) : !plan ? (
+        <button type="button" className="primary wide" onClick={make}>
+          <Icon name="spark" /> Write the game plan
+        </button>
+      ) : null}
+
+      {plan && (
+        <>
+          {stale && (
+            <p className="notice small">
+              The armies, battleplan or tactics changed since this plan was written.{" "}
+              <button type="button" className="small ghost accent" disabled={busy} onClick={make}>
+                Update it
+              </button>
+            </p>
+          )}
+          <section className="card plan-summary">
+            <Icon name="spark" />
+            <p>{plan.summary}</p>
+          </section>
+          <div className="plan-two">
+            {section("Our strengths", plan.ourStrengths, "me")}
+            {section("Their threats", plan.theirThreats, "opponent")}
+          </div>
+          {section("Deployment", plan.deployment)}
+          <section className="plan-section">
+            <h3>Round by round</h3>
+            <ol className="plan-rounds">
+              {plan.rounds.map((r) => (
+                <li key={r.round}>
+                  <span className="plan-round-no">{r.round}</span>
+                  <span>{r.plan}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+          {section("Battle tactics", plan.tactics)}
+          {section("Priority & double turns", plan.priority)}
+          {section("Don't lose it by", plan.avoid, "warn")}
+        </>
+      )}
+
+      <button type="button" className="primary wide start-game" onClick={() => go("round-1")}>
+        Start the game: Round 1 <Icon name="right" />
+      </button>
+    </div>
+  );
+}
+
 // ---------- a battle round ----------
 
 function RoundStep(props: {
@@ -646,6 +769,15 @@ function RoundStep(props: {
         )}
         {future && !rec?.first && <p className="small muted" style={{ margin: "0.3rem 0 0" }}>Finish round {liveRound || 1} first; you can still fill this in.</p>}
       </Group>
+
+      {game.plan?.rounds.find((r) => r.round === n) && (
+        <p className="round-plan">
+          <Icon name="spark" />
+          <span>
+            <b>Plan for round {n}:</b> {game.plan.rounds.find((r) => r.round === n)!.plan}
+          </span>
+        </p>
+      )}
 
       {isLive && <TurnCard {...props} />}
 
