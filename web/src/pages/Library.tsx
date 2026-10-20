@@ -93,7 +93,7 @@ export function LibraryPage() {
   // Pick up a read that stopped when the page was closed.
   useEffect(() => {
     if (meta?.backgroundJobs !== false || !meta.coachReady || driving.current) return;
-    const next = docs?.find((d) => d.transcription?.status === "running" || d.transcription?.status === "pending");
+    const next = docs?.find((d) => d.canEdit !== false && (d.transcription?.status === "running" || d.transcription?.status === "pending"));
     if (next) void drive(next);
   }, [docs, meta?.backgroundJobs, meta?.coachReady]);
 
@@ -214,20 +214,22 @@ function BookCard({ doc, category, onStart, onRemove }: { doc: LibraryDoc; categ
         </div>
       )}
       <span className="muted small">
-        {category} · {size}
+        <span className={`tag ${doc.owner && doc.owner !== "shared" ? "me" : ""}`}>{doc.owner && doc.owner !== "shared" ? "Yours" : "Shared"}</span> {category} · {size}
         {t?.status === "done" ? ` · ${total} scanned page${total > 1 ? "s" : ""} read` : ""}
         {t?.status === "running" ? (backgroundJobs === false ? " · keep this page open while it reads" : " · photos and scans are read once, then searchable") : ""}
         {t?.status === "failed" && t.error ? ` · ${t.error}` : ""}
       </span>
       <div className="row" style={{ margin: 0 }}>
-        {t && (t.status === "pending" || t.status === "failed") && (
+        {doc.canEdit !== false && t && (t.status === "pending" || t.status === "failed") && (
           <button type="button" className="small primary" onClick={onStart}>
             {t.status === "failed" || t.done > 0 ? "Resume reading" : "Read with Claude"}
           </button>
         )}
-        <button type="button" className="small" onClick={onRemove}>
-          Remove
-        </button>
+        {doc.canEdit !== false && (
+          <button type="button" className="small" onClick={onRemove}>
+            Remove
+          </button>
+        )}
       </div>
     </div>
   );

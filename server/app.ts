@@ -15,7 +15,31 @@ import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
 import { askCoach, conversations, gamePlan, PROMPTS, resetConversation, turnTips } from "./coach.ts";
 import { gameData, listRules, warscrollText } from "./data.ts";
-import { addDocument, deleteDocument, docPath, finishUpload, getPages, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
+import {
+  accountSettings,
+  accountsEnabled,
+  AuthError,
+  createInvite,
+  createLogin,
+  findInvite,
+  limitFor,
+  listAccounts,
+  listInvites,
+  publicAccount,
+  refreshSession,
+  saveAccounts,
+  saveAccountSettings,
+  saveInvites,
+  setLoginPassword,
+  signIn,
+  updateAccount,
+  usageOf,
+  userIdFromToken,
+  type Account,
+  type Session,
+} from "./accounts.ts";
+import { currentUser, LOCAL_USER, runAs, userPrefix, type UserCtx } from "./context.ts";
+import { addDocument, canEdit, deleteDocument, docPath, finishUpload, getPages, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
 import { Collection, newId } from "./store.ts";
 import { backgroundJobs, resumePendingTranscriptions, transcribeDocument, transcribeStep } from "./transcribe.ts";
@@ -32,10 +56,11 @@ app.use(express.json({ limit: "4mb" }));
 // Health check for the hosting platform (no data, no auth).
 app.get(["/healthz", "/api/healthz"], (_req, res) => res.json({ ok: true }));
 
-// ---------- password ----------
-// Optional on your own computer; required when the app is online (Docker
-// sets PUBLIC=1, Vercel sets VERCEL=1), so nobody else can use it or spend
-// your Claude credit.
+// ---------- who is it ----------
+// Online, people sign in with their account (invite-only, email + password).
+// The app password (APP_ACCESS_KEY) still works as the owner's master key,
+// and is needed once to create the first admin account. On your own
+// computer without Supabase there are no accounts: one local user.
 
 const accessKey = process.env.APP_ACCESS_KEY ?? "";
 const isPublic = process.env.PUBLIC === "1" || Boolean(process.env.VERCEL);
@@ -43,7 +68,7 @@ const missingPassword = isPublic && accessKey.length < 8;
 if (missingPassword) console.error("APP_ACCESS_KEY (8+ characters) is not set: the app stays locked until it is.");
 
 const sameKey = (given: unknown) => {
-  if (typeof given !== "string") return false;
+  if (typeof given !== "string" || !accessKey) return false;
   const a = crypto.createHash("sha256").update(given).digest();
   const b = crypto.createHash("sha256").update(accessKey).digest();
   return crypto.timingSafeEqual(a, b);
@@ -51,19 +76,195 @@ const sameKey = (given: unknown) => {
 
 // Slow down password guessing: 20 wrong tries per address per 15 minutes.
 const failures = new Map<string, { count: number; since: number }>();
-app.use("/api", (req, res, next) => {
-  if (missingPassword) return res.status(503).json({ error: "Set APP_ACCESS_KEY (the app password, 8+ characters) in the hosting settings, then redeploy." });
-  if (!accessKey) return next();
+const tooMany = (req: Request) => {
   const ip = req.ip ?? "?";
   const f = failures.get(ip);
   if (f && Date.now() - f.since > 15 * 60_000) failures.delete(ip);
-  if ((failures.get(ip)?.count ?? 0) >= 20) return res.status(429).json({ error: "Too many wrong passwords. Try again in 15 minutes." });
-  if (sameKey(req.get("x-access-key")) || sameKey(req.query.key)) return next();
-  if (req.get("x-access-key") || req.query.key) {
-    const cur = failures.get(ip) ?? { count: 0, since: Date.now() };
-    failures.set(ip, { ...cur, count: cur.count + 1 });
+  return (failures.get(ip)?.count ?? 0) >= 20;
+};
+const failed = (req: Request) => {
+  const ip = req.ip ?? "?";
+  const cur = failures.get(ip) ?? { count: 0, since: Date.now() };
+  failures.set(ip, { ...cur, count: cur.count + 1 });
+};
+
+async function ownerCtx(): Promise<UserCtx> {
+  const owner = accountsEnabled() ? (await listAccounts()).find((a) => a.owner) : undefined;
+  return { id: owner?.id ?? "owner", name: owner?.name ?? "", isAdmin: true, prefix: "" };
+}
+async function accountCtx(userId: string): Promise<UserCtx> {
+  const acc = (await listAccounts()).find((a) => a.id === userId);
+  if (!acc) throw new AuthError("This account isn't on the app's player list. Ask the admin for an invite.", 403);
+  if (acc.disabled) throw new AuthError("This account is switched off. Ask the admin.", 403);
+  return { id: acc.id, name: acc.name, isAdmin: acc.role === "admin", prefix: userPrefix(acc.id, !!acc.owner) };
+}
+
+app.use("/api", async (req, res, next) => {
+  if (missingPassword) return res.status(503).json({ error: "Set APP_ACCESS_KEY (the app password, 8+ characters) in the hosting settings, then redeploy." });
+  if (req.path.startsWith("/auth/")) return next(); // sign-in routes check for themselves
+  if (tooMany(req)) return res.status(429).json({ error: "Too many wrong passwords. Try again in 15 minutes." });
+  try {
+    const master = req.get("x-access-key") ?? (typeof req.query.key === "string" ? req.query.key : undefined);
+    const bearer = req.get("authorization")?.replace(/^Bearer\s+/i, "") || (typeof req.query.token === "string" ? req.query.token : "");
+    let user: UserCtx | null = null;
+    if (master && sameKey(master)) user = await ownerCtx();
+    else if (bearer && accountsEnabled()) user = await accountCtx(await userIdFromToken(bearer).catch(() => Promise.reject(new AuthError("Your session ended. Sign in again."))));
+    else if (!accessKey && !isPublic) user = LOCAL_USER;
+    if (!user) {
+      if (master) failed(req);
+      return res.status(401).json({ error: "Sign in required", needsLogin: true });
+    }
+    runAs(user, () => next());
+  } catch (e) {
+    if (e instanceof AuthError) return res.status(e.status).json({ error: e.message, needsLogin: e.status === 401 });
+    next(e);
   }
-  res.status(401).json({ error: "Password required", needsLogin: true });
+});
+
+const requireAdmin = (_req: Request, res: Response, next: NextFunction) =>
+  currentUser().isAdmin ? next() : res.status(403).json({ error: "Only the admin can do that." });
+
+// ---------- sign in, invites ----------
+
+app.get("/api/auth/status", async (_req, res) => {
+  const enabled = accountsEnabled();
+  res.json({ accounts: enabled, setupNeeded: enabled && !(await listAccounts()).length, password: !!accessKey });
+});
+
+const signedIn = async (userId: string, session: Session) => {
+  const acc = (await listAccounts()).find((a) => a.id === userId);
+  if (!acc) throw new AuthError("This account isn't on the app's player list. Ask the admin for an invite.", 403);
+  if (acc.disabled) throw new AuthError("This account is switched off. Ask the admin.", 403);
+  return { session, user: publicAccount(acc) };
+};
+
+app.post("/api/auth/login", async (req, res) => {
+  if (!accountsEnabled()) return res.status(400).json({ error: "Accounts need Supabase. Use the app password." });
+  if (tooMany(req)) return res.status(429).json({ error: "Too many wrong passwords. Try again in 15 minutes." });
+  try {
+    const { session, userId } = await signIn(String(req.body.email ?? ""), String(req.body.password ?? ""));
+    res.json(await signedIn(userId, session));
+  } catch (e) {
+    if (e instanceof AuthError && e.status === 400) failed(req);
+    throw e;
+  }
+});
+
+app.post("/api/auth/refresh", async (req, res) => {
+  const { session, userId } = await refreshSession(String(req.body.refresh_token ?? "")).catch(() => {
+    throw new AuthError("Your session ended. Sign in again.");
+  });
+  res.json(await signedIn(userId, session));
+});
+
+// The very first account: needs the app password, becomes the admin and owns the existing data.
+app.post("/api/auth/setup", async (req, res) => {
+  if (!accountsEnabled()) return res.status(400).json({ error: "Accounts need Supabase storage." });
+  if (tooMany(req)) return res.status(429).json({ error: "Too many wrong passwords. Try again in 15 minutes." });
+  if (!sameKey(req.body.accessKey)) {
+    failed(req);
+    return res.status(401).json({ error: "Wrong app password." });
+  }
+  if ((await listAccounts()).length) return res.status(409).json({ error: "The admin account already exists. Sign in." });
+  const name = String(req.body.name ?? "").trim() || "Admin";
+  const email = String(req.body.email ?? "").trim().toLowerCase();
+  const id = await createLogin(email, String(req.body.password ?? ""), name);
+  await saveAccounts([{ id, email, name, role: "admin", owner: true, monthlyLimitUsd: null, createdAt: new Date().toISOString() }]);
+  const { session } = await signIn(email, String(req.body.password ?? ""));
+  res.json(await signedIn(id, session));
+});
+
+app.get("/api/auth/invite/:token", async (req, res) => {
+  const inv = await findInvite(param(req, "token"));
+  res.json(inv ? { valid: true, note: inv.note } : { valid: false });
+});
+
+app.post("/api/auth/join", async (req, res) => {
+  if (tooMany(req)) return res.status(429).json({ error: "Too many tries. Try again in 15 minutes." });
+  const inv = await findInvite(String(req.body.token ?? ""));
+  if (!inv) {
+    failed(req);
+    return res.status(400).json({ error: "This invite link is not valid any more. Ask the admin for a new one." });
+  }
+  const name = String(req.body.name ?? "").trim();
+  const email = String(req.body.email ?? "").trim().toLowerCase();
+  const password = String(req.body.password ?? "");
+  if (!name) return res.status(400).json({ error: "Tell us your name (it shows on your games)." });
+  const id = await createLogin(email, password, name);
+  await saveAccounts([...(await listAccounts()), { id, email, name, role: inv.role, createdAt: new Date().toISOString() }]);
+  await saveInvites((await listInvites()).map((i) => (i.id === inv.id ? { ...i, usedBy: id, usedAt: new Date().toISOString() } : i)));
+  const { session } = await signIn(email, password);
+  res.json(await signedIn(id, session));
+});
+
+// ---------- me ----------
+
+app.get("/api/me", async (_req, res) => {
+  const u = currentUser();
+  const acc = accountsEnabled() ? (await listAccounts()).find((a) => a.id === u.id) : undefined;
+  res.json({
+    user: acc ? publicAccount(acc) : { id: u.id, name: u.name, email: "", role: "admin", owner: true },
+    accounts: accountsEnabled(),
+    usage: { month: new Date().toISOString().slice(0, 7), ...(await usageOf(u.id)), limitUsd: await limitFor(u.id) },
+  });
+});
+app.patch("/api/me", async (req, res) => {
+  const name = String(req.body.name ?? "").trim();
+  if (!name) return res.status(400).json({ error: "Name can't be empty." });
+  res.json(publicAccount(await updateAccount(currentUser().id, { name })));
+});
+app.post("/api/me/password", async (req, res) => {
+  if (!accountsEnabled()) return res.status(400).json({ error: "No accounts on this app." });
+  await setLoginPassword(currentUser().id, String(req.body.password ?? ""));
+  res.json({ ok: true });
+});
+
+// ---------- admin: players, invites, limits ----------
+
+app.get("/api/admin/users", requireAdmin, async (_req, res) => {
+  const accounts = await listAccounts();
+  res.json(
+    await Promise.all(accounts.map(async (a) => ({ ...publicAccount(a), disabled: !!a.disabled, createdAt: a.createdAt, monthlyLimitUsd: a.monthlyLimitUsd, limitUsd: await limitFor(a.id), usage: await usageOf(a.id) }))),
+  );
+});
+app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
+  const b = req.body as { monthlyLimitUsd?: number | null | "default"; disabled?: boolean; role?: "admin" | "player"; name?: string };
+  const target = (await listAccounts()).find((a) => a.id === param(req, "id"));
+  if (!target) return res.status(404).json({ error: "No such player" });
+  if (target.owner && (b.disabled || b.role === "player")) return res.status(400).json({ error: "The owner account stays an active admin." });
+  const patch: Partial<Account> = {};
+  if ("monthlyLimitUsd" in b)
+    patch.monthlyLimitUsd = b.monthlyLimitUsd === "default" ? undefined : b.monthlyLimitUsd === null ? null : Math.max(0, Number(b.monthlyLimitUsd) || 0);
+  if (typeof b.disabled === "boolean") patch.disabled = b.disabled;
+  if (b.role === "admin" || b.role === "player") patch.role = b.role;
+  if (b.name?.trim()) patch.name = b.name.trim();
+  res.json(publicAccount(await updateAccount(target.id, patch)));
+});
+// A new temporary password, shown once to the admin to pass on.
+app.post("/api/admin/users/:id/password", requireAdmin, async (req, res) => {
+  const password = crypto.randomBytes(9).toString("base64url");
+  await setLoginPassword(param(req, "id"), password);
+  res.json({ password });
+});
+app.get("/api/admin/invites", requireAdmin, async (_req, res) => {
+  const now = new Date().toISOString();
+  res.json((await listInvites()).filter((i) => !i.usedBy && i.expiresAt > now).map(({ tokenHash: _t, ...i }) => i));
+});
+app.post("/api/admin/invites", requireAdmin, async (req, res) => {
+  if (!accountsEnabled()) return res.status(400).json({ error: "Invites need accounts (Supabase)." });
+  const { invite, token } = await createInvite(String(req.body.note ?? ""), req.body.role === "admin" ? "admin" : "player");
+  const { tokenHash: _t, ...rest } = invite;
+  res.json({ invite: rest, token });
+});
+app.delete("/api/admin/invites/:id", requireAdmin, async (req, res) => {
+  await saveInvites((await listInvites()).filter((i) => i.id !== param(req, "id")));
+  res.json({ ok: true });
+});
+app.get("/api/admin/settings", requireAdmin, async (_req, res) => res.json(await accountSettings()));
+app.put("/api/admin/settings", requireAdmin, async (req, res) => {
+  const defaultLimitUsd = Math.max(0, Number(req.body.defaultLimitUsd) || 0);
+  await saveAccountSettings({ defaultLimitUsd });
+  res.json({ defaultLimitUsd });
 });
 
 // A Claude key pasted in the app online is kept in storage; pick it up.
@@ -80,7 +281,10 @@ const newestFirst = <T extends { createdAt: string }>(xs: T[]) => xs.sort((a, b)
 
 app.get("/api/meta", (_req, res) => {
   const d = gameData();
+  const u = currentUser();
   res.json({
+    user: { id: u.id, name: u.name, isAdmin: u.isAdmin },
+    accounts: accountsEnabled(),
     source: d.source,
     commit: d.commit,
     builtAt: d.builtAt,
@@ -96,9 +300,8 @@ app.get("/api/meta", (_req, res) => {
 // Only from the computer running it, or with the password when online.
 app.post("/api/settings/api-key", async (req, res) => {
   const local = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "") && !isPublic;
-  if (!local && !(accessKey && sameKey(req.get("x-access-key")))) {
-    return res.status(403).json({ error: "Set the API key from the computer running the app." });
-  }
+  const allowed = isPublic || accessKey ? currentUser().isAdmin : local;
+  if (!allowed) return res.status(403).json({ error: isPublic ? "Only the admin can set the Claude API key." : "Set the API key from the computer running the app." });
   const key = String(req.body.key ?? "").trim();
   if (!/^sk-ant-[A-Za-z0-9_-]{20,}$/.test(key)) return res.status(400).json({ error: "That doesn't look like a Claude API key (it starts with sk-ant-)." });
   await saveApiKey(key);
@@ -155,7 +358,7 @@ const startReading = async (doc: LibraryDoc) => {
   if (doc.transcription && hasCredentials() && backgroundJobs()) void transcribeDocument(doc.id);
 };
 
-app.get("/api/library", async (_req, res) => res.json(newestFirst(await listDocuments())));
+app.get("/api/library", async (_req, res) => res.json(newestFirst(await listDocuments()).map((d) => ({ ...d, canEdit: canEdit(d) }))));
 
 // Upload in one request (used for small files and by older clients).
 app.post("/api/library", upload.single("file"), async (req, res) => {
@@ -202,6 +405,7 @@ app.post("/api/library/:id/finish", async (req, res) => {
 app.post("/api/library/:id/transcribe", async (req, res) => {
   const doc = await libraryDocs.get(param(req, "id"));
   if (!doc?.transcription) return res.status(404).json({ error: "Nothing to transcribe" });
+  if (!canEdit(doc)) return res.status(403).json({ error: "The admin reads the shared books." });
   if (!hasCredentials()) return res.status(503).json({ error: "Reading scanned pages needs your Claude API key (paste it on the Ask page)." });
   if (backgroundJobs()) {
     void transcribeDocument(doc.id);
@@ -231,6 +435,8 @@ app.get("/api/library/:id/file", async (req, res) => {
   res.type(doc.mime).send(data);
 });
 app.delete("/api/library/:id", async (req, res) => {
+  const doc = await libraryDocs.get(param(req, "id"));
+  if (doc && !canEdit(doc)) return res.status(403).json({ error: "This book is in the shared library: only the admin can remove it." });
   await deleteDocument(param(req, "id"));
   res.json({ ok: true });
 });
@@ -273,7 +479,7 @@ app.post("/api/games", async (req, res) => {
   const game: Game = {
     id: newId(),
     name: b.name || "",
-    myName: b.myName ?? last?.myName ?? "",
+    myName: b.myName ?? (last?.myName || currentUser().name),
     opponentName: b.opponentName ?? "",
     date: b.date ?? new Date().toISOString().slice(0, 10),
     points: b.points ?? 2000,
@@ -304,7 +510,8 @@ app.delete("/api/games/:id", async (req, res) => {
   const id = param(req, "id");
   await games.delete(id);
   await resetConversation(id);
-  for (const name of await blobs().list(`game-photos/${id}`)) await blobs().remove(`game-photos/${id}/${name}`);
+  const photos = `${currentUser().prefix}game-photos/${id}`;
+  for (const name of await blobs().list(photos)) await blobs().remove(`${photos}/${name}`);
   res.json({ ok: true });
 });
 
@@ -338,13 +545,13 @@ app.post("/api/games/:id/photo", express.raw({ type: "image/*", limit: "8mb" }),
   if (!(await games.get(id))) return res.status(404).json({ error: "Game not found" });
   const body = req.body as Buffer;
   if (!Buffer.isBuffer(body) || !body.length) return res.status(400).json({ error: "No photo received" });
-  const path = `game-photos/${id}/${Date.now()}.jpg`;
+  const path = `${currentUser().prefix}game-photos/${id}/${Date.now()}.jpg`;
   await blobs().write(path, body, "image/jpeg");
   res.json({ path });
 });
 app.get("/api/games/:id/photo", async (req, res) => {
   const p = String(req.query.path ?? "");
-  if (!p.startsWith(`game-photos/${param(req, "id")}/`)) return res.status(400).end();
+  if (!p.startsWith(`${currentUser().prefix}game-photos/${param(req, "id")}/`)) return res.status(400).end();
   const data = await blobs().read(p);
   return data ? res.type("image/jpeg").send(data) : res.status(404).end();
 });
@@ -382,6 +589,7 @@ if (fs.existsSync(path.join(dist, "index.html"))) {
 }
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof AuthError) return res.status(err.status).json({ error: err.message, needsLogin: err.status === 401 });
   if (/authentication method/i.test(err.message)) {
     return res.status(503).json({ error: "The coach needs your Claude API key.", needsKey: true });
   }

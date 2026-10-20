@@ -3,7 +3,7 @@ import { result } from "../../../shared/scoring.ts";
 import type { ArmyList, Game } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { GameCard, gameHref, sideInfo } from "../gameView.tsx";
-import { Icon, useLoad } from "../ui.tsx";
+import { Icon, useLoad, useMeta } from "../ui.tsx";
 
 export async function newGame() {
   const g = await api<Game>("/games", { method: "POST", json: {} });
@@ -13,6 +13,7 @@ export async function newGame() {
 const byDate = (a: Game, b: Game) => (a.date ?? a.createdAt).localeCompare(b.date ?? b.createdAt) || a.createdAt.localeCompare(b.createdAt);
 
 export function HomePage() {
+  const meta = useMeta();
   const [games] = useLoad<Game[]>("/games");
   const [lists] = useLoad<ArmyList[]>("/lists");
   if (!games) return <p className="muted">Loading…</p>;
@@ -24,7 +25,10 @@ export function HomePage() {
   return (
     <div className="stack">
       <div className="page-head">
-        <h1>Thorgrim</h1>
+        <a className="me-link" href="#/profile" aria-label="Your profile">
+          <span className="avatar">{(meta?.user?.name || "T").slice(0, 1).toUpperCase()}</span>
+        </a>
+        <h1 className="grow">Thorgrim</h1>
         <a className="button small ghost" href="#/calc">
           <Icon name="calc" /> Calculator
         </a>

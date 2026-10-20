@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { api, LOGIN_EVENT, setAccessKey } from "./api.ts";
+import { api, LOGIN_EVENT } from "./api.ts";
 import { CalculatorPage } from "./pages/Calculator.tsx";
 import { CoachChat } from "./pages/CoachChat.tsx";
 import { GamePage } from "./pages/Game.tsx";
 import { GamesPage } from "./pages/Games.tsx";
 import { LibraryPage } from "./pages/Library.tsx";
 import { ListsPage } from "./pages/Lists.tsx";
+import { Join, Login } from "./pages/Auth.tsx";
 import { HomePage } from "./pages/Home.tsx";
+import { ProfilePage } from "./pages/Profile.tsx";
 import { Icon, MetaContext, type IconName, type Meta } from "./ui.tsx";
 
 const TABS: [string, string, IconName][] = [
@@ -44,6 +46,7 @@ export function App() {
     return () => window.removeEventListener(LOGIN_EVENT, on);
   }, []);
 
+  if (tab === "join" && id) return <Join token={id} />;
   if (needLogin) return <Login />;
 
   // A game has its own top and bottom bars, like a scoresheet.
@@ -73,6 +76,7 @@ export function App() {
         {tab === "lists" && <ListsPage selectedId={id} />}
         {tab === "library" && <LibraryPage />}
         {tab === "calc" && <CalculatorPage />}
+        {tab === "profile" && <ProfilePage />}
         {tab === "ask" && (
           <CoachChat
             convoId="general"
@@ -122,42 +126,5 @@ function AskIntro() {
       </ul>
       <p className="small muted">Try one of these:</p>
     </div>
-  );
-}
-
-function Login() {
-  const [key, setKey] = useState("");
-  const [error, setError] = useState<string>();
-  const [busy, setBusy] = useState(false);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setError(undefined);
-    const res = await fetch("/api/meta", { headers: { "x-access-key": key } });
-    if (res.ok) {
-      setAccessKey(key);
-      window.location.reload();
-      return;
-    }
-    const data = await res.json().catch(() => ({}));
-    setError((data as { error?: string }).error === "Password required" ? "Wrong password." : ((data as { error?: string }).error ?? "Could not sign in."));
-    setBusy(false);
-  };
-  return (
-    <main className="login">
-      <form className="card" onSubmit={submit}>
-        <span className="brand">Thorgrim</span>
-        <h1>Sign in</h1>
-        <p className="muted small">Enter the app password you chose when you set it up.</p>
-        <label>
-          Password
-          <input type="password" autoComplete="current-password" autoFocus value={key} onChange={(e) => setKey(e.target.value)} />
-        </label>
-        {error && <p className="error small">{error}</p>}
-        <button type="submit" className="primary" disabled={!key || busy} style={{ width: "100%" }}>
-          {busy ? "Checking…" : "Sign in"}
-        </button>
-      </form>
-    </main>
   );
 }

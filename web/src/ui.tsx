@@ -3,6 +3,8 @@ import { ALLIANCES, allianceOf, baseFaction, type Alliance } from "../../shared/
 import { api } from "./api.ts";
 
 export interface Meta {
+  user?: { id: string; name: string; isAdmin: boolean };
+  accounts?: boolean;
   source: string;
   commit: string;
   builtAt: string;

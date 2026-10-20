@@ -99,6 +99,10 @@ export interface LibraryDoc {
   mime: string;
   pages: number;
   createdAt: string;
+  /** "shared" (the admin's library, everyone's coach uses it) or the id of the user who uploaded it. Missing = shared. */
+  owner?: string;
+  /** Sent by the server: can the signed-in user change or remove it? */
+  canEdit?: boolean;
   /** Set while the browser is still sending the file to storage. */
   uploading?: boolean;
   /** Pages with no text layer (photos/scans) are read by Claude and transcribed. */

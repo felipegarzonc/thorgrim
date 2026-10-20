@@ -6,6 +6,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { PDFDocument } from "pdf-lib";
 import type { LibraryDoc } from "../shared/types.ts";
+import { checkBudget, recordUsage } from "./accounts.ts";
 import { anthropic, hasCredentials } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
 import { docPath, libraryDocs, setPageText } from "./library.ts";
@@ -37,6 +38,7 @@ export function splitPages(text: string, pageNumbers: number[]): Map<number, str
 }
 
 async function transcribeBatch(blocks: Anthropic.Beta.BetaContentBlockParam[], pageNumbers: number[]) {
+  await checkBudget();
   const response = await anthropic().beta.messages.create({
     model: MODEL,
     max_tokens: 16000,
@@ -50,6 +52,7 @@ async function transcribeBatch(blocks: Anthropic.Beta.BetaContentBlockParam[], p
       },
     ],
   });
+  await recordUsage(response.usage);
   if (response.stop_reason === "refusal") throw new Error("Claude declined to transcribe these pages");
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")

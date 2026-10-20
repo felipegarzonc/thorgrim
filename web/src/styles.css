@@ -2457,3 +2457,119 @@ button.mic.on {
   align-items: flex-end;
   flex: none;
 }
+
+/* accounts */
+.me-link {
+  text-decoration: none;
+  flex: none;
+}
+.me-link .avatar,
+.players .avatar,
+.profile-card .avatar {
+  width: 2.6rem;
+  height: 2.6rem;
+  background: var(--fab);
+  font-size: 1.1rem;
+}
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.3rem;
+}
+.profile-card .avatar.big {
+  width: 5.5rem;
+  height: 5.5rem;
+  font-size: 2.2rem;
+  margin-bottom: 0.3rem;
+}
+.profile-card h2 {
+  font-size: 1.8rem;
+}
+.profile-card p {
+  margin: 0;
+}
+.usage-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.usage-line b {
+  font-size: 1.5rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.usage-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #3a3d43;
+  overflow: hidden;
+  margin: 0.4rem 0 0.2rem;
+}
+.usage-bar span {
+  display: block;
+  height: 100%;
+  background: var(--me);
+  border-radius: 999px;
+}
+.usage-bar span.high {
+  background: var(--warn);
+}
+.invite-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--me-soft);
+  border-radius: 12px;
+  padding: 0.8rem;
+  margin-top: 0.4rem;
+}
+.invite-link code {
+  word-break: break-all;
+  font-size: 0.85rem;
+}
+.players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.players li {
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.players li.off {
+  opacity: 0.6;
+}
+.player-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.player-limit,
+.player-actions {
+  margin: 0;
+  align-items: center;
+}
+.money {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.money input {
+  width: 5rem;
+  min-height: 40px;
+}
+.login .card {
+  width: min(420px, 100%);
+}
+.login form {
+  display: flex;
+  flex-direction: column;
+}
+.login form button[type="submit"] {
+  margin-top: 0.6rem;
+}

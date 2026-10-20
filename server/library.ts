@@ -10,12 +10,38 @@ import path from "node:path";
 import { extractText, getDocumentProxy } from "unpdf";
 import type { LibraryDoc } from "../shared/types.ts";
 import { blobs } from "./blobs.ts";
+import { currentUser } from "./context.ts";
 import { Collection, newId } from "./store.ts";
 
-export const libraryDocs = new Collection<LibraryDoc>("library");
+// The shared library lives at the root (the admin's books); each invited
+// player can add their own under their space. The coach uses both.
+const shared = new Collection<LibraryDoc>("library", "");
+const isShared = (doc: Pick<LibraryDoc, "owner">) => !doc.owner || doc.owner === "shared";
+const prefixOf = (doc: Pick<LibraryDoc, "owner">) => (isShared(doc) ? "" : `users/${doc.owner}/`);
+const own = () => (currentUser().prefix ? new Collection<LibraryDoc>("library", currentUser().prefix) : null);
 
-const pagesPath = (id: string) => `library-files/${id}.pages.json`;
-export const docPath = (doc: Pick<LibraryDoc, "id" | "filename">) => `library-files/${doc.id}${path.extname(doc.filename).toLowerCase() || ""}`;
+/** Library entries visible to the current user: the shared ones and their own. */
+export const libraryDocs = {
+  async get(id: string) {
+    return (await own()?.get(id)) ?? (await shared.get(id));
+  },
+  async list() {
+    return [...(await shared.list()), ...((await own()?.list()) ?? [])];
+  },
+  async save(doc: LibraryDoc) {
+    return new Collection<LibraryDoc>("library", prefixOf(doc)).save(doc);
+  },
+  async delete(doc: LibraryDoc) {
+    return new Collection<LibraryDoc>("library", prefixOf(doc)).delete(doc.id);
+  },
+};
+
+/** Can the current user change or remove this entry? (their own, or any shared one as admin) */
+export const canEdit = (doc: LibraryDoc) => (isShared(doc) ? currentUser().isAdmin : doc.owner === currentUser().id);
+
+const pagesPath = (doc: Pick<LibraryDoc, "id" | "owner">) => `${prefixOf(doc)}library-files/${doc.id}.pages.json`;
+export const docPath = (doc: Pick<LibraryDoc, "id" | "filename" | "owner">) =>
+  `${prefixOf(doc)}library-files/${doc.id}${path.extname(doc.filename).toLowerCase() || ""}`;
 
 /** Pages with less text than this are treated as images (photos, scans). */
 export const MIN_PAGE_TEXT = 50;
@@ -35,6 +61,8 @@ function newDoc(input: NewDoc): LibraryDoc {
     mime: input.mime || "application/octet-stream",
     pages: 1,
     createdAt: new Date().toISOString(),
+    // Admins add to the shared library; players to their own.
+    owner: currentUser().isAdmin ? "shared" : currentUser().id,
   };
 }
 
@@ -56,7 +84,7 @@ async function process(doc: LibraryDoc, buffer: Buffer): Promise<LibraryDoc> {
   } else {
     pages = [buffer.toString("utf8")];
   }
-  await blobs().write(pagesPath(doc.id), JSON.stringify(pages), "application/json");
+  await blobs().write(pagesPath(doc), JSON.stringify(pages), "application/json");
   await libraryDocs.save(doc);
   return doc;
 }
@@ -87,22 +115,25 @@ export async function finishUpload(id: string): Promise<LibraryDoc> {
 }
 
 export async function setPageText(id: string, page: number, text: string) {
+  const doc = await libraryDocs.get(id);
+  if (!doc) return;
   const pages = await getPages(id);
   while (pages.length < page) pages.push("");
   pages[page - 1] = text;
-  await blobs().write(pagesPath(id), JSON.stringify(pages), "application/json");
+  await blobs().write(pagesPath(doc), JSON.stringify(pages), "application/json");
 }
 
 export async function deleteDocument(id: string) {
   const doc = await libraryDocs.get(id);
   if (!doc) return;
   await blobs().remove(docPath(doc));
-  await blobs().remove(pagesPath(id));
-  await libraryDocs.delete(id);
+  await blobs().remove(pagesPath(doc));
+  await libraryDocs.delete(doc);
 }
 
 export async function getPages(id: string): Promise<string[]> {
-  const b = await blobs().read(pagesPath(id));
+  const doc = await libraryDocs.get(id);
+  const b = doc ? await blobs().read(pagesPath(doc)) : undefined;
   return b ? (JSON.parse(b.toString("utf8")) as string[]) : [];
 }
 
@@ -143,7 +174,7 @@ interface Index {
 
 // Rebuilt whenever the set of documents or their transcription progress
 // changes (online, several server instances may each hold their own copy).
-let index: Index | null = null;
+const indexes = new Map<string, Index>(); // per user: their own books differ
 
 const STOP = new Set("the a an of to and or in on for is are be this that it its with as at by from if any each your you can cannot not their them they".split(" "));
 const tokenize = (s: string) =>
@@ -159,7 +190,8 @@ async function currentIndex(): Promise<Index> {
     .map((d) => `${d.id}:${d.transcription?.done ?? 0}:${d.transcription?.status ?? ""}`)
     .sort()
     .join("|");
-  if (index?.signature === signature) return index;
+  const cached = indexes.get(currentUser().id);
+  if (cached?.signature === signature) return cached;
   const chunks: Chunk[] = [];
   const allPages = await Promise.all(docs.map((d) => getPages(d.id)));
   docs.forEach((doc, di) => {
@@ -177,7 +209,8 @@ async function currentIndex(): Promise<Index> {
   const df = new Map<string, number>();
   for (const c of chunks) for (const t of c.terms.keys()) df.set(t, (df.get(t) ?? 0) + 1);
   const avgLen = chunks.reduce((s, c) => s + c.length, 0) / Math.max(1, chunks.length);
-  index = { signature, chunks, df, avgLen };
+  const index = { signature, chunks, df, avgLen };
+  indexes.set(currentUser().id, index);
   return index;
 }
 

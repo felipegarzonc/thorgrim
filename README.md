@@ -38,6 +38,18 @@ The app runs on [Vercel](https://vercel.com) (free Hobby plan) and keeps your li
 
 Each push to `main` redeploys automatically. Online, big files are uploaded from the browser straight to Supabase, and scanned pages are read while the Rules page is open (keep it open until it says "Searchable"). Books uploaded on your Mac need to be uploaded again online.
 
+### Players (accounts)
+
+Online with Supabase, the app has accounts so several people can track their own games:
+
+- **First time:** open the app, sign in with the app password (`APP_ACCESS_KEY`), then go to your profile (the round badge on Home) and create your admin account. It keeps everything already in the app.
+- **Inviting:** Profile → *Invite a player* creates a one-time link (valid 14 days) to send by WhatsApp or email. They pick their own email and password. Nobody can sign up without a link.
+- **Each player** has their own lists, games and coach conversations. The rules library is shared (the admin's books) plus each player's own uploads, which only they see.
+- **Coach costs** use the admin's Claude key. Each player has a monthly limit (default $5, estimated from Claude's prices), set per player in the profile page; admins have none.
+- **Forgotten password:** the admin gives a new one from the profile page (no email is sent).
+
+Accounts use Supabase Auth in the same Supabase project; nothing else to configure. On your own computer (no Supabase) there are no accounts.
+
 Alternative: the repository also has a Dockerfile and a Render blueprint (`render.yaml`) for a server with a persistent disk (Render Starter, about $7/month plus disk). Set `APP_ACCESS_KEY` there too.
 
 ## Manual setup (for development)

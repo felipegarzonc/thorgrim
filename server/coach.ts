@@ -15,6 +15,7 @@ import { isBattleplanDoc } from "../shared/season.ts";
 import { factionRulesText, findUnit, gameData, listDossier, matchedPlayRule, norm, warscrollText } from "./data.ts";
 import { blobs } from "./blobs.ts";
 import { docPath, getPages, libraryDocs, listDocuments, parsePageRange, searchLibrary } from "./library.ts";
+import { checkBudget, recordUsage } from "./accounts.ts";
 import { anthropic } from "./anthropic.ts";
 import { Collection } from "./store.ts";
 
@@ -361,6 +362,7 @@ export async function askCoach(
   question: string,
   opts: { effort?: "low" | "medium" | "high" } = {},
 ): Promise<TranscriptEntry> {
+  await checkBudget();
   const convo = (await conversations.get(convoId)) ?? { id: convoId, messages: [], transcript: [] };
 
   // Build this turn's user content: dossier/images only when new or changed.
@@ -401,6 +403,7 @@ export async function askCoach(
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
     });
+    await recordUsage(response.usage);
     messages.push({ role: "assistant", content: response.content as Block[] });
 
     for (const block of response.content) {
@@ -496,6 +499,7 @@ export interface TurnEvent {
 }
 
 export async function turnTips(ctx: CoachContext, round: number, side: "me" | "opponent", event?: TurnEvent): Promise<TurnTips> {
+  await checkBudget();
   const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game)), ...(await tablePhoto(ctx.game))];
   content.push({ type: "text", text: stateText(ctx) });
   const ask =
@@ -520,6 +524,7 @@ export async function turnTips(ctx: CoachContext, round: number, side: "me" | "o
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
   });
+  await recordUsage(response.usage);
   if (response.stop_reason === "refusal") throw new Error("The coach couldn't write tips for this turn.");
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
@@ -566,6 +571,7 @@ const planSchema = {
 };
 
 export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {}): Promise<Omit<GamePlan, "basis">> {
+  await checkBudget();
   const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game)), ...(await tablePhoto(ctx.game))];
   content.push({ type: "text", text: stateText(ctx) });
   const s = ctx.game?.state;
@@ -588,6 +594,7 @@ export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {
       fallbacks: "default",
     })
     .finalMessage();
+  await recordUsage(response.usage);
   if (response.stop_reason === "refusal") throw new Error("The coach couldn't write a plan for this game.");
   if (response.stop_reason === "max_tokens") throw new Error("The plan came out too long. Try again.");
   const text = response.content
