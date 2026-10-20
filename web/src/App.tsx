@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "./api.ts";
+import { api, LOGIN_EVENT, setAccessKey } from "./api.ts";
 import { CalculatorPage } from "./pages/Calculator.tsx";
 import { CoachChat } from "./pages/CoachChat.tsx";
 import { GamePage } from "./pages/Game.tsx";
@@ -33,9 +33,16 @@ export function App() {
   const route = useHashRoute();
   const [tab = "games", id] = route;
 
+  const [needLogin, setNeedLogin] = useState(false);
+
   useEffect(() => {
+    const on = () => setNeedLogin(true);
+    window.addEventListener(LOGIN_EVENT, on);
     api<Meta>("/meta").then(setMeta).catch((e: Error) => setError(e.message));
+    return () => window.removeEventListener(LOGIN_EVENT, on);
   }, []);
+
+  if (needLogin) return <Login />;
 
   return (
     <MetaContext.Provider value={meta}>
@@ -102,5 +109,42 @@ function AskIntro() {
       </ul>
       <p className="small muted">Try one of these:</p>
     </div>
+  );
+}
+
+function Login() {
+  const [key, setKey] = useState("");
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(undefined);
+    const res = await fetch("/api/meta", { headers: { "x-access-key": key } });
+    if (res.ok) {
+      setAccessKey(key);
+      window.location.reload();
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    setError((data as { error?: string }).error === "Password required" ? "Wrong password." : ((data as { error?: string }).error ?? "Could not sign in."));
+    setBusy(false);
+  };
+  return (
+    <main className="login">
+      <form className="card" onSubmit={submit}>
+        <span className="brand">AoS Coach</span>
+        <h1>Sign in</h1>
+        <p className="muted small">Enter the app password you chose when you set it up.</p>
+        <label>
+          Password
+          <input type="password" autoComplete="current-password" autoFocus value={key} onChange={(e) => setKey(e.target.value)} />
+        </label>
+        {error && <p className="error small">{error}</p>}
+        <button type="submit" className="primary" disabled={!key || busy} style={{ width: "100%" }}>
+          {busy ? "Checking…" : "Sign in"}
+        </button>
+      </form>
+    </main>
   );
 }

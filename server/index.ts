@@ -1,4 +1,5 @@
-import "dotenv/config";
+import "./env.ts";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
@@ -18,14 +19,41 @@ const lists = new Collection<ArmyList>("lists");
 const games = new Collection<Game>("games");
 
 const app = express();
+app.set("trust proxy", 1); // behind the host's HTTPS proxy when deployed
 app.use(express.json({ limit: "2mb" }));
+
+// Health check for the hosting platform (no data, no auth).
+app.get("/healthz", (_req, res) => res.json({ ok: true }));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 150 * 1024 * 1024 } });
 
-// Optional shared-secret protection for when the app is hosted online.
-const accessKey = process.env.APP_ACCESS_KEY;
+// Password protection. Optional on your own computer; required when the app
+// is public (PUBLIC=1, set by the Docker image), so nobody else can use it or
+// spend your Claude credit.
+const accessKey = process.env.APP_ACCESS_KEY ?? "";
+if (process.env.PUBLIC === "1" && accessKey.length < 8) {
+  console.error("APP_ACCESS_KEY must be set (8+ characters) when the app is public. Refusing to start.");
+  process.exit(1);
+}
+const sameKey = (given: unknown) => {
+  if (typeof given !== "string") return false;
+  const a = crypto.createHash("sha256").update(given).digest();
+  const b = crypto.createHash("sha256").update(accessKey).digest();
+  return crypto.timingSafeEqual(a, b);
+};
+// Slow down password guessing: 20 wrong tries per address per 15 minutes.
+const failures = new Map<string, { count: number; since: number }>();
 app.use("/api", (req, res, next) => {
-  if (!accessKey || req.get("x-access-key") === accessKey || req.query.key === accessKey) return next();
-  res.status(401).json({ error: "Access key required" });
+  if (!accessKey) return next();
+  const ip = req.ip ?? "?";
+  const f = failures.get(ip);
+  if (f && Date.now() - f.since > 15 * 60_000) failures.delete(ip);
+  if ((failures.get(ip)?.count ?? 0) >= 20) return res.status(429).json({ error: "Too many wrong passwords. Try again in 15 minutes." });
+  if (sameKey(req.get("x-access-key")) || sameKey(req.query.key)) return next();
+  if (req.get("x-access-key") || req.query.key) {
+    const cur = failures.get(ip) ?? { count: 0, since: Date.now() };
+    failures.set(ip, { ...cur, count: cur.count + 1 });
+  }
+  res.status(401).json({ error: "Password required", needsLogin: true });
 });
 
 const wrap = (fn: (req: Request, res: Response) => Promise<unknown> | unknown) => (req: Request, res: Response, next: NextFunction) =>
@@ -51,7 +79,7 @@ app.get("/api/meta", (_req, res) => {
 // Only from this computer (or with the access key when hosted).
 app.post("/api/settings/api-key", (req, res) => {
   const local = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "");
-  if (!local && !(accessKey && req.get("x-access-key") === accessKey)) {
+  if (!local && !(accessKey && sameKey(req.get("x-access-key")))) {
     return res.status(403).json({ error: "Set the API key from the computer running the app." });
   }
   const key = String(req.body.key ?? "").trim();

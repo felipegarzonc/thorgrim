@@ -19,7 +19,7 @@ const root = process.cwd();
 const bsDir = process.env.BSDATA_DIR ?? path.join(root, ".cache", "bsdata");
 const outFile = path.join(root, "data", "aos.json");
 
-const TARBALL = process.env.BSDATA_TARBALL_URL ?? "https://codeload.github.com/BSData/age-of-sigmar-4th/tar.gz/HEAD";
+const TARBALL = process.env.BSDATA_TARBALL_URL || "https://codeload.github.com/BSData/age-of-sigmar-4th/tar.gz/HEAD";
 
 /**
  * Get the BSData files. An existing git checkout is updated with git;

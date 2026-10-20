@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LibraryDoc } from "../../../shared/types.ts";
-import { api } from "../api.ts";
+import { api, withKey } from "../api.ts";
 import { Card, useLoad } from "../ui.tsx";
 
 const CATEGORIES: [LibraryDoc["category"], string][] = [
@@ -160,7 +160,7 @@ function BookCard({ doc, category, onStart, onRemove }: { doc: LibraryDoc; categ
   return (
     <div className={`book ${t?.status === "running" ? "reading" : ""}`}>
       <div className="book-head">
-        <a href={`/api/library/${doc.id}/file`} target="_blank" rel="noreferrer">
+        <a href={withKey(`/api/library/${doc.id}/file`)} target="_blank" rel="noreferrer">
           <b>{doc.title}</b>
         </a>
         <span className={`status ${status[0]}`}>{status[1]}</span>
