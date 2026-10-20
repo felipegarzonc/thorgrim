@@ -10,7 +10,7 @@ import crypto from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { castChance, chargeChance, damageBySave, expectedDamage, parseCrit, parseTarget, simulate, type AttackProfile } from "../engine/dice.ts";
-import type { ArmyList, Game } from "../shared/types.ts";
+import type { ArmyList, Game, TurnTips } from "../shared/types.ts";
 import { factionRulesText, findUnit, gameData, listDossier, matchedPlayRule, norm, warscrollText } from "./data.ts";
 import { blobs } from "./blobs.ts";
 import { docPath, getPages, libraryDocs, listDocuments, parsePageRange, searchLibrary } from "./library.ts";
@@ -419,3 +419,63 @@ export const PROMPTS = {
   review:
     "The game is over. Review it using the game state, log and our conversation: what decided the game, my 3 biggest mistakes (with what I should have done instead), 3 things I did well, and 3 short lessons I should remember for future games, phrased as rules of thumb.",
 };
+
+// ---------- per-turn tips ----------
+// One short request per turn (not part of the chat conversation): a plan for
+// the turn split by phase, from the player's side or, in the opponent's
+// turn, what to expect and how to respond.
+
+const TIP_PHASES = ["Start of Turn", "Hero", "Movement", "Shooting", "Charge", "Combat", "End of Turn"] as const;
+
+const TIPS_SYSTEM = `${SYSTEM}
+
+You are now writing the in-game turn plan shown on the player's phone at the table, one card per phase. Rules for it:
+- Each phase gets 0-3 tips of at most 25 words each. Leave a phase empty when nothing matters there.
+- In the player's own turn: concrete actions with unit names (moves, targets, spells, commands with CP cost) that score VP or protect the lead, and what to hold back.
+- In the opponent's turn: what they will most likely do in that phase, and how the player should respond (reactive commands, CP to keep, units to screen or protect).
+- Name abilities and commands exactly as in the army data. No odds you have not calculated: qualitative is fine.
+- headline: the one-sentence aim of this turn.`;
+
+const tipsSchema = {
+  type: "object",
+  properties: {
+    headline: { type: "string" },
+    phases: {
+      type: "object",
+      properties: Object.fromEntries(TIP_PHASES.map((p) => [p, { type: "array", items: { type: "string" } }])),
+      required: [...TIP_PHASES],
+      additionalProperties: false,
+    },
+  },
+  required: ["headline", "phases"],
+  additionalProperties: false,
+};
+
+export async function turnTips(ctx: CoachContext, round: number, side: "me" | "opponent"): Promise<TurnTips> {
+  const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game))];
+  content.push({ type: "text", text: stateText(ctx) });
+  content.push({
+    type: "text",
+    text:
+      side === "me"
+        ? `Battle round ${round}, my turn. Write my plan for this turn.`
+        : `Battle round ${round}, my opponent's turn. Write what to expect from them in each phase and how I should respond.`,
+  });
+  const response = await anthropic().beta.messages.create({
+    model: MODEL,
+    max_tokens: 16000,
+    system: TIPS_SYSTEM,
+    messages: [{ role: "user", content }],
+    cache_control: { type: "ephemeral" },
+    output_config: { effort: "medium", format: { type: "json_schema", schema: tipsSchema } },
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+  });
+  if (response.stop_reason === "refusal") throw new Error("The coach couldn't write tips for this turn.");
+  const text = response.content
+    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+  const parsed = JSON.parse(text) as { headline: string; phases: Record<string, string[]> };
+  return { headline: parsed.headline, phases: parsed.phases, generatedAt: new Date().toISOString() };
+}

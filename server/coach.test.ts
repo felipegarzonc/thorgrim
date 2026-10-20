@@ -86,3 +86,36 @@ describe.skipIf(!hasData)("askCoach loop", () => {
     expect(result.is_error).toBe(true);
   });
 });
+
+describe.skipIf(!hasData)("turnTips", () => {
+  it("asks for a JSON plan for the turn and returns it by phase", async () => {
+    const { turnTips } = await import("./coach.ts");
+    const plan = { headline: "Take the centre and hold it.", phases: { "Start of Turn": [], Hero: ["Cast first."], Movement: ["Stonehorn to B."], Shooting: [], Charge: [], Combat: [], "End of Turn": [] } };
+    replies.push({ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify(plan) }] });
+    const before = calls.length;
+    const game = {
+      id: "g2",
+      name: "",
+      myListId: "",
+      opponentListId: "",
+      battleplan: "Into the Fire",
+      battleplanNotes: "",
+      references: [],
+      log: [],
+      createdAt: "2026-10-20",
+      state: {
+        round: 2, attacker: "me", firstThisRound: "opponent", activePlayer: "opponent", phase: "Start of Turn",
+        cp: { me: 4, opponent: 5 }, vp: { me: 10, opponent: 8 }, fury: { me: 1, opponent: 2 }, rage: { me: 0, opponent: 0 },
+        tactics: [], opponentTactics: [], units: {}, objectives: "", notes: "",
+      },
+    } as any;
+    const tips = await turnTips({ game }, 2, "opponent");
+    expect(tips.headline).toBe(plan.headline);
+    expect(tips.phases.Movement).toEqual(["Stonehorn to B."]);
+    const req = calls[before];
+    expect(req.output_config.format.type).toBe("json_schema");
+    expect(req.output_config.format.schema.properties.phases.required).toContain("Combat");
+    expect(req.fallbacks).toBe("default");
+    expect(JSON.stringify(req.messages[0].content)).toContain("my opponent's turn");
+  });
+});

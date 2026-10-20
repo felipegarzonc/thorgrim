@@ -135,3 +135,25 @@ export function scoringFor(battleplan: string, round: number): ScoringLine[] | n
 
 export const TACTIC_VP = 5;
 export const TACTIC_STEPS = ["affray", "strike", "domination"] as const;
+
+/** The six battle tactic cards of the 2026-27 season (General's Handbook). */
+export const SEASON_TACTICS = ["Blazing Onslaught", "Siege of Ashes", "Flanking Firestorm", "Smokescreen", "Burning for Vengeance", "Legend of the Parch"];
+
+/** Battleplans with their card numbers (11-16 table 1, 21-26 table 2). */
+export const NUMBERED_BATTLEPLANS = Object.values(BATTLEPLANS).flatMap((names, t) => names.map((name, i) => ({ number: (t + 1) * 10 + i + 1, name })));
+
+export const ALLIANCES = {
+  Order: ["Cities of Sigmar", "Daughters of Khaine", "Fyreslayers", "Idoneth Deepkin", "Kharadron Overlords", "Lumineth Realm-lords", "Seraphon", "Stormcast Eternals", "Sylvaneth"],
+  Chaos: ["Beasts of Chaos", "Blades of Khorne", "Disciples of Tzeentch", "Hedonites of Slaanesh", "Helsmiths of Hashut", "Maggotkin of Nurgle", "Skaven", "Slaves to Darkness"],
+  Death: ["Flesh-eater Courts", "Nighthaunt", "Ossiarch Bonereapers", "Soulblight Gravelords"],
+  Destruction: ["Bonesplitterz", "Gloomspite Gitz", "Ironjawz", "Kruleboyz", "Ogor Mawtribes", "Sons of Behemat"],
+} as const;
+export type Alliance = keyof typeof ALLIANCES;
+
+/** "Ogor Mawtribes - Beastclaw Alfrostun" -> "Ogor Mawtribes". */
+export const baseFaction = (f: string) => f.replace(/\s*\[LEGENDS\]/, "").split(" - ")[0].trim();
+
+export function allianceOf(faction: string): Alliance | undefined {
+  const base = baseFaction(faction);
+  return (Object.keys(ALLIANCES) as Alliance[]).find((a) => (ALLIANCES[a] as readonly string[]).includes(base));
+}

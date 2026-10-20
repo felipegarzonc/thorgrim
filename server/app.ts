@@ -13,7 +13,7 @@ import { castChance, chargeChance, damageBySave, expectedDamage, simulate, type 
 import type { ArmyList, Game, GameState, LibraryDoc } from "../shared/types.ts";
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
-import { askCoach, conversations, PROMPTS, resetConversation } from "./coach.ts";
+import { askCoach, conversations, PROMPTS, resetConversation, turnTips } from "./coach.ts";
 import { gameData, listRules, warscrollText } from "./data.ts";
 import { addDocument, deleteDocument, docPath, finishUpload, getPages, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
@@ -269,15 +269,20 @@ app.get("/api/games/:id", async (req, res) => {
 app.post("/api/games", async (req, res) => {
   const b = req.body as Partial<Game> & { attacker?: GameState["attacker"] };
   const [mine, theirs] = await Promise.all([lists.get(b.myListId ?? ""), lists.get(b.opponentListId ?? "")]);
+  const last = newestFirst(await games.list())[0];
   const game: Game = {
     id: newId(),
-    name: b.name || "New game",
+    name: b.name || "",
+    myName: b.myName ?? last?.myName ?? "",
+    opponentName: b.opponentName ?? "",
+    date: b.date ?? new Date().toISOString().slice(0, 10),
+    points: b.points ?? 2000,
     myListId: b.myListId ?? "",
     opponentListId: b.opponentListId ?? "",
     battleplan: b.battleplan ?? "",
     battleplanNotes: b.battleplanNotes ?? "",
     references: b.references ?? [],
-    state: { ...newState(b.attacker ?? "me"), tactics: tacticsFrom(mine), opponentTactics: tacticsFrom(theirs) },
+    state: { ...newState(b.attacker ?? "me"), tactics: tacticsFrom(mine), opponentTactics: tacticsFrom(theirs), rounds: [] },
     log: [],
     createdAt: new Date().toISOString(),
   };
@@ -307,6 +312,15 @@ app.get("/api/coach/:id", async (req, res) => res.json((await conversations.get(
 app.delete("/api/coach/:id", async (req, res) => {
   await resetConversation(param(req, "id"));
   res.json({ ok: true });
+});
+// The coach's plan for one turn. The page stores it in the game state.
+app.post("/api/games/:id/tips", async (req, res) => {
+  const game = await games.get(param(req, "id"));
+  if (!game) return res.status(404).json({ error: "Game not found" });
+  const side = req.body.side === "opponent" ? "opponent" : "me";
+  const round = Number(req.body.round) || game.state.round;
+  const [myList, opponentList] = await Promise.all([lists.get(game.myListId), lists.get(game.opponentListId)]);
+  res.json(await turnTips({ game, myList, opponentList }, round, side));
 });
 app.post("/api/coach/:id", async (req, res) => {
   const id = param(req, "id");

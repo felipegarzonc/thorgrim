@@ -6,15 +6,17 @@ import { GamePage } from "./pages/Game.tsx";
 import { GamesPage } from "./pages/Games.tsx";
 import { LibraryPage } from "./pages/Library.tsx";
 import { ListsPage } from "./pages/Lists.tsx";
-import { MetaContext, type Meta } from "./ui.tsx";
+import { HomePage } from "./pages/Home.tsx";
+import { Icon, MetaContext, type IconName, type Meta } from "./ui.tsx";
 
-const TABS = [
-  ["games", "Games"],
-  ["lists", "Lists"],
-  ["library", "Rules"],
-  ["calc", "Calculator"],
-  ["ask", "Ask"],
-] as const;
+const TABS: [string, string, IconName][] = [
+  ["home", "Home", "home"],
+  ["games", "Games", "games"],
+  ["lists", "Lists", "lists"],
+  ["library", "Rules", "rules"],
+  ["ask", "Coach", "coach"],
+];
+const TITLES: Record<string, string> = { lists: "Army lists", library: "Rules library", calc: "Calculator", ask: "Coach" };
 
 function useHashRoute(): string[] {
   const read = () => window.location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
@@ -31,7 +33,7 @@ export function App() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [error, setError] = useState<string>();
   const route = useHashRoute();
-  const [tab = "games", id] = route;
+  const [tab = "home", id, step] = route;
 
   const [needLogin, setNeedLogin] = useState(false);
 
@@ -44,29 +46,30 @@ export function App() {
 
   if (needLogin) return <Login />;
 
+  // A game has its own top and bottom bars, like a scoresheet.
+  if (tab === "games" && id)
+    return (
+      <MetaContext.Provider value={meta}>
+        <GamePage key={id} id={id} step={step} />
+      </MetaContext.Provider>
+    );
+
   return (
     <MetaContext.Provider value={meta}>
-      <header className="topbar">
-        <a className="brand" href="#/games">
-          AoS Coach
-        </a>
-        <nav>
-          {TABS.map(([key, label]) => (
-            <a key={key} href={`#/${key}`} className={tab === key ? "active" : ""}>
-              {label}
-            </a>
-          ))}
-        </nav>
-      </header>
       <main>
         {error && <p className="error">Server error: {error}. Is the server running and `npm run data` done?</p>}
-        {meta && !meta.coachReady && tab !== "ask" && (
-          <p className="warning small">
-            The coach is off until you add your Claude API key — <a href="#/ask">set it up</a>.
+        {TITLES[tab] && (
+          <div className="page-head">
+            <h1>{TITLES[tab]}</h1>
+          </div>
+        )}
+        {meta && !meta.coachReady && (tab === "library" || tab === "calc") && (
+          <p className="notice small">
+            The coach is off until you add your Claude API key. <a href="#/ask">Set it up</a>
           </p>
         )}
-        {tab === "games" && !id && <GamesPage />}
-        {tab === "games" && id && <GamePage id={id} />}
+        {tab === "home" && <HomePage />}
+        {tab === "games" && <GamesPage />}
         {tab === "lists" && <ListsPage selectedId={id} />}
         {tab === "library" && <LibraryPage />}
         {tab === "calc" && <CalculatorPage />}
@@ -86,11 +89,21 @@ export function App() {
           />
         )}
       </main>
-      {meta && (
+      {meta && tab !== "home" && (
         <footer className="footer">
           Army data: BSData {meta.commit} ({meta.builtAt.slice(0, 10)}). Rules text belongs to Games Workshop — personal use only.
         </footer>
       )}
+      <nav className="bottom-nav" aria-label="Sections">
+        {TABS.map(([key, label, icon]) => (
+          <a key={key} href={`#/${key}`} className={tab === key ? "active" : ""} aria-current={tab === key ? "page" : undefined}>
+            <span className="ico-wrap">
+              <Icon name={icon} />
+            </span>
+            {label}
+          </a>
+        ))}
+      </nav>
     </MetaContext.Provider>
   );
 }
@@ -99,7 +112,7 @@ function AskIntro() {
   return (
     <div className="ask-intro">
       <p>
-        Ask anything outside a game: rules, list building, matchups, the meta. For advice <em>during</em> a game, open the game and use its Coach tab, so
+        Ask anything outside a game: rules, list building, matchups, the meta. For advice <em>during</em> a game, open the game and tap the coach button at the top, so
         the coach sees both lists, the battleplan and the score.
       </p>
       <ul className="small muted">
@@ -133,7 +146,7 @@ function Login() {
   return (
     <main className="login">
       <form className="card" onSubmit={submit}>
-        <span className="brand">AoS Coach</span>
+        <span className="brand">Thorgrim</span>
         <h1>Sign in</h1>
         <p className="muted small">Enter the app password you chose when you set it up.</p>
         <label>

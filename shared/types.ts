@@ -117,6 +117,36 @@ export interface TacticProgress {
   domination: boolean;
 }
 
+export type TacticStep = "affray" | "strike" | "domination";
+
+/** What one player did in their turn of a battle round. */
+export interface SideRound {
+  /** Battleplan scoring lines achieved (by label). */
+  scored: string[];
+  /** VP from anything else (manual), can be negative to correct. */
+  extraVp: number;
+  /** Battle tactics completed this turn. */
+  tactics: { card: string; step: TacticStep }[];
+  cpGained: number;
+  cpSpent: number;
+}
+
+export interface RoundRecord {
+  /** Who won the priority roll (round 2+). */
+  priority?: "me" | "opponent";
+  /** Who took the first turn. */
+  first?: "me" | "opponent";
+  me: SideRound;
+  opponent: SideRound;
+}
+
+/** The coach's plan for one turn, split by phase. */
+export interface TurnTips {
+  headline: string;
+  phases: Partial<Record<Phase, string[]>>;
+  generatedAt: string;
+}
+
 export interface UnitStatus {
   damage: number;
   destroyed: boolean;
@@ -143,6 +173,10 @@ export interface GameState {
   units: Record<string, UnitStatus>; // keyed by "me:<key>" / "opponent:<key>"
   objectives: string;
   notes: string;
+  /** Per-round record of priority, scoring and CP. VP and tactic progress are derived from it. */
+  rounds?: RoundRecord[];
+  /** Coach tips per turn, keyed "round:side". */
+  tips?: Record<string, TurnTips>;
 }
 
 export const PHASES = [
@@ -160,6 +194,15 @@ export type Phase = (typeof PHASES)[number];
 export interface Game {
   id: string;
   name: string;
+  myName?: string;
+  opponentName?: string;
+  /** Faction when no list is attached (a list's own faction wins). */
+  myFaction?: string;
+  opponentFaction?: string;
+  points?: number;
+  /** YYYY-MM-DD */
+  date?: string;
+  finished?: { conclusion: "played" | "conceded-me" | "conceded-opponent" | "time"; at: string };
   myListId: string;
   opponentListId: string;
   battleplan: string;

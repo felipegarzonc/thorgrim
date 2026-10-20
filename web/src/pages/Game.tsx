@@ -1,92 +1,64 @@
-import { useEffect, useMemo, useState } from "react";
-import type { AttackProfile, Crit, SimulationResult } from "../../../engine/dice.ts";
-import {
-  BATTLE_ROUNDS,
-  CORE_COMMANDS,
-  newBattleRound,
-  scoringFor,
-  SEASON_ABILITIES,
-  SEIZE_EXCEPTION_LEAD,
-  TACTIC_STEPS,
-  TACTIC_VP,
-  usableBy,
-} from "../../../shared/season.ts";
-import { PHASES, type Ability, type ArmyList, type FactionRule, type Game, type GameState, type ListUnit, type Phase, type TacticProgress, type Unit } from "../../../shared/types.ts";
-import { api } from "../api.ts";
-import { Card, RulesText, useLoad, useMeta } from "../ui.tsx";
+// A game, step by step like a scoresheet app: players, setup, battleplan,
+// battle tactics, one screen per battle round, then the results. Each round
+// screen also runs the live turn (phases) with the coach's plan for it.
+
+import { useEffect, useRef, useState } from "react";
+import { BATTLE_ROUNDS, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
+import { derive, emptyRound, nextTacticStep, result, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
+import { PHASES, type ArmyList, type FactionRule, type Game, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TurnTips } from "../../../shared/types.ts";
+import { api, withKey } from "../api.ts";
+import { gameDate, sideInfo } from "../gameView.tsx";
+import { Avatar, Counter, FactionPicker, Group, Icon, RulesText, Seg, Sheet, useLoad, useMeta } from "../ui.tsx";
 import { CoachChat } from "./CoachChat.tsx";
-import { SetupFields } from "./Games.tsx";
+import { BoardInfo, LogCard, OddsCard, other, PhaseChecklist, UnitsCard, useUnits, type Army, type Side, type Update } from "./gameTools.tsx";
 import { WarscrollCard } from "./Lists.tsx";
 
-type Side = "me" | "opponent";
-type Tab = "play" | "coach" | "armies" | "setup";
-type Update = (patch: Partial<GameState>, log?: string) => void;
-
-const other = (s: Side): Side => (s === "me" ? "opponent" : "me");
-const sideName = (s: Side) => (s === "me" ? "me" : "them");
-
-const TABS: [Tab, string, string][] = [
-  ["play", "Play", "M4 20V10l8-6 8 6v10z"],
-  ["coach", "Coach", "M4 5h16v11H9l-5 4z"],
-  ["armies", "Armies", "M12 3l8 4v6c0 4-3.5 7-8 8-4.5-1-8-4-8-8V7z"],
-  ["setup", "Setup", "M4 7h10M18 7h2M4 17h4M12 17h8"],
-];
-
-const PHASE_MATCH: Record<Phase, RegExp> = {
-  Deployment: /deployment/,
-  "Start of Turn": /start of (the |any |your |enemy |)?(turn|battle round)/,
-  Hero: /hero phase/,
-  Movement: /movement phase/,
-  Shooting: /shooting phase/,
-  Charge: /charge phase/,
-  Combat: /combat phase/,
-  "End of Turn": /end of (the |any |your |enemy |)?(turn|battle round)/,
+type Step = string;
+const ROUND_STEPS = Array.from({ length: BATTLE_ROUNDS }, (_, i) => `round-${i + 1}`);
+const STEPS: Step[] = ["players", "setup", "battleplan", "tactics-me", "tactics-opponent", ...ROUND_STEPS, "results"];
+const STEP_TITLE: Record<string, string> = {
+  players: "Players",
+  setup: "Game Setup",
+  battleplan: "Battleplan",
+  "tactics-me": "Your Battle Tactics",
+  "tactics-opponent": "Opponent's Battle Tactics",
+  results: "Results",
+};
+const stepTitle = (s: Step) => STEP_TITLE[s] ?? `Round ${s.split("-")[1]}`;
+const cap = (k: string) => k[0].toUpperCase() + k.slice(1);
+const PLAY_PHASES: Phase[] = PHASES.filter((p) => p !== "Deployment");
+const SHORT: Record<Phase, string> = {
+  Deployment: "Deploy",
+  "Start of Turn": "Start",
+  Hero: "Hero",
+  Movement: "Move",
+  Shooting: "Shoot",
+  Charge: "Charge",
+  Combat: "Combat",
+  "End of Turn": "End",
 };
 
-/** Is this ability usable by `owner` in `phase` while `active` is taking their turn? */
-export function usableNow(a: Ability, phase: Phase, owner: Side, active: Side): boolean {
-  if (!a.timing || a.kind === "Ability (Passive)" || a.kind === "Rule") return false;
-  const t = a.timing.toLowerCase();
-  if (!PHASE_MATCH[phase].test(t)) return false;
-  if (/\byour\b/.test(t)) return owner === active;
-  if (/\benemy\b/.test(t)) return owner !== active;
-  return true;
+type Mutate = (fn: (g: Game) => Game, log?: string) => Promise<void>;
+type SheetName = "menu" | "coach" | "armies" | "odds" | "log";
+
+function defaultStep(g: Game): Step {
+  if (g.finished) return "results";
+  if ((g.state.rounds?.length ?? 0) > 0 && g.state.phase !== "Deployment") return `round-${g.state.round}`;
+  return "players";
 }
 
-// ---------- data hooks ----------
-
-function useUnits(lists: (ArmyList | undefined)[]) {
-  const [units, setUnits] = useState<Record<string, Unit>>({});
-  const ids = [...new Set(lists.flatMap((l) => l?.units.map((u) => u.unitId) ?? []))].sort().join(",");
-  useEffect(() => {
-    if (!ids) return;
-    Promise.all(ids.split(",").map((id) => api<Unit>(`/units/${id}`))).then((us) => setUnits(Object.fromEntries(us.map((u) => [u.id, u]))));
-  }, [ids]);
-  return units;
-}
-
-/** Total health of a list unit (doubled models when reinforced). */
-function unitHealth(lu: ListUnit, u?: Unit) {
-  if (!u?.stats) return undefined;
-  const h = Number(u.stats.health);
-  return Number.isFinite(h) ? h * u.models * (lu.reinforced ? 2 : 1) : undefined;
-}
-
-interface Army {
-  side: Side;
-  list?: ArmyList;
-  rules: FactionRule[];
-}
-
-// ---------- page ----------
-
-export function GamePage({ id }: { id: string }) {
+export function GamePage({ id, step }: { id: string; step?: string }) {
   const [game, setGame] = useState<Game>();
-  const [lists] = useLoad<ArmyList[]>("/lists");
-  const [tab, setTab] = useState<Tab>("play");
+  const ref = useRef<Game | undefined>(undefined);
+  const saving = useRef<Promise<unknown>>(Promise.resolve());
+  const [lists, reloadLists] = useLoad<ArmyList[]>("/lists");
+  const [sheet, setSheet] = useState<SheetName | null>(null);
 
   useEffect(() => {
-    api<Game>(`/games/${id}`).then(setGame);
+    api<Game>(`/games/${id}`).then((g) => {
+      ref.current = g;
+      setGame(g);
+    });
   }, [id]);
 
   const myList = lists?.find((l) => l.id === game?.myListId);
@@ -97,56 +69,148 @@ export function GamePage({ id }: { id: string }) {
 
   if (!game) return <p className="muted">Loading…</p>;
 
+  // Every change goes through here: derive totals, add a log line, save in order.
+  const mutate: Mutate = (fn, log) => {
+    const cur = ref.current!;
+    let next = fn(cur);
+    next = { ...next, state: derive(next) };
+    if (log) {
+      const s = cur.state;
+      const prefix = log.startsWith("Battle round") || s.phase === "Deployment" ? "" : `R${s.round} ${s.activePlayer === "me" ? "my" : "their"} ${s.phase}: `;
+      next = { ...next, log: [...next.log, { at: new Date().toISOString(), text: prefix + log }] };
+    }
+    ref.current = next;
+    setGame(next);
+    saving.current = saving.current.then(() => api(`/games/${next.id}`, { method: "PUT", json: ref.current }).catch((e: Error) => alert(`Could not save: ${e.message}`)));
+    return saving.current.then(() => undefined);
+  };
+  const update: Update = (patch, log) => void mutate((g) => ({ ...g, state: { ...g.state, ...patch } }), log);
+
+  const current = STEPS.includes(step ?? "") ? step! : defaultStep(game);
+  const idx = STEPS.indexOf(current);
+  const go = (s: Step) => {
+    window.location.hash = `#/games/${game.id}/${s}`;
+    window.scrollTo(0, 0);
+  };
   const armies: Record<Side, Army> = {
     me: { side: "me", list: myList, rules: myRules ?? [] },
     opponent: { side: "opponent", list: oppList, rules: oppRules ?? [] },
   };
+  const me = sideInfo(game, lists, "me");
+  const opp = sideInfo(game, lists, "opponent");
 
-  const save = (g: Game) => {
-    setGame(g);
-    api(`/games/${g.id}`, { method: "PUT", json: g }).catch((e: Error) => alert(`Could not save: ${e.message}`));
+  // Closing a new game that was never filled in deletes it, so + then X leaves nothing behind.
+  const close = async () => {
+    const g = ref.current!;
+    const untouched =
+      !g.myListId && !g.opponentListId && !g.battleplan && !g.opponentName && !g.myFaction && !g.opponentFaction && !g.state.rounds?.length && !g.log.length;
+    await saving.current;
+    if (untouched) await api(`/games/${g.id}`, { method: "DELETE" }).catch(() => undefined);
+    window.location.hash = untouched ? "#/home" : "#/games";
   };
-  // Every state change can add a line to the automatic game log.
-  const update: Update = (patch, log) => {
-    const state = { ...game.state, ...patch };
-    // Round starts read on their own; everything else gets "R2 my Combat:" context.
-    const prefix = log?.startsWith("Battle round") ? "" : `R${game.state.round} ${game.state.activePlayer === "me" ? "my" : "their"} ${game.state.phase}: `;
-    const entry = log ? [{ at: new Date().toISOString(), text: prefix + log }] : [];
-    save({ ...game, state, log: [...game.log, ...entry] });
+  const finish = async () => {
+    await mutate((g) => ({ ...g, finished: g.finished ?? { conclusion: "played", at: new Date().toISOString() } }), "Game finished.");
+    window.location.hash = "#/games";
   };
 
   return (
-    <div className="stack">
-      <div className="game-title">
-        <h1>{game.name}</h1>
-        <span className="muted">
-          {myList?.faction ?? "?"} vs {oppList?.faction ?? "?"} · {game.battleplan || "battleplan not set"}
+    <div className="game-screen">
+      <header className="game-head">
+        <button type="button" className="icon" aria-label="Close game" onClick={close}>
+          <Icon name="close" />
+        </button>
+        <span className="game-head-title">
+          {game.state.vp.me}-{game.state.vp.opponent} {me.name} vs {opp.name}
         </span>
-      </div>
-      <nav className="tabs" aria-label="Game sections">
-        {TABS.map(([t, label, icon]) => (
-          <button key={t} type="button" className={tab === t ? "active" : ""} aria-current={tab === t ? "page" : undefined} onClick={() => setTab(t)}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d={icon} />
-            </svg>
-            {label}
-          </button>
-        ))}
-      </nav>
+        <button type="button" className="icon" aria-label="Ask the coach" onClick={() => setSheet("coach")}>
+          <Icon name="coach" />
+        </button>
+        <button type="button" className="icon" aria-label="More" onClick={() => setSheet("menu")}>
+          <Icon name="more" />
+        </button>
+      </header>
 
-      {tab === "play" && (
-        <>
-          <Tracker game={game} update={update} onAsk={() => setTab("coach")} />
-          {game.state.phase === "End of Turn" && <ScoringPanel game={game} update={update} />}
-          <PhaseChecklist game={game} armies={armies} units={units} />
-          <OddsCard game={game} armies={armies} units={units} />
-          <TacticsCard state={game.state} update={update} />
-          <UnitsCard game={game} armies={armies} units={units} update={update} />
-        </>
+      <div className="step-body">
+        {current === "players" && <PlayersStep game={game} lists={lists} mutate={mutate} reloadLists={reloadLists} />}
+        {current === "setup" && <SetupStep game={game} mutate={mutate} />}
+        {current === "battleplan" && <BattleplanStep game={game} mutate={mutate} />}
+        {current === "tactics-me" && <TacticsStep game={game} side="me" mutate={mutate} />}
+        {current === "tactics-opponent" && <TacticsStep game={game} side="opponent" mutate={mutate} />}
+        {current.startsWith("round-") && (
+          <RoundStep
+            key={current}
+            game={game}
+            n={Number(current.split("-")[1])}
+            mutate={mutate}
+            update={update}
+            saved={() => saving.current}
+            armies={armies}
+            units={units}
+            names={{ me: me.name, opponent: opp.name }}
+            go={go}
+            openCoach={() => setSheet("coach")}
+          />
+        )}
+        {current === "results" && <ResultsStep game={game} lists={lists} mutate={mutate} openCoach={() => setSheet("coach")} />}
+      </div>
+
+      <footer className="step-bar">
+        <button type="button" className="icon" aria-label="Previous step" disabled={idx <= 0} onClick={() => go(STEPS[idx - 1])}>
+          <Icon name="left" />
+        </button>
+        <span className="step-title">{stepTitle(current)}</span>
+      </footer>
+      <button
+        type="button"
+        className="fab step-fab"
+        aria-label={current === "results" ? "Finish game" : `Next: ${stepTitle(STEPS[idx + 1])}`}
+        onClick={() => (current === "results" ? finish() : go(STEPS[idx + 1]))}
+      >
+        <Icon name={current === "results" ? "check" : "right"} />
+      </button>
+
+      {sheet === "menu" && (
+        <Sheet title="Game" onClose={() => setSheet(null)}>
+          <ul className="pick-list">
+            {(
+              [
+                ["coach", "coach", "Ask the coach", "Questions, pre-game brief, post-game review"],
+                ["armies", "shield", "Armies & warscrolls", "Both lists, unit by unit"],
+                ["odds", "calc", "Attack odds", "Who can kill what, with current damage"],
+                ["log", "log", "Board notes & game log", "Objectives, positions, what happened"],
+              ] as const
+            ).map(([s, icon, title, sub]) => (
+              <li key={s}>
+                <button type="button" className="ghost" onClick={() => setSheet(s)}>
+                  <Icon name={icon} />
+                  <span className="grow">
+                    {title}
+                    <small className="muted">{sub}</small>
+                  </span>
+                  <Icon name="right" />
+                </button>
+              </li>
+            ))}
+            {STEPS.map((s) => (
+              <li key={s} className="step-link">
+                <button
+                  type="button"
+                  className={`ghost ${s === current ? "on" : ""}`}
+                  onClick={() => {
+                    setSheet(null);
+                    go(s);
+                  }}
+                >
+                  <span className="grow">{stepTitle(s)}</span>
+                  {s === current && <Icon name="check" />}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Sheet>
       )}
-      {tab === "coach" && (
-        <>
-          <BoardInfo state={game.state} update={update} />
+      {sheet === "coach" && (
+        <Sheet title="Coach" onClose={() => setSheet(null)}>
           <CoachChat
             convoId={game.id}
             title="Coach"
@@ -158,901 +222,873 @@ export function GamePage({ id }: { id: string }) {
             quick={[
               "What should I do this phase?",
               "I won the priority roll. Should I go first or second?",
-              "Which battle tactic objective should I go for this turn?",
+              "Which battle tactic should I go for this turn?",
               "What can my opponent do to punish me right now?",
             ]}
           />
-          <LogCard game={game} update={update} />
-        </>
+        </Sheet>
       )}
-      {tab === "armies" &&
-        [myList, oppList].map(
-          (l) =>
-            l && (
-              <Card key={l.id} title={`${l.owner === "me" ? "My army" : "Opponent"}: ${l.name}`}>
-                <div className="stack">
+      {sheet === "armies" && (
+        <Sheet title="Armies" onClose={() => setSheet(null)}>
+          {[myList, oppList].map(
+            (l) =>
+              l && (
+                <section key={l.id} className="stack" style={{ marginBottom: "1.5rem" }}>
+                  <h2>
+                    {l.owner === "me" ? me.name : opp.name}: {l.name}
+                  </h2>
                   {l.units.map((u) => (
                     <WarscrollCard key={u.key} unitId={u.unitId} title={`${u.name}${u.reinforced ? " (Reinforced)" : ""}`} notes={u.notes} />
                   ))}
-                </div>
-              </Card>
-            ),
-        )}
-      {tab === "setup" && (
-        <Card title="Game setup">
-          <SetupFields value={game} onChange={(v) => save({ ...game, ...v })} />
-          <button
-            type="button"
-            onClick={async () => {
-              if (!confirm("Delete this game and its coach conversation?")) return;
-              await api(`/games/${game.id}`, { method: "DELETE" });
-              window.location.hash = "#/games";
-            }}
-          >
-            Delete game
-          </button>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ---------- scoreboard & turn flow ----------
-
-function Tracker({ game, update, onAsk }: { game: Game; update: Update; onAsk: () => void }) {
-  const s = game.state;
-  const [askPriority, setAskPriority] = useState(false);
-  const [editing, setEditing] = useState<StatEdit | null>(null);
-
-  const firstRound = s.phase === "Deployment";
-  const gameOver = !firstRound && s.round >= BATTLE_ROUNDS;
-  const phaseIndex = PHASES.indexOf(s.phase);
-
-  const nextPhase = () => {
-    if (firstRound) return setAskPriority(true);
-    if (phaseIndex < PHASES.length - 1) return update({ phase: PHASES[phaseIndex + 1] });
-    if (s.activePlayer === s.firstThisRound) return update({ activePlayer: other(s.activePlayer), phase: "Start of Turn" });
-    setAskPriority(true);
-  };
-  const startRound = (first: Side) => {
-    setAskPriority(false);
-    const r = firstRound ? { seized: null, underdog: null, cp: { me: 4, opponent: 4 } } : newBattleRound(s, first);
-    const round = firstRound ? 1 : s.round + 1;
-    update(
-      {
-        round,
-        firstThisRound: first,
-        activePlayer: first,
-        phase: "Start of Turn",
-        underdog: r.underdog,
-        seizedInitiative: r.seized,
-        cp: r.cp,
-        // Simmering Rage: rage dice equal to fury level; unspent ones are lost.
-        rage: { me: s.fury.me, opponent: s.fury.opponent },
-      },
-      `Battle round ${round}: ${first === "me" ? "I go" : "opponent goes"} first${r.seized ? " (seized the initiative)" : ""}.`,
-    );
-  };
-  const wentSecond = other(s.firstThisRound);
-  const seizeNote = (side: Side) =>
-    firstRound || side !== wentSecond
-      ? ""
-      : s.vp[other(side)] - s.vp[side] >= SEIZE_EXCEPTION_LEAD
-        ? " (double turn, tactics still allowed: 11+ VP behind)"
-        : " — seizes the initiative";
-  const nextLabel = firstRound
-    ? "Start round 1"
-    : phaseIndex < PHASES.length - 1
-      ? `Next: ${PHASES[phaseIndex + 1]}`
-      : s.activePlayer === s.firstThisRound
-        ? `End turn → ${other(s.activePlayer) === "me" ? "my" : "their"} turn`
-        : gameOver
-          ? "End game"
-          : `Start round ${s.round + 1}`;
-
-  return (
-    <Card>
-      <div className="round-line">
-        <span className="round">
-          {firstRound ? (
-            "Deployment"
-          ) : (
-            <>
-              Round {s.round} <span>/ {BATTLE_ROUNDS}</span>
-            </>
+                </section>
+              ),
           )}
-        </span>
-        {!firstRound && (
-          <button
-            type="button"
-            className={`pill ${s.activePlayer === "me" ? "" : "opponent"}`}
-            style={{ minHeight: 0, border: 0 }}
-            onClick={() => update({ activePlayer: other(s.activePlayer) })}
-            title="Switch active player"
-          >
-            {s.activePlayer === "me" ? "MY TURN" : "THEIR TURN"}
-          </button>
-        )}
-      </div>
-
-      <div className="scoreboard">
-        <SidePanel side="me" label="Me" s={s} update={update} editing={editing} onEdit={setEditing} />
-        <SidePanel side="opponent" label="Opponent" s={s} update={update} editing={editing} onEdit={setEditing} />
-      </div>
-      {editing && (
-        <div className="stat-editor">
-          <span>
-            {editing.side === "me" ? "My" : "Their"} {STAT_NAMES[editing.stat]}
-          </span>
-          <span className="stepper">
-            {[-1, 1].map((d) => (
-              <button
-                key={d}
-                type="button"
-                aria-label={d < 0 ? "decrease" : "increase"}
-                onClick={() => update({ [editing.stat]: { ...s[editing.stat], [editing.side]: Math.max(0, s[editing.stat][editing.side] + d) } })}
-              >
-                {d < 0 ? "−" : "+"}
-              </button>
-            ))}
-          </span>
-          <button type="button" className="small" onClick={() => setEditing(null)}>
-            Done
-          </button>
-        </div>
+          {!myList && !oppList && <p className="muted">Add army lists in the Players step to see warscrolls here.</p>}
+        </Sheet>
       )}
-      {s.seizedInitiative && !firstRound && (
-        <p className="small warning">{s.seizedInitiative === "me" ? "You" : "Your opponent"} seized the initiative: no battle tactics that turn.</p>
+      {sheet === "odds" && (
+        <Sheet title="Attack odds" onClose={() => setSheet(null)}>
+          <OddsCard game={game} armies={armies} units={units} />
+        </Sheet>
       )}
-
-      <nav className="phase-strip" aria-label="Phases">
-        {PHASES.filter((p) => p !== "Deployment" || firstRound).map((p) => {
-          const i = PHASES.indexOf(p);
-          return (
-            <button
-              key={p}
-              type="button"
-              className={i < phaseIndex ? "past" : i === phaseIndex ? "current" : ""}
-              aria-current={i === phaseIndex ? "step" : undefined}
-              onClick={() => update({ phase: p })}
-            >
-              {p}
-            </button>
-          );
-        })}
-      </nav>
-      <div className="turn-actions">
-        <button type="button" className="primary next-btn" onClick={nextPhase}>
-          {nextLabel} →
-        </button>
-        <button type="button" className="secondary" onClick={onAsk}>
-          Ask coach
-        </button>
-      </div>
-
-      {askPriority && gameOver && (
-        <div className="callout">
-          <p>
-            <strong>The game is over:</strong> {s.vp.me}–{s.vp.opponent}. Open the Coach tab for a post-game review.
-          </p>
-          <button type="button" onClick={() => setAskPriority(false)}>
-            Close
-          </button>
-        </div>
-      )}
-      {askPriority && !gameOver && (
-        <div className="callout">
-          <p>
-            <strong>{firstRound ? "Who takes the first turn?" : `Round ${s.round + 1}: who goes first?`}</strong>{" "}
-            <span className="small muted">{firstRound ? "The player who finished deploying first decides." : "Priority roll winner decides."}</span>
-          </p>
-          <div className="stack" style={{ gap: "0.4rem" }}>
-            <button type="button" className="primary" onClick={() => startRound("me")}>
-              I go first{seizeNote("me")}
-            </button>
-            <button type="button" onClick={() => startRound("opponent")}>
-              Opponent goes first{seizeNote("opponent")}
-            </button>
-            <button type="button" className="small" onClick={() => setAskPriority(false)}>
-              Cancel
-            </button>
+      {sheet === "log" && (
+        <Sheet title="Board & log" onClose={() => setSheet(null)}>
+          <div className="stack">
+            <BoardInfo state={game.state} update={update} />
+            <LogCard game={game} update={update} />
           </div>
-        </div>
+        </Sheet>
       )}
-    </Card>
-  );
-}
-
-type Stat = "cp" | "fury" | "rage";
-type StatEdit = { side: Side; stat: Stat };
-const STAT_NAMES: Record<Stat, string> = { cp: "command points", fury: "fury level", rage: "rage dice" };
-
-/** One player's half of the scoreboard: big VP plus CP / Fury / Rage (tap one to edit it). */
-function SidePanel(props: { side: Side; label: string; s: GameState; update: Update; editing: StatEdit | null; onEdit: (e: StatEdit | null) => void }) {
-  const { side, label, s, update, editing, onEdit } = props;
-  const setVp = (v: number) => update({ vp: { ...s.vp, [side]: Math.max(0, v) } });
-  const who = side === "me" ? "my" : "their";
-  return (
-    <div className={`side ${side}`}>
-      <span className="side-label">
-        {label}
-        {s.underdog === side && s.phase !== "Deployment" && <span className="badge">Underdog</span>}
-      </span>
-      <div className="vp">
-        <button type="button" aria-label={`Remove 1 from ${who} VP`} onClick={() => setVp(s.vp[side] - 1)}>
-          −
-        </button>
-        <span className="vp-value" aria-live="polite">
-          {s.vp[side]}
-          <small> VP</small>
-        </span>
-        <button type="button" aria-label={`Add 1 to ${who} VP`} onClick={() => setVp(s.vp[side] + 1)}>
-          +
-        </button>
-      </div>
-      <div className="mini-stats">
-        {(["cp", "fury", "rage"] as const).map((k) => {
-          const active = editing?.side === side && editing.stat === k;
-          return (
-            <button
-              key={k}
-              type="button"
-              className={`mini-stat ${active ? "active" : ""}`}
-              aria-pressed={active}
-              aria-label={`${who} ${STAT_NAMES[k]}: ${s[k][side]}. Tap to change.`}
-              onClick={() => onEdit(active ? null : { side, stat: k })}
-            >
-              <span>{k === "cp" ? "CP" : k === "fury" ? "Fury" : "Rage"}</span>
-              <b>{s[k][side]}</b>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
 
-// ---------- end-of-turn scoring ----------
+// ---------- players ----------
 
-const turnKey = (s: GameState) => `${s.round}:${s.activePlayer}`;
-const cap = (k: string) => k[0].toUpperCase() + k.slice(1);
-const tacticsOf = (s: GameState, side: Side) => (side === "me" ? s.tactics : (s.opponentTactics ?? []));
-const tacticsKey = (side: Side) => (side === "me" ? "tactics" : "opponentTactics");
+function PlayersStep({ game, lists, mutate, reloadLists }: { game: Game; lists?: ArmyList[]; mutate: Mutate; reloadLists: () => void }) {
+  return (
+    <div className="stack">
+      {(["me", "opponent"] as const).map((side) => (
+        <PlayerBlock key={side} side={side} game={game} lists={lists} mutate={mutate} reloadLists={reloadLists} />
+      ))}
+    </div>
+  );
+}
 
-function ScoringPanel({ game, update }: { game: Game; update: Update }) {
-  const meta = useMeta();
-  const s = game.state;
-  const side = s.activePlayer;
-  const lines = scoringFor(game.battleplan, s.round);
-  const tactics = tacticsOf(s, side);
-  const seized = s.seizedInitiative === side;
-  const [ticked, setTicked] = useState<Record<string, boolean>>({});
-  const [manual, setManual] = useState(0);
-  const key = turnKey(s);
-  useEffect(() => {
-    setTicked({});
-    setManual(0);
-  }, [key]);
+function PlayerBlock({ side, game, lists, mutate, reloadLists }: { side: Side; game: Game; lists?: ArmyList[]; mutate: Mutate; reloadLists: () => void }) {
+  const info = sideInfo(game, lists, side);
+  const nameKey = side === "me" ? "myName" : "opponentName";
+  const listKey = side === "me" ? "myListId" : "opponentListId";
+  const factionKey = side === "me" ? "myFaction" : "opponentFaction";
+  const tacticsKey = side === "me" ? "tactics" : "opponentTactics";
+  const [name, setName] = useState(game[nameKey] ?? "");
+  const [picking, setPicking] = useState(false);
+  const [pasting, setPasting] = useState(false);
 
-  const scored = s.scoredTurns?.[key];
-  if (scored !== undefined)
-    return (
-      <Card>
-        <p style={{ margin: 0 }}>
-          <b>
-            {side === "me" ? "You" : "They"} scored {scored} VP this turn.
-          </b>{" "}
-          <span className="muted small">Adjust on the scoreboard if needed.</span>
-        </p>
-      </Card>
-    );
-
-  const nextStep = (t: TacticProgress) => TACTIC_STEPS.find((k) => !t[k]);
-  const objectiveVp = lines ? lines.reduce((sum, l, i) => sum + (ticked[`l${i}`] ? l.vp : 0), 0) : manual;
-  const tacticPicks = tactics.flatMap((t, i) => (ticked[`t${i}`] && nextStep(t) ? [{ i, step: nextStep(t)! }] : []));
-  const total = objectiveVp + tacticPicks.length * TACTIC_VP;
-
-  const apply = () => {
-    const nextTactics = tactics.map((t, i) => {
-      const pick = tacticPicks.find((p) => p.i === i);
-      return pick ? { ...t, [pick.step]: true } : t;
-    });
-    const parts = [objectiveVp ? `${objectiveVp} for objectives` : "", ...tacticPicks.map((p) => `${cap(p.step)} of ${tactics[p.i].card}`)].filter(Boolean);
-    update(
-      {
-        vp: { ...s.vp, [side]: s.vp[side] + total },
-        [tacticsKey(side)]: nextTactics,
-        scoredTurns: { ...(s.scoredTurns ?? {}), [key]: total },
-      } as Partial<GameState>,
-      `${side === "me" ? "I" : "They"} scored ${total} VP${parts.length ? ` (${parts.join(", ")})` : ""}.`,
+  const chooseList = (id: string, fresh?: ArmyList) => {
+    const list = fresh ?? lists?.find((l) => l.id === id);
+    mutate(
+      (g) => {
+        const current = (side === "me" ? g.state.tactics : g.state.opponentTactics) ?? [];
+        const fromList: TacticProgress[] = (list?.tacticCards ?? []).slice(0, 2).map((card) => ({ card, affray: false, strike: false, domination: false }));
+        return { ...g, [listKey]: id, state: { ...g.state, [tacticsKey]: current.length || !fromList.length ? current : fromList } };
+      },
+      list ? `${side === "me" ? "My" : "Opponent's"} list: ${list.name}.` : undefined,
     );
   };
+  const ordered = [...(lists ?? [])].sort((a, b) => Number(b.owner === side) - Number(a.owner === side) || b.createdAt.localeCompare(a.createdAt));
 
   return (
-    <Card title={`Score ${side === "me" ? "your" : "their"} turn`} className={`score-panel ${side}`}>
-      {lines ? (
-        lines.map((l, i) => (
-          <label key={i} className="inline score-line">
-            <input type="checkbox" checked={!!ticked[`l${i}`]} onChange={(e) => setTicked({ ...ticked, [`l${i}`]: e.target.checked })} />
-            <span>{l.label}</span>
-            <b>+{l.vp}</b>
-          </label>
-        ))
-      ) : (
-        <div className="row spread">
-          <span className="small muted">{game.battleplan ? `No scoring card for "${game.battleplan}" — enter objective VP:` : "Set the battleplan in Setup to get its scoring. Objective VP:"}</span>
-          <span className="stepper">
-            <button type="button" aria-label="decrease" onClick={() => setManual(Math.max(0, manual - 1))}>
-              −
-            </button>
-            <span className="stepper-value">{manual}</span>
-            <button type="button" aria-label="increase" onClick={() => setManual(manual + 1)}>
-              +
-            </button>
-          </span>
-        </div>
-      )}
-      {tactics.map((t, i) => {
-        const step = nextStep(t);
-        if (!step) return null;
-        const text = meta?.battleTactics.find((c) => c.name === t.card)?.[cap(step) as "Affray" | "Strike" | "Domination"];
-        return (
-          <label key={t.card} className="inline score-line">
-            <input type="checkbox" disabled={seized} checked={!!ticked[`t${i}`]} onChange={(e) => setTicked({ ...ticked, [`t${i}`]: e.target.checked })} />
-            <span>
-              {cap(step)}: {text?.split("\n")[0].replace(/:\s*$/, "") ?? t.card} <span className="muted small">({t.card})</span>
-            </span>
-            <b>+{TACTIC_VP}</b>
-          </label>
-        );
-      })}
-      {seized && <p className="small warning">Seized the initiative: no battle tactics this turn.</p>}
-      <button type="button" className="primary" style={{ width: "100%", marginTop: "0.5rem" }} onClick={apply}>
-        Add {total} VP {side === "me" ? "to me" : "to them"}
+    <section>
+      <h1 className="step-heading">{side === "me" ? "You" : "Opponent"}</h1>
+      <label className="field">
+        <span className="field-label">{side === "me" ? "Your name" : "Opponent's name"}</span>
+        <span className="field-box">
+          <Icon name="user" />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => name !== (game[nameKey] ?? "") && mutate((g) => ({ ...g, [nameKey]: name.trim() }))}
+            placeholder={side === "me" ? "Your name" : "Opponent's name"}
+          />
+        </span>
+      </label>
+      <div className="list-row">
+        <Icon name="lists" />
+        <select value={game[listKey]} onChange={(e) => chooseList(e.target.value)} aria-label={`${side === "me" ? "Your" : "Opponent's"} army list`}>
+          <option value="">Add an army list…</option>
+          {ordered.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name} ({l.faction || "?"})
+            </option>
+          ))}
+        </select>
+        <button type="button" className="small" onClick={() => setPasting(true)}>
+          Paste
+        </button>
+      </div>
+      <button type="button" className="ghost faction-row" onClick={() => setPicking(true)} disabled={!!info.list}>
+        {info.faction ? <Avatar faction={info.faction} /> : <span className="avatar-space" />}
+        <span className="grow">
+          {info.faction ? info.base : "Select a faction…"}
+          {info.sub && <small className="muted">{info.sub}</small>}
+          {info.list && <small className="muted">From the army list</small>}
+        </span>
       </button>
-    </Card>
+      {picking && (
+        <FactionPicker
+          onClose={() => setPicking(false)}
+          onPick={(f) => {
+            setPicking(false);
+            mutate((g) => ({ ...g, [factionKey]: f }));
+          }}
+        />
+      )}
+      {pasting && (
+        <PasteList
+          side={side}
+          onClose={() => setPasting(false)}
+          onSaved={(l) => {
+            setPasting(false);
+            reloadLists();
+            chooseList(l.id, l);
+          }}
+        />
+      )}
+    </section>
   );
 }
 
-// ---------- don't forget ----------
-
-interface Source {
-  owner: Side;
-  from: string;
-  ability: Ability;
-}
-
-function PhaseChecklist({ game, armies, units }: { game: Game; armies: Record<Side, Army>; units: Record<string, Unit> }) {
-  const s = game.state;
-  const sources = useMemo(() => {
-    const out: Source[] = [];
-    for (const side of ["me", "opponent"] as const) {
-      const { list, rules } = armies[side];
-      const seen = new Set<string>();
-      for (const lu of list?.units ?? []) {
-        if (s.units[`${side}:${lu.key}`]?.destroyed || seen.has(lu.unitId)) continue;
-        seen.add(lu.unitId);
-        for (const a of units[lu.unitId]?.abilities ?? []) out.push({ owner: side, from: lu.name, ability: a });
-      }
-      for (const r of rules) out.push({ owner: side, from: r.group && !/battle traits/i.test(r.group) ? r.group : r.entry || "Faction", ability: r.ability });
+function PasteList({ side, onClose, onSaved }: { side: Side; onClose: () => void; onSaved: (l: ArmyList) => void }) {
+  const [name, setName] = useState("");
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const save = async () => {
+    setBusy(true);
+    try {
+      onSaved(await api<ArmyList>("/lists", { method: "POST", json: { name: name || (side === "me" ? "My list" : "Opponent's list"), owner: side, rawText: text } }));
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
     }
-    return out;
-  }, [armies, units, s.units]);
-
-  const now = sources.filter((x) => usableNow(x.ability, s.phase, x.owner, s.activePlayer));
-  const reactions = sources.filter((x) => x.ability.timing?.toLowerCase().startsWith("reaction"));
-  const commands = [...CORE_COMMANDS, ...SEASON_ABILITIES];
-  const commandsFor = (o: Side) => commands.filter((c) => usableBy(c, s.phase, o, s.activePlayer) && (c.cost === 0 || c.cost <= s.cp[o]));
-
-  const AbilityItem = ({ x }: { x: Source }) => {
-    const value = x.ability.extra?.["Casting Value"] ?? x.ability.extra?.["Chanting Value"];
-    return (
-      <li>
-        <details>
-          <summary>
-            <span className="name">
-              <b>{x.ability.name}</b>
-              <span>
-                {x.from}
-                {value ? ` · ${x.ability.extra?.["Casting Value"] ? "cast" : "chant"} ${value}` : ""}
-                {x.ability.timing ? ` · ${x.ability.timing}` : " · always on"}
-              </span>
-            </span>
-            <span className={`who ${x.owner}`}>{x.owner === "me" ? "YOU" : "THEM"}</span>
-          </summary>
-          <div className="body">
-            {x.ability.declare && <RulesText text={`*Declare:* ${x.ability.declare}`} />}
-            <RulesText text={x.ability.effect} />
-          </div>
-        </details>
-      </li>
-    );
   };
-  const CommandItem = ({ c, o }: { c: (typeof commands)[number]; o: Side }) => (
-    <li>
-      <details>
-        <summary>
-          <span className="name">
-            <b>{c.name}</b>
-            <span>{c.cost > 0 ? "Command" : "Season rule"}</span>
-          </span>
-          <span className={`who ${o}`}>
-            {o === "me" ? "YOU" : "THEM"}
-            {c.cost > 0 ? ` · ${c.cost} CP` : ""}
-          </span>
-        </summary>
-        <div className="body">{c.summary}</div>
-      </details>
-    </li>
-  );
-  // Army-wide passives (formation, enhancements) never match a phase, so list them once.
-  const alwaysOn = (["me", "opponent"] as const).flatMap((side) =>
-    armies[side].rules
-      .filter((r) => !r.ability.timing && r.ability.kind !== "Rule" && !/battle traits/i.test(`${r.group} ${r.entry}`))
-      .map((r) => ({ owner: side, from: r.group || r.entry, ability: r.ability })),
-  );
-  const mine = now.filter((x) => x.owner === "me");
-  const theirs = now.filter((x) => x.owner === "opponent");
-
   return (
-    <Card title={`${s.phase} — don't forget`}>
-      <ul className="forget">
-        {mine.map((x, i) => (
-          <AbilityItem key={`m${i}`} x={x} />
-        ))}
-        {commandsFor("me").map((c) => (
-          <CommandItem key={`mc${c.name}`} c={c} o="me" />
-        ))}
-        {(theirs.length > 0 || commandsFor("opponent").length > 0) && <hr className="divider" />}
-        {theirs.map((x, i) => (
-          <AbilityItem key={`t${i}`} x={x} />
-        ))}
-        {commandsFor("opponent").map((c) => (
-          <CommandItem key={`tc${c.name}`} c={c} o="opponent" />
-        ))}
-      </ul>
-      {alwaysOn.length > 0 && (
-        <details>
-          <summary className="muted small" style={{ padding: "0.5rem 0", cursor: "pointer" }}>
-            Always on: formation & enhancements ({alwaysOn.length})
-          </summary>
-          <ul className="forget">
-            {alwaysOn.map((x, i) => (
-              <AbilityItem key={`p${i}`} x={x} />
-            ))}
-          </ul>
-        </details>
-      )}
-      {reactions.length > 0 && (
-        <details>
-          <summary className="muted small" style={{ padding: "0.5rem 0", cursor: "pointer" }}>
-            Reactions in play ({reactions.length})
-          </summary>
-          <ul className="forget">
-            {reactions.map((x, i) => (
-              <AbilityItem key={`r${i}`} x={x} />
-            ))}
-          </ul>
-        </details>
-      )}
-    </Card>
+    <Sheet title="Paste an army list" onClose={onClose}>
+      <p className="muted small">From the GW app, New Recruit or Listhammer. Units are matched to warscrolls; the list is saved under Lists.</p>
+      <label>
+        Name
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Beastclaw Hunt" />
+      </label>
+      <label>
+        List text
+        <textarea rows={12} value={text} onChange={(e) => setText(e.target.value)} />
+      </label>
+      {error && <p className="error">{error}</p>}
+      <button type="button" className="primary wide" disabled={!text.trim() || busy} onClick={save}>
+        {busy ? "Saving…" : "Save list"}
+      </button>
+    </Sheet>
   );
 }
 
-// ---------- attack odds ----------
+// ---------- setup ----------
 
-const num = (v: string) => Number(/(\d+)/.exec(v)?.[1] ?? 0);
-const critOf = (a: string): Crit => {
-  const t = a.toLowerCase();
-  return t.includes("2 hits") ? "2 hits" : t.includes("auto-wound") ? "auto-wound" : t.includes("crit (mortal)") ? "mortal" : "none";
-};
-const plusOne = (dmg: string) => (/^\d+$/.test(dmg) ? String(Number(dmg) + 1) : /\+\d+$/.test(dmg) ? dmg.replace(/\+(\d+)$/, (_, n) => `+${Number(n) + 1}`) : `${dmg}+1`);
-
-interface GameUnit {
-  key: string;
-  side: Side;
-  lu: ListUnit;
-  u?: Unit;
-  health?: number;
-  damage: number;
-  destroyed: boolean;
-}
-
-function gameUnits(game: Game, armies: Record<Side, Army>, units: Record<string, Unit>): GameUnit[] {
-  return (["me", "opponent"] as const).flatMap((side) =>
-    (armies[side].list?.units ?? []).map((lu) => {
-      const key = `${side}:${lu.key}`;
-      const st = game.state.units[key] ?? { damage: 0, destroyed: false };
-      const u = units[lu.unitId];
-      return { key, side, lu, u, health: unitHealth(lu, u), damage: st.damage, destroyed: st.destroyed };
-    }),
-  );
-}
-
-function OddsCard({ game, armies, units }: { game: Game; armies: Record<Side, Army>; units: Record<string, Unit> }) {
-  const s = game.state;
-  const all = gameUnits(game, armies, units).filter((g) => !g.destroyed && g.u);
-  const [attackerKey, setAttackerKey] = useState("");
-  const [targetKey, setTargetKey] = useState("");
-  const [ranged, setRanged] = useState(s.phase === "Shooting");
-  const [charged, setCharged] = useState(s.phase === "Charge" || s.phase === "Combat");
-  const [aoa, setAoa] = useState(false);
-  const [saveBonus, setSaveBonus] = useState(false);
-  const [result, setResult] = useState<{ mean: number; sim: SimulationResult }>();
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => setRanged(s.phase === "Shooting"), [s.phase]);
-  const attacker = all.find((g) => g.key === attackerKey) ?? all.find((g) => g.side === s.activePlayer);
-  const target = all.find((g) => g.key === targetKey && g.side !== attacker?.side) ?? all.find((g) => g.side !== attacker?.side);
-
-  const profiles: AttackProfile[] = useMemo(() => {
-    if (!attacker?.u) return [];
-    const perModel = num(attacker.u.stats?.health ?? "0");
-    const models = attacker.u.models * (attacker.lu.reinforced ? 2 : 1);
-    const alive = perModel ? Math.max(1, models - Math.floor(attacker.damage / perModel)) : models;
-    return attacker.u.weapons
-      .filter((w) => (w.kind === "ranged") === ranged)
-      .map((w) => ({
-        name: w.name,
-        attacks: w.attacks,
-        hit: num(w.hit),
-        wound: num(w.wound),
-        rend: w.rend === "-" ? 0 : num(w.rend),
-        damage: charged && /charge \(\+1 damage\)/i.test(w.ability) ? plusOne(w.damage) : w.damage,
-        crit: critOf(w.ability),
-        models: alive,
-        hitMod: aoa ? 1 : 0,
-      }));
-  }, [attacker?.key, attacker?.damage, ranged, charged, aoa, units]);
-
-  const tu = target?.u;
-  const targetProfile = tu?.stats
-    ? {
-        save: num(tu.stats.save) || null,
-        ward: tu.stats.ward ? num(tu.stats.ward) : null,
-        saveMod: saveBonus ? 1 : 0,
-        health: num(tu.stats.health),
-        models: tu.models * (target!.lu.reinforced ? 2 : 1),
-        damageTaken: target!.damage,
-      }
-    : undefined;
-
-  useEffect(() => {
-    if (!open || !profiles.length || !targetProfile) return setResult(undefined);
-    const t = setTimeout(() => {
-      api<{ simulation: SimulationResult; perProfile: { expectedDamage: number }[] }>("/calc/damage", {
-        method: "POST",
-        json: { profiles, target: targetProfile, runs: 10000 },
-      }).then((r) => setResult({ mean: r.perProfile.reduce((a, p) => a + p.expectedDamage, 0), sim: r.simulation }));
-    }, 200);
-    return () => clearTimeout(t);
-  }, [open, JSON.stringify(profiles), JSON.stringify(targetProfile)]);
-
-  const options = (side: Side | "other") =>
-    all
-      .filter((g) => (side === "other" ? g.side !== attacker?.side : true))
-      .map((g) => (
-        <option key={g.key} value={g.key}>
-          {g.side === "me" ? "Mine" : "Theirs"} · {g.lu.name}
-          {g.lu.reinforced ? " (R)" : ""}
-          {g.damage ? ` (−${g.damage})` : ""}
-        </option>
-      ));
-
+function SetupStep({ game, mutate }: { game: Game; mutate: Mutate }) {
+  const [docs] = useLoad<LibraryDoc[]>("/library");
+  const [name, setName] = useState(game.name);
+  const refFor = (id: string) => game.references.find((r) => r.docId === id);
+  const toggleRef = (id: string, on: boolean) =>
+    mutate((g) => ({ ...g, references: on ? [...g.references, { docId: id }] : g.references.filter((r) => r.docId !== id) }));
+  const setPages = (id: string, pages: string) => mutate((g) => ({ ...g, references: g.references.map((r) => (r.docId === id ? { ...r, pages } : r)) }));
   return (
-    <Card>
-      <details open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-        <summary style={{ cursor: "pointer", listStyle: "none" }}>
-          <h2 style={{ display: "inline" }}>Attack odds</h2> <span className="muted small">— who can kill what, with current damage</span>
-        </summary>
-        <div className="grid2" style={{ marginTop: "0.6rem" }}>
-          <label>
-            Attacker
-            <select value={attacker?.key ?? ""} onChange={(e) => setAttackerKey(e.target.value)}>
-              {options("me")}
-            </select>
-          </label>
-          <label>
-            Target
-            <select value={target?.key ?? ""} onChange={(e) => setTargetKey(e.target.value)}>
-              {options("other")}
-            </select>
-          </label>
+    <div className="stack">
+      <label className="field">
+        <span className="field-label">Game date</span>
+        <span className="field-box">
+          <Icon name="calendar" />
+          <input type="date" value={game.date ?? game.createdAt.slice(0, 10)} onChange={(e) => mutate((g) => ({ ...g, date: e.target.value }))} />
+        </span>
+      </label>
+      <label className="field">
+        <span className="field-label">Game description</span>
+        <span className="field-box">
+          <Icon name="pencil" />
+          <input value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name !== game.name && mutate((g) => ({ ...g, name }))} placeholder="e.g. Club night, Tuesday league" />
+        </span>
+      </label>
+
+      <h3>Mission pack</h3>
+      <div className="card list-card">
+        <div className="list-item">
+          <Icon name="castle" />
+          <span className="grow">
+            Pitched Battles 2026-27
+            <small className="muted">General's Handbook · Matched Play</small>
+          </span>
         </div>
-        <div className="chips" style={{ margin: "0.3rem 0" }}>
-          <button type="button" className={`chip ${ranged ? "" : "strong"}`} aria-pressed={!ranged} onClick={() => setRanged(false)}>
-            Melee
-          </button>
-          <button type="button" className={`chip ${ranged ? "strong" : ""}`} aria-pressed={ranged} onClick={() => setRanged(true)}>
-            Shooting
-          </button>
-          <button type="button" className={`chip ${charged ? "strong" : ""}`} aria-pressed={charged} onClick={() => setCharged(!charged)}>
-            Charged
-          </button>
-          <button type="button" className={`chip ${aoa ? "strong" : ""}`} aria-pressed={aoa} onClick={() => setAoa(!aoa)}>
-            All-out Attack
-          </button>
-          <button type="button" className={`chip ${saveBonus ? "strong" : ""}`} aria-pressed={saveBonus} onClick={() => setSaveBonus(!saveBonus)}>
-            Target +1 save
-          </button>
-        </div>
-        {!profiles.length && <p className="muted small">{attacker?.lu.name} has no {ranged ? "shooting" : "melee"} weapons.</p>}
-        {result && profiles.length > 0 && (
-          <div className="kpis">
-            <div>
-              <span className="kpi accent">{result.mean.toFixed(1)}</span>
-              <span className="muted small">average damage</span>
-            </div>
-            {result.sim.killChance !== undefined && (
-              <div>
-                <span className="kpi">{Math.round(result.sim.killChance * 100)}%</span>
-                <span className="muted small">to destroy {target?.lu.name}</span>
-              </div>
-            )}
-            {result.sim.expectedModelsSlain !== undefined && (
-              <div>
-                <span className="kpi">{result.sim.expectedModelsSlain.toFixed(1)}</span>
-                <span className="muted small">models slain</span>
-              </div>
-            )}
-          </div>
+        <label className="list-item">
+          <Icon name="rules" />
+          <select value={game.points ?? 2000} onChange={(e) => mutate((g) => ({ ...g, points: Number(e.target.value) }))} aria-label="Points">
+            {[1000, 1500, 2000, 2500].map((p) => (
+              <option key={p} value={p}>
+                {p}pts
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <h3>Rules & maps for the coach</h3>
+      <div className="card list-card">
+        {!docs?.length && (
+          <p className="muted small list-item">
+            Upload your General's Handbook, battleplan cards or a map under <a href="#/library">Rules</a> to attach them here.
+          </p>
         )}
-        <p className="muted small" style={{ margin: 0 }}>
-          Uses the warscroll weapons and models still alive. Other buffs (spells, auras, champions): use the full Calculator.
+        {docs?.map((d) => {
+          const r = refFor(d.id);
+          return (
+            <div key={d.id} className="list-item">
+              <label className="inline grow" style={{ margin: 0 }}>
+                <input type="checkbox" checked={!!r} onChange={(e) => toggleRef(d.id, e.target.checked)} />
+                <span>
+                  {d.title}
+                  <small className="muted">
+                    {d.category} · {d.kind === "pdf" ? `${d.pages} pages` : d.kind}
+                  </small>
+                </span>
+              </label>
+              {r && d.kind === "pdf" && (
+                <input className="pages-input" defaultValue={r.pages ?? ""} onBlur={(e) => setPages(d.id, e.target.value)} placeholder="pages, e.g. 34-35" aria-label={`Pages of ${d.title}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        className="card danger delete-game"
+        onClick={async () => {
+          if (!confirm("Delete this game and its coach conversation?")) return;
+          await api(`/games/${game.id}`, { method: "DELETE" });
+          window.location.hash = "#/games";
+        }}
+      >
+        Delete game
+      </button>
+    </div>
+  );
+}
+
+// ---------- battleplan ----------
+
+function BattleplanStep({ game, mutate }: { game: Game; mutate: Mutate }) {
+  const [docs] = useLoad<LibraryDoc[]>("/library");
+  const [notes, setNotes] = useState(game.battleplanNotes);
+  const pick = (name: string) => mutate((g) => ({ ...g, battleplan: name }), `Battleplan: ${name}.`);
+  const images = (docs ?? []).filter((d) => d.kind === "image" && (d.category === "map" || d.category === "battleplan"));
+  const attached = new Set(game.references.map((r) => r.docId));
+  const setAttacker = (a: Side) =>
+    mutate((g) => ({
+      ...g,
+      state: { ...g.state, attacker: a, ...(g.state.phase === "Deployment" ? { fury: { me: a === "me" ? 1 : 2, opponent: a === "opponent" ? 1 : 2 } } : {}) },
+    }));
+  return (
+    <div className="stack">
+      <h1 className="step-heading">Battleplan</h1>
+      <button type="button" className="outline wide" onClick={() => pick(NUMBERED_BATTLEPLANS[Math.floor(Math.random() * NUMBERED_BATTLEPLANS.length)].name)}>
+        <Icon name="games" /> Randomize
+      </button>
+      <ul className="plan-list" role="radiogroup" aria-label="Battleplan">
+        {NUMBERED_BATTLEPLANS.map((b) => {
+          const on = game.battleplan.toLowerCase() === b.name.toLowerCase();
+          return (
+            <li key={b.number}>
+              <button type="button" role="radio" aria-checked={on} className={`ghost ${on ? "on" : ""}`} onClick={() => pick(b.name)}>
+                <span className="plan-no">{b.number}</span>
+                <span className="grow">{b.name}</span>
+                <span className="radio" aria-hidden="true" />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <h3>Attacker</h3>
+      <div className="question">
+        <span>Who is the attacker?</span>
+        <Seg label="Attacker" value={game.state.attacker} options={[["me", "You"], ["opponent", "Opponent"]]} onChange={setAttacker} />
+      </div>
+      <p className="muted small" style={{ marginTop: 0 }}>
+        Starting fury: attacker 1, defender 2.
+      </p>
+
+      <h3>Deployment map</h3>
+      {images.length ? (
+        <div className="map-grid">
+          {images.map((d) => (
+            <figure key={d.id} className={attached.has(d.id) ? "on" : ""}>
+              <img src={withKey(`/api/library/${d.id}/file`)} alt={d.title} loading="lazy" />
+              <figcaption>
+                <label className="inline" style={{ margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={attached.has(d.id)}
+                    onChange={(e) =>
+                      mutate((g) => ({ ...g, references: e.target.checked ? [...g.references, { docId: d.id }] : g.references.filter((r) => r.docId !== d.id) }))
+                    }
+                  />
+                  {d.title}
+                </label>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      ) : (
+        <p className="map-empty muted small">
+          No map yet. Upload a photo of the battleplan card or the table under <a href="#/library">Rules</a> (type "Battleplan" or "Map") and tick it here: the coach
+          sees it.
         </p>
-      </details>
-    </Card>
+      )}
+      <label>
+        Notes for the coach
+        <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== game.battleplanNotes && mutate((g) => ({ ...g, battleplanNotes: notes }))} placeholder="Objective positions, terrain, deployment zones…" />
+      </label>
+    </div>
   );
 }
 
 // ---------- battle tactics ----------
 
-function TacticsCard({ state, update }: { state: GameState; update: Update }) {
+function TacticsStep({ game, side, mutate }: { game: Game; side: Side; mutate: Mutate }) {
   const meta = useMeta();
-  const [pick, setPick] = useState<Record<Side, string>>({ me: "", opponent: "" });
-
-  const section = (side: Side) => {
-    const tactics = tacticsOf(state, side);
-    const set = (next: TacticProgress[], vpDelta: number, log: string) =>
-      update({ [tacticsKey(side)]: next, vp: { ...state.vp, [side]: Math.max(0, state.vp[side] + vpDelta) } } as Partial<GameState>, log);
+  const key = side === "me" ? "tactics" : "opponentTactics";
+  const chosen = (side === "me" ? game.state.tactics : game.state.opponentTactics) ?? [];
+  const isOn = (c: string) => chosen.some((t) => t.card === c);
+  const toggle = (c: string) =>
+    mutate(
+      (g) => {
+        const cur = (side === "me" ? g.state.tactics : g.state.opponentTactics) ?? [];
+        const next = cur.some((t) => t.card === c) ? cur.filter((t) => t.card !== c) : [...cur, { card: c, affray: false, strike: false, domination: false }];
+        return { ...g, state: { ...g.state, [key]: next } };
+      },
+      `${side === "me" ? "My" : "Opponent's"} battle tactics: ${isOn(c) ? "removed" : "picked"} ${c}.`,
+    );
+  const season = SEASON_TACTICS.filter((c) => meta?.battleTactics.some((b) => b.name === c));
+  const others = (meta?.battleTactics ?? []).map((b) => b.name).filter((c) => !SEASON_TACTICS.includes(c));
+  const row = (c: string, i: number) => {
+    const card = meta?.battleTactics.find((b) => b.name === c);
+    const on = isOn(c);
     return (
-      <div key={side} className={`tactic-side ${side}`}>
-        <h3>{side === "me" ? "My battle tactics" : "Their battle tactics"}</h3>
-        {tactics.map((t, i) => {
-          const card = meta?.battleTactics.find((c) => c.name === t.card);
-          const nextStep = TACTIC_STEPS.find((k) => !t[k]);
-          const lastDone = [...TACTIC_STEPS].reverse().find((k) => t[k]);
-          const title = (k: (typeof TACTIC_STEPS)[number]) => card?.[cap(k) as "Affray" | "Strike" | "Domination"]?.split("\n")[0].replace(/:\s*$/, "");
-          const blocked = state.seizedInitiative === side && state.activePlayer === side;
-          return (
-            <div key={t.card} className="tactic">
-              <div className="row spread" style={{ margin: 0 }}>
-                <b>{t.card}</b>
-                <span className="muted small">{TACTIC_VP} VP each</span>
-              </div>
-              <div className="tiles">
-                {TACTIC_STEPS.map((k) => {
-                  const status = t[k] ? "done" : k === nextStep ? "next" : "locked";
-                  // Only the next objective can be completed, and only the latest one undone.
-                  const canToggle = (status === "next" && !blocked) || (t[k] && k === lastDone);
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      className={`tile ${status}`}
-                      aria-pressed={t[k]}
-                      disabled={!canToggle}
-                      onClick={() =>
-                        set(
-                          tactics.map((x, j) => (j === i ? { ...x, [k]: !x[k] } : x)),
-                          t[k] ? -TACTIC_VP : TACTIC_VP,
-                          `${side === "me" ? "I" : "They"} ${t[k] ? "undid" : "completed"} ${cap(k)} of ${t.card} (${t[k] ? "−" : "+"}${TACTIC_VP} VP).`,
-                        )
-                      }
-                    >
-                      <b>{cap(k)}</b>
-                      <span>{t[k] ? "Done · undo" : status === "locked" ? "Locked" : blocked ? "Not this turn" : (title(k) ?? "Next")}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <details>
-                <summary className="muted small" style={{ cursor: "pointer" }}>
-                  Card rules
-                </summary>
-                {card?.Card && <RulesText text={card.Card} />}
-                {TACTIC_STEPS.map((k) => {
-                  const text = card?.[cap(k) as "Affray" | "Strike" | "Domination"];
-                  return text ? <RulesText key={k} text={`**${cap(k)}** — ${text}`} /> : null;
-                })}
-                <button type="button" className="small" onClick={() => set(tactics.filter((_, j) => j !== i), 0, `Removed ${t.card}.`)}>
-                  Remove card
-                </button>
-              </details>
-            </div>
-          );
-        })}
-        {tactics.length < 2 && (
-          <div className="row">
-            <select value={pick[side]} onChange={(e) => setPick({ ...pick, [side]: e.target.value })} aria-label={`Add a battle tactic card for ${sideName(side)}`}>
-              <option value="">Add a battle tactic card…</option>
-              {meta?.battleTactics
-                .filter((c) => !tactics.some((t) => t.card === c.name))
-                .map((c) => (
-                  <option key={c.name}>{c.name}</option>
-                ))}
-            </select>
-            <button
-              type="button"
-              disabled={!pick[side]}
-              onClick={() => {
-                set([...tactics, { card: pick[side], affray: false, strike: false, domination: false }], 0, `Picked ${pick[side]}.`);
-                setPick({ ...pick, [side]: "" });
-              }}
-            >
-              Add
-            </button>
-          </div>
-        )}
+      <div key={c} className="tactic-pick">
+        {i >= 0 && <span className="tactic-no">Tactic Card {i + 1}</span>}
+        <label className="inline tactic-check">
+          <input type="checkbox" checked={on} disabled={!on && chosen.length >= 2} onChange={() => toggle(c)} />
+          <span className="grow">{c}</span>
+        </label>
+        <details className="card-rules">
+          <summary>Card rules</summary>
+          {card?.Card && <RulesText text={card.Card} />}
+          {(["Affray", "Strike", "Domination"] as const).map((k) => (card?.[k] ? <RulesText key={k} text={`**${k}** — ${card[k]}`} /> : null))}
+        </details>
       </div>
     );
   };
-
   return (
-    <Card title="Battle tactics">
-      {section("me")}
-      {section("opponent")}
-    </Card>
+    <div className="stack">
+      <div>
+        <h1 className="step-heading">{side === "me" ? "Your Battle Tactics" : "Opponent's Battle Tactics"}</h1>
+        <p className="muted small" style={{ margin: "0.3rem 0 0" }}>
+          Pick 2 cards. Each has Affray, Strike and Domination, completed in that order for {TACTIC_VP} VP each.
+        </p>
+      </div>
+      {season.map((c, i) => row(c, i))}
+      {others.length > 0 && (
+        <details>
+          <summary className="muted small" style={{ cursor: "pointer", padding: "0.5rem 0" }}>
+            Other cards in the army data ({others.length})
+          </summary>
+          {others.map((c) => row(c, -1))}
+        </details>
+      )}
+    </div>
   );
 }
 
-// ---------- units ----------
+// ---------- a battle round ----------
 
-function UnitsCard({ game, armies, units, update }: { game: Game; armies: Record<Side, Army>; units: Record<string, Unit>; update: Update }) {
+function RoundStep(props: {
+  game: Game;
+  n: number;
+  mutate: Mutate;
+  update: Update;
+  saved: () => Promise<unknown>;
+  armies: Record<Side, Army>;
+  units: Parameters<typeof UnitsCard>[0]["units"];
+  names: Record<Side, string>;
+  go: (s: Step) => void;
+  openCoach: () => void;
+}) {
+  const { game, n, mutate, update, armies, units, names, go } = props;
   const s = game.state;
-  const [view, setView] = useState<Side>(other(s.activePlayer));
-  const [openKey, setOpenKey] = useState<string | null>(null);
-  const [showDead, setShowDead] = useState(false);
-  useEffect(() => setView(other(s.activePlayer)), [s.activePlayer]);
+  const rounds = s.rounds ?? [];
+  const rec = rounds[n - 1];
+  const liveRound = s.phase === "Deployment" ? 0 : s.round;
+  const isLive = n === liveRound;
+  const canStart = !rec?.first && n === liveRound + 1;
+  const prevFirst = n > 1 ? rounds[n - 2]?.first : undefined;
 
-  const list = gameUnits(game, armies, units).filter((g) => g.side === view);
-  const dead = list.filter((g) => g.destroyed);
-  const shown = list.filter((g) => showDead || !g.destroyed);
+  const setRec = (patch: Partial<NonNullable<typeof rec>>) =>
+    mutate((g) => {
+      const rs = [...(g.state.rounds ?? [])];
+      while (rs.length < n) rs.push(emptyRound());
+      rs[n - 1] = { ...rs[n - 1], ...patch };
+      return { ...g, state: { ...g.state, rounds: rs } };
+    });
 
-  const change = (g: GameUnit, damage: number, destroyed?: boolean) => {
-    const dmg = Math.max(0, damage);
-    const isDead = destroyed ?? (g.health !== undefined && dmg >= g.health);
-    const who = `${g.side === "me" ? "My" : "Their"} ${g.lu.name}`;
-    const log =
-      isDead && !g.destroyed
-        ? `${who} destroyed.`
-        : !isDead && g.destroyed
-          ? `${who} back on the table.`
-          : dmg > g.damage
-            ? `${who} took ${dmg - g.damage} damage${g.health ? ` (${Math.max(0, g.health - dmg)}/${g.health} left)` : ""}.`
-            : undefined;
-    update({ units: { ...s.units, [g.key]: { damage: dmg, destroyed: isDead } } }, log);
-    if (isDead) setOpenKey(null);
+  const setFirst = (side: Side) => {
+    const label = `Battle round ${n}: ${side === "me" ? "I go" : "opponent goes"} first`;
+    if (canStart || isLive) {
+      void mutate((g) => {
+        let state = g.state;
+        if (isLive) {
+          // Re-picking first in the live round: recompute the CP from scratch.
+          const rs = [...(state.rounds ?? [])];
+          rs[n - 1] = { ...rs[n - 1], me: { ...rs[n - 1].me, cpGained: 0 }, opponent: { ...rs[n - 1].opponent, cpGained: 0 } };
+          state = { ...state, rounds: rs };
+        }
+        const next = startRound({ battleplan: g.battleplan, state }, n, side);
+        return { ...g, state: next };
+      }, `${label}${n > 1 && prevFirst && side !== prevFirst ? "" : ""}.`);
+    } else setRec({ first: side });
   };
+  const seizeNote = (side: Side) => {
+    if (n === 1 || !prevFirst || side === prevFirst) return "";
+    const vp = s.vp;
+    return vp[other(side)] - vp[side] >= SEIZE_EXCEPTION_LEAD ? "double turn (11+ VP behind: tactics allowed)" : "double turn: seizes the initiative";
+  };
+  const future = n > liveRound + 1;
 
   return (
-    <Card
-      title="Units"
-      actions={
-        <div className="seg" role="group" aria-label="Which army">
-          {(["opponent", "me"] as const).map((v) => (
-            <button key={v} type="button" className={view === v ? `active ${v}` : ""} aria-pressed={view === v} onClick={() => setView(v)}>
-              {v === "me" ? "Mine" : "Theirs"}
-            </button>
-          ))}
-        </div>
-      }
-    >
-      {shown.map((g) => {
-        const left = g.health !== undefined ? (g.destroyed ? 0 : Math.max(0, g.health - g.damage)) : undefined;
-        const isOpen = openKey === g.key;
-        return (
-          <div key={g.key} className={`unit-row ${g.destroyed ? "destroyed" : ""}`}>
-            <button type="button" className="unit-main unit-toggle" aria-expanded={isOpen} onClick={() => setOpenKey(isOpen ? null : g.key)}>
-              <span className="unit-top">
-                <span>
-                  {g.lu.name}
-                  {g.lu.reinforced ? " (R)" : ""}
-                </span>
-                <span className="muted">{g.destroyed ? "destroyed" : left !== undefined ? `${left} / ${g.health}` : ""}</span>
-              </span>
-              {g.health !== undefined && (
-                <span className={`hp ${g.side}`} aria-hidden="true">
-                  <span style={{ width: `${((left ?? 0) / g.health) * 100}%` }} />
-                </span>
-              )}
-            </button>
-            {isOpen && (
-              <div className="quick">
-                {g.destroyed ? (
-                  <button type="button" onClick={() => change(g, 0, false)}>
-                    Bring back
-                  </button>
-                ) : (
-                  <>
-                    <button type="button" aria-label="Heal 1" onClick={() => change(g, g.damage - 1)}>
-                      −1
-                    </button>
-                    {[1, 3, 5].map((n) => (
-                      <button key={n} type="button" className="dmg" aria-label={`${n} damage`} onClick={() => change(g, g.damage + n)}>
-                        +{n}
-                      </button>
-                    ))}
-                    <button type="button" className="kill" onClick={() => change(g, g.health ?? g.damage, true)}>
-                      Destroyed
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+    <div className="stack">
+      <Group className="priority">
+        {n > 1 && (
+          <div className="question">
+            <span>Who won priority this battle round?</span>
+            <Seg label="Priority" value={rec?.priority} options={[["me", "You"], ["opponent", "Opponent"]]} onChange={(v) => setRec({ priority: v })} />
           </div>
-        );
-      })}
-      {dead.length > 0 && (
-        <button type="button" className="small" style={{ marginTop: "0.5rem" }} onClick={() => setShowDead(!showDead)}>
-          {showDead ? "Hide" : "Show"} {dead.length} destroyed
+        )}
+        <div className="question">
+          <span>Who went first this battle round?</span>
+          <Seg label="First turn" value={rec?.first} options={[["me", "You"], ["opponent", "Opponent"]]} onChange={setFirst} />
+        </div>
+        {!rec?.first && (seizeNote("me") || seizeNote("opponent")) && (
+          <p className="small warning" style={{ margin: "0.3rem 0 0" }}>
+            {seizeNote("me") ? `You going first: ${seizeNote("me")}.` : `Opponent going first: ${seizeNote("opponent")}.`} No battle tactics in that turn.
+          </p>
+        )}
+        {future && !rec?.first && <p className="small muted" style={{ margin: "0.3rem 0 0" }}>Finish round {liveRound || 1} first; you can still fill this in.</p>}
+      </Group>
+
+      {isLive && <TurnCard {...props} />}
+
+      {(["me", "opponent"] as const).map((side) => (
+        <SideBlock key={side} side={side} game={game} n={n} mutate={mutate} isLive={isLive} name={names[side]} />
+      ))}
+
+      {isLive && (
+        <details className="card collapsible">
+          <summary>
+            <h2>Unit damage</h2>
+            <Icon name="down" />
+          </summary>
+          <UnitsCard game={game} armies={armies} units={units} update={update} />
+        </details>
+      )}
+      {isLive && (
+        <div className="collapsible-plain">
+          <OddsCard game={game} armies={armies} units={units} />
+        </div>
+      )}
+      {!rec?.first && n === liveRound && <p className="muted small">Pick who went first to start the turn tracker.</p>}
+      {n === BATTLE_ROUNDS && liveRound === n && s.activePlayer !== s.firstThisRound && s.phase === "End of Turn" && (
+        <button type="button" className="primary wide" onClick={() => go("results")}>
+          See the results
         </button>
       )}
-    </Card>
+    </div>
   );
 }
 
-// ---------- coach tab extras ----------
+/** The live turn: phases, the coach's plan for this phase, and what not to forget. */
+function TurnCard(props: Parameters<typeof RoundStep>[0]) {
+  const { game, n, mutate, update, saved, armies, units, names, go, openCoach } = props;
+  const meta = useMeta();
+  const s = game.state;
+  const active = s.activePlayer;
+  const turnNo = active === s.firstThisRound ? 1 : 2;
+  const phaseIndex = PLAY_PHASES.indexOf(s.phase);
+  const key = `${n}:${active}`;
+  const tips = s.tips?.[key];
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const asked = useRef(new Set<string>());
 
-function BoardInfo({ state, update }: { state: GameState; update: Update }) {
-  const [objectives, setObjectives] = useState(state.objectives);
-  const [notes, setNotes] = useState(state.notes);
-  const dirty = objectives !== state.objectives || notes !== state.notes;
-  return (
-    <Card title="Board for the coach">
-      <p className="muted small" style={{ marginTop: 0 }}>
-        Optional. The coach asks when it needs positions; anything you note here it sees with every question.
-      </p>
-      <label>
-        Objectives
-        <input value={objectives} onChange={(e) => setObjectives(e.target.value)} placeholder="e.g. I hold A and C, B contested, they hold D" />
-      </label>
-      <label>
-        Positions & threats
-        <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Hell Pit 8&quot; from my Stonehorn, Jezzails on the left ruin" />
-      </label>
-      {dirty && (
-        <button type="button" className="small primary" onClick={() => update({ objectives, notes })}>
-          Save board
-        </button>
-      )}
-    </Card>
-  );
-}
-
-function LogCard({ game, update }: { game: Game; update: Update }) {
-  const [text, setText] = useState("");
-  const add = () => {
-    if (!text.trim()) return;
-    update({}, text.trim());
-    setText("");
+  const fetchTips = async (force = false) => {
+    if (!meta?.coachReady || (!force && (tips || asked.current.has(key)))) return;
+    asked.current.add(key);
+    setBusy(true);
+    setError(undefined);
+    try {
+      await saved(); // the server reads the saved game
+      const t = await api<TurnTips>(`/games/${game.id}/tips`, { method: "POST", json: { round: n, side: active } });
+      await mutate((g) => ({ ...g, state: { ...g.state, tips: { ...(g.state.tips ?? {}), [key]: t } } }));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
+  useEffect(() => {
+    void fetchTips();
+  }, [key, meta?.coachReady]);
+
+  const next = () => {
+    if (phaseIndex < PLAY_PHASES.length - 1) return update({ phase: PLAY_PHASES[phaseIndex + 1] });
+    if (turnNo === 1) return update({ activePlayer: other(active), phase: "Start of Turn" }, `${names[other(active)]}'s turn.`);
+    go(n < BATTLE_ROUNDS ? `round-${n + 1}` : "results");
+  };
+  const nextLabel =
+    phaseIndex < PLAY_PHASES.length - 1
+      ? `Next: ${PLAY_PHASES[phaseIndex + 1]}`
+      : turnNo === 1
+        ? `End turn → ${active === "me" ? names.opponent : names.me}`
+        : n < BATTLE_ROUNDS
+          ? `End round → Round ${n + 1}`
+          : "End game → Results";
+  const phaseTips = tips?.phases[s.phase] ?? [];
+
   return (
-    <Card title="Game log">
-      <p className="muted small" style={{ marginTop: 0 }}>
-        Rounds, scoring, damage and destroyed units are logged automatically. Add anything else worth remembering for the review.
-      </p>
-      <div className="row">
-        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="e.g. Failed a 6&quot; charge with the Stonehorn" />
-        <button type="button" onClick={add}>
-          Add
+    <section className={`turn-card ${active}`}>
+      <div className="turn-head">
+        <span className="turn-label">
+          Turn {turnNo} · <b>{active === "me" ? "Your turn" : `${names.opponent}'s turn`}</b>
+        </span>
+        <span className="muted small">{s.cp[active]} CP</span>
+      </div>
+      <nav className="phase-chips" aria-label="Phases">
+        {PLAY_PHASES.map((p, i) => (
+          <button key={p} type="button" className={i < phaseIndex ? "past" : i === phaseIndex ? "current" : ""} aria-current={i === phaseIndex ? "step" : undefined} onClick={() => update({ phase: p })}>
+            {SHORT[p]}
+          </button>
+        ))}
+      </nav>
+      {s.seizedInitiative === active && <p className="small warning">Seized the initiative: no battle tactics this turn.</p>}
+
+      <div className="tips">
+        <div className="tips-head">
+          <Icon name="spark" />
+          <b>{active === "me" ? `Coach · ${s.phase}` : `Coach · their ${s.phase}`}</b>
+          {tips && (
+            <button type="button" className="icon small-icon" aria-label="New plan for this turn" disabled={busy} onClick={() => fetchTips(true)}>
+              <Icon name="refresh" />
+            </button>
+          )}
+        </div>
+        {!meta?.coachReady ? (
+          <p className="muted small">
+            Add your Claude API key on the <a href="#/ask">Coach</a> page to get a plan for every turn.
+          </p>
+        ) : busy && !tips ? (
+          <p className="muted small thinking">Planning this turn…</p>
+        ) : error ? (
+          <p className="error small">
+            {error}{" "}
+            <button type="button" className="small" onClick={() => fetchTips(true)}>
+              Try again
+            </button>
+          </p>
+        ) : tips ? (
+          <>
+            <p className="tips-headline">{tips.headline}</p>
+            {phaseTips.length ? (
+              <ul className="tips-list">
+                {phaseTips.map((t, i) => (
+                  <li key={i}>{t}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted small">Nothing special this phase.</p>
+            )}
+          </>
+        ) : null}
+        <button type="button" className="small ghost accent" onClick={openCoach}>
+          Ask the coach
         </button>
       </div>
-      <ul className="log">
-        {[...game.log].reverse().map((l, i) => (
-          <li key={i}>{l.text}</li>
-        ))}
-      </ul>
-    </Card>
+
+      <details className="forget-wrap">
+        <summary>
+          Don't forget this phase <Icon name="down" />
+        </summary>
+        <PhaseChecklist game={game} armies={armies} units={units} />
+      </details>
+
+      <button type="button" className="primary wide" onClick={next}>
+        {nextLabel} <Icon name="right" />
+      </button>
+    </section>
+  );
+}
+
+function SideBlock({ side, game, n, mutate, isLive, name }: { side: Side; game: Game; n: number; mutate: Mutate; isLive: boolean; name: string }) {
+  const meta = useMeta();
+  const s = game.state;
+  const rounds = s.rounds ?? [];
+  const rec = rounds[n - 1] ?? emptyRound();
+  const sr = rec[side];
+  const lines = scoringFor(game.battleplan, n);
+  const tactics = (side === "me" ? s.tactics : s.opponentTactics) ?? [];
+  const who = side === "me" ? "I" : "They";
+
+  const setSr = (patch: Partial<SideRound>, log?: string) =>
+    mutate((g) => {
+      const rs = [...(g.state.rounds ?? [])];
+      while (rs.length < n) rs.push(emptyRound());
+      rs[n - 1] = { ...rs[n - 1], [side]: { ...rs[n - 1][side], ...patch } };
+      return { ...g, state: { ...g.state, rounds: rs } };
+    }, log);
+
+  const objectiveVp = sideRoundVp({ ...sr, tactics: [] }, game.battleplan, n);
+  const roundVp = sideRoundVp(sr, game.battleplan, n);
+  const blocked = isLive && s.seizedInitiative === side;
+
+  return (
+    <section className="side-block">
+      <div className="side-name">
+        <h1>{name}</h1>
+        {isLive && s.underdog === side && <span className="badge">Underdog</span>}
+        {rec.first && <span className="muted small">Turn {rec.first === side ? 1 : 2}</span>}
+        <span className="grow" />
+        <span className="round-vp">+{roundVp} pts</span>
+      </div>
+
+      <Group label="Command points">
+        <div className="cp-row">
+          <Counter label="Gained" value={sr.cpGained} onChange={(v) => setSr({ cpGained: v })} />
+          <Counter label="Spent" value={sr.cpSpent} onChange={(v) => setSr({ cpSpent: v })} />
+          <span className="cp-total">
+            <b>{Math.max(0, sr.cpGained - sr.cpSpent)}</b>
+            <small>cp</small>
+          </span>
+        </div>
+        {isLive && (
+          <div className="cp-row two">
+            <Counter label="Fury" value={s.fury[side]} onChange={(v) => mutate((g) => ({ ...g, state: { ...g.state, fury: { ...g.state.fury, [side]: Math.min(7, v) } } }))} />
+            <Counter label="Rage dice" value={s.rage[side]} onChange={(v) => mutate((g) => ({ ...g, state: { ...g.state, rage: { ...g.state.rage, [side]: v } } }))} />
+          </div>
+        )}
+      </Group>
+
+      <Group label="Objectives">
+        <div className="score-row">
+          <span className="grow">{lines ? "Objective control" : "Objective VP"}</span>
+          <span className="muted">{objectiveVp} pts</span>
+        </div>
+        {lines?.map((l) => {
+          const on = sr.scored.includes(l.label);
+          return (
+            <label key={l.label} className={`toggle-row ${on ? "on" : ""}`}>
+              <input
+                type="checkbox"
+                checked={on}
+                onChange={(e) =>
+                  setSr(
+                    { scored: e.target.checked ? [...sr.scored, l.label] : sr.scored.filter((x) => x !== l.label) },
+                    e.target.checked ? `${who} scored "${l.label}" (+${l.vp}).` : undefined,
+                  )
+                }
+              />
+              <span className="grow">
+                {l.label}
+                <small>{l.vp}pts</small>
+              </span>
+            </label>
+          );
+        })}
+        {!lines && (
+          <p className="muted small">{game.battleplan ? `No scoring card for "${game.battleplan}": add the VP below.` : "Pick the battleplan to get its scoring."}</p>
+        )}
+        <div className="score-row">
+          <span className="grow">{lines ? "Other VP" : "VP this turn"}</span>
+          <Counter label="pts" value={sr.extraVp} min={-50} onChange={(v) => setSr({ extraVp: v })} />
+        </div>
+      </Group>
+
+      <Group label={`Battle tactics: ${tactics.reduce((sum, t) => sum + tacticSteps(rounds, side, t.card).size, 0) * TACTIC_VP}/${tactics.length * 15 || 30}`}>
+        {!tactics.length && <p className="muted small">No cards picked. Choose them in the Battle Tactics steps.</p>}
+        {tactics.map((t) => {
+          const doneHere = sr.tactics.find((x) => x.card === t.card);
+          const total = tacticSteps(rounds, side, t.card).size * TACTIC_VP;
+          const laterDone = tacticSteps(rounds, side, t.card).size > tacticSteps(rounds, side, t.card, n).size;
+          const step = doneHere?.step ?? nextTacticStep(rounds, side, t.card);
+          const card = meta?.battleTactics.find((b) => b.name === t.card);
+          const goal = step ? card?.[cap(step) as "Affray" | "Strike" | "Domination"]?.split("\n")[0].replace(/:\s*$/, "").replace(/\*+/g, "") : undefined;
+          return (
+            <div key={t.card} className="score-row tactic-row">
+              <span className="grow">
+                {t.card}
+                <small className="muted">{step ? `${cap(step)}${goal ? `: ${goal}` : ""}` : "All done"}</small>
+              </span>
+              <span className="muted">{total}/15</span>
+              {doneHere ? (
+                <button
+                  type="button"
+                  className="score-btn on"
+                  disabled={laterDone}
+                  aria-label={`Undo ${cap(doneHere.step)} of ${t.card}`}
+                  onClick={() => setSr({ tactics: sr.tactics.filter((x) => x.card !== t.card) }, `${who} undid ${cap(doneHere.step)} of ${t.card}.`)}
+                >
+                  <Icon name="check" /> {cap(doneHere.step)}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="score-btn"
+                  disabled={!step || blocked || laterDone}
+                  onClick={() => step && setSr({ tactics: [...sr.tactics, { card: t.card, step }] }, `${who} completed ${cap(step)} of ${t.card} (+${TACTIC_VP}).`)}
+                >
+                  +{TACTIC_VP}pts
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </Group>
+    </section>
+  );
+}
+
+// ---------- results ----------
+
+const CONCLUSIONS = [
+  ["played", "Played to end of game"],
+  ["time", "Ran out of time"],
+  ["conceded-opponent", "Opponent conceded"],
+  ["conceded-me", "I conceded"],
+] as const;
+
+function ResultsStep({ game, lists, mutate, openCoach }: { game: Game; lists?: ArmyList[]; mutate: Mutate; openCoach: () => void }) {
+  const [conclusion, setConclusion] = useState<NonNullable<Game["finished"]>["conclusion"]>(game.finished?.conclusion ?? "played");
+  const s = game.state;
+  const rounds = s.rounds ?? [];
+  const r = result({ state: s, finished: { conclusion, at: "" } });
+  const me = sideInfo(game, lists, "me");
+  const opp = sideInfo(game, lists, "opponent");
+  const status = r === "win" ? "VICTORY" : r === "loss" ? "DEFEAT" : "DRAW";
+  const [copied, setCopied] = useState(false);
+
+  const change = (c: typeof conclusion) => {
+    setConclusion(c);
+    if (game.finished) void mutate((g) => ({ ...g, finished: { conclusion: c, at: g.finished!.at } }));
+  };
+  const cells = (values: (number | null)[]) =>
+    Array.from({ length: BATTLE_ROUNDS }, (_, i) => (
+      <span key={i} className="cell">
+        {values[i] === null || values[i] === undefined ? "-" : values[i]}
+      </span>
+    ));
+  const sideTable = (side: Side, name: string) => {
+    const tactics = (side === "me" ? s.tactics : s.opponentTactics) ?? [];
+    const obj = rounds.map((rec, i) => (rec.first ? sideRoundVp({ ...rec[side], tactics: [] }, game.battleplan, i + 1) : null));
+    return (
+      <div className="res-side">
+        <h2>{name}</h2>
+        <div className="res-row">
+          <span className="grow">Objectives</span>
+          <span className="cells">{cells(obj)}</span>
+          <span className="res-total">{obj.reduce<number>((a, b) => a + (b ?? 0), 0)}</span>
+        </div>
+        {tactics.map((t) => {
+          const per = rounds.map((rec) => (rec[side].tactics.some((x) => x.card === t.card) ? TACTIC_VP : rec.first ? 0 : null));
+          return (
+            <div key={t.card} className="res-row">
+              <span className="grow">{t.card}</span>
+              <span className="cells">{cells(per)}</span>
+              <span className="res-total">{tacticSteps(rounds, side, t.card).size * TACTIC_VP}/15</span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+  const summary = `${me.name} (${me.base}) ${s.vp.me} - ${s.vp.opponent} ${opp.name} (${opp.base}) · ${status}\nAge of Sigmar 4e · Pitched Battles 2026-27 · ${game.battleplan || "?"} · ${game.points ?? 2000}pts · ${gameDate(game)}`;
+  const share = async () => {
+    try {
+      if (navigator.share) await navigator.share({ title: "Game result", text: summary });
+      else {
+        await navigator.clipboard.writeText(summary);
+        setCopied(true);
+      }
+    } catch {
+      /* cancelled */
+    }
+  };
+
+  return (
+    <div className="stack">
+      <label className="field">
+        <span className="field-label">Game conclusion</span>
+        <span className="field-box">
+          <Icon name="flag" />
+          <select value={conclusion} onChange={(e) => change(e.target.value as typeof conclusion)}>
+            {CONCLUSIONS.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </span>
+      </label>
+      <article className="card result-card">
+        <div className="game-card-body">
+          <div className="gc-side">
+            <span className="muted gc-date">{gameDate(game)}</span>
+            <b className="gc-name">{me.name}</b>
+            <span className="gc-faction">{me.base}</span>
+            {me.sub && <small className="muted">{me.sub}</small>}
+          </div>
+          <div className="gc-score">
+            <span className="big-score">
+              {s.vp.me}-{s.vp.opponent}
+            </span>
+            <span className={`gc-status ${r}`}>{status}</span>
+          </div>
+          <div className="gc-side right">
+            <span className="muted gc-date">&nbsp;</span>
+            <b className="gc-name">{opp.name}</b>
+            <span className="gc-faction">{opp.base}</span>
+            {opp.sub && <small className="muted">{opp.sub}</small>}
+          </div>
+        </div>
+        {sideTable("me", me.name)}
+        {sideTable("opponent", opp.name)}
+        <p className="res-foot">
+          Age of Sigmar 4e · Pitched Battles 2026-27 · {game.battleplan || "battleplan not set"} · {game.points ?? 2000}pts
+          <br />
+          Tracked with Thorgrim
+        </p>
+      </article>
+      <div className="two-buttons">
+        <button type="button" className="outline" onClick={share}>
+          <Icon name="share" /> {copied ? "Copied" : "Share"}
+        </button>
+        <button type="button" className="outline" onClick={openCoach}>
+          <Icon name="coach" /> Coach review
+        </button>
+      </div>
+    </div>
   );
 }
