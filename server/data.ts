@@ -100,6 +100,23 @@ export function factionRulesText(rules: FactionRule[], filter?: (r: FactionRule)
 const NARRATIVE = /battle (scars|wounds)|path|anvil of apotheosis|aqshian artefacts|thyrian wonders|hallmarks|pride of thyria|veteran abilit|renown/i;
 export const matchedPlayRule = (r: FactionRule) => !NARRATIVE.test(`${r.group} ${r.entry}`);
 
+/**
+ * The faction rules a list actually uses: battle traits always, plus any
+ * formation, enhancement or lore (and its spells/prayers) named in the list.
+ */
+export function listRules(list: ArmyList): FactionRule[] {
+  const faction = gameData().factions[list.faction];
+  if (!faction) return [];
+  const raw = norm(list.rawText);
+  return faction.rules.filter(
+    (r) =>
+      matchedPlayRule(r) &&
+      (/battle traits/i.test(`${r.group} ${r.entry}`) ||
+        (r.entry && raw.includes(norm(r.entry))) ||
+        (/^lore of|lore$/i.test(r.group) && raw.includes(norm(r.group)))),
+  );
+}
+
 /** Everything the coach needs to know about one army list. */
 export function listDossier(list: ArmyList): string {
   const d = gameData();
@@ -113,13 +130,7 @@ export function listDossier(list: ArmyList): string {
   ];
   if (list.unmatched.length) lines.push(`Lines not matched to a warscroll: ${list.unmatched.join(" | ")}`, "");
   if (faction) {
-    // Only include the faction rules that matter: battle traits always, other
-    // groups only when the list mentions their entries.
-    const raw = norm(list.rawText);
-    const relevant = faction.rules.filter(
-      (r) => matchedPlayRule(r) && (/battle traits/i.test(r.entry) || /battle traits/i.test(r.group) || (r.entry && raw.includes(norm(r.entry)))),
-    );
-    lines.push(`## Faction rules used by this list`, factionRulesText(relevant), "");
+    lines.push(`## Faction rules used by this list`, factionRulesText(listRules(list)), "");
   }
   lines.push("## Warscrolls");
   const seen = new Set<string>();

@@ -32,7 +32,7 @@ export const SEASON_ABILITIES: Command[] = [
   { name: "Simmering Rage", cost: 0, phases: ["Start of Turn"], side: "both", summary: "Start of each battle round: gain rage dice equal to your fury level. Unspent rage dice are lost at the end of the round." },
   { name: "Activate Place of Power", cost: 0, phases: ["Start of Turn"], side: "both", summary: "Hero within 3\" of a Place of Power rolls a dice: 1 = D3 mortal damage to it; 2+ = gain 2 rage dice and +2 fury (max 7), or +1 to cast/chant, or unbind as Wizard (1)." },
   { name: "Eruption of Fury", cost: 0, phases: ["End of Turn"], side: "both", summary: "Once per turn: a unit in combat spends up to 3 rage dice for that many extra attacks with one melee weapon (no crits). Each unmodified 6: D3 mortal damage to each enemy unit in combat with it, and the opponent's fury +1. Each 1: D3 mortal damage to your unit, no ward." },
-  { name: "Fight Through the Pain", cost: 0, phases: ["Shooting", "Combat", "Hero", "End of Turn"], side: "both", summary: "Before allocating damage to your unit: spend rage dice, lowering your fury by 1 each; each 3+ removes 1 damage point." },
+  { name: "Fight Through the Pain", cost: 0, phases: ["Combat"], side: "both", summary: "Before allocating damage to your unit: spend rage dice, lowering your fury by 1 each; each 3+ removes 1 damage point." },
 ];
 
 export const BATTLEPLANS = {
@@ -66,3 +66,72 @@ export function newBattleRound(prev: { firstThisRound: Side; vp: Record<Side, nu
   const cp = { me: 4 + (underdog === "me" ? 1 : 0), opponent: 4 + (underdog === "opponent" ? 1 : 0) };
   return { seized, underdog, cp };
 }
+
+// ---------- battleplan scoring (General's Handbook 2026-27) ----------
+// Short summaries of each battleplan's end-of-turn scoring, from the
+// player's battleplan cards. Each line scores on its own.
+
+export interface ScoringLine {
+  label: string;
+  vp: number;
+  /** "first": battle round 1 only; "later": from battle round 2. */
+  rounds?: "first" | "later";
+}
+
+const STANDARD: ScoringLine[] = [
+  { label: "Control at least 1 objective", vp: 3 },
+  { label: "Control at least 2 objectives", vp: 3 },
+  { label: "Control more objectives than your opponent", vp: 4 },
+];
+
+export const BATTLEPLAN_SCORING: Record<string, ScoringLine[]> = {
+  "Into the Fire": STANDARD,
+  "Bloodstained Coasts": [
+    STANDARD[0],
+    STANDARD[1],
+    { label: "Control more objectives than your opponent", vp: 4, rounds: "first" },
+    { label: "Control an objective your opponent controlled at the start of the turn", vp: 4, rounds: "later" },
+  ],
+  "Avalanche of Ash": [
+    ...STANDARD,
+    { label: "Only 1 objective left, and you control a non-faction terrain feature in enemy territory", vp: 3 },
+    { label: "No objectives left, and you control more terrain features than your opponent", vp: 7 },
+  ],
+  "Caverns of Slaughter": [STANDARD[0], STANDARD[1], { label: "Control at least 1 pair of objectives", vp: 4 }],
+  "What's Yours is Ours": [STANDARD[0], { label: "Control the coveted objective pair", vp: 3 }, STANDARD[2]],
+  "Warped Ruins": [STANDARD[0], { label: "Control at least 1 pair of objectives", vp: 3 }, STANDARD[2]],
+  "Curse of the Gnaw": [
+    { label: "Control the Golden Lions objective", vp: 3 },
+    { label: "Control the Sun Seekers objective", vp: 3 },
+    STANDARD[2],
+  ],
+  "Seize the Embers": [
+    STANDARD[0],
+    { label: "Control at least 2 objectives", vp: 3, rounds: "first" },
+    { label: "Used 'Return to Base Camp' this turn", vp: 3, rounds: "later" },
+    STANDARD[2],
+  ],
+  "Treacherous Ground": [
+    { label: "Control at least 1 stable objective", vp: 3 },
+    { label: "Control at least 2 stable objectives", vp: 3 },
+    { label: "Control more stable objectives than your opponent", vp: 4 },
+  ],
+  "Escape From the Coast": STANDARD,
+  "Power of the Realms": [
+    { label: "Control the primary objective", vp: 3 },
+    { label: "Control at least 2 secondary objectives", vp: 3 },
+    STANDARD[2],
+  ],
+};
+
+const normName = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
+
+/** Scoring lines for a battleplan this round, or null if the app doesn't know it. */
+export function scoringFor(battleplan: string, round: number): ScoringLine[] | null {
+  const key = Object.keys(BATTLEPLAN_SCORING).find((k) => normName(k) === normName(battleplan));
+  if (!key) return null;
+  return BATTLEPLAN_SCORING[key].filter((l) => !l.rounds || (l.rounds === "first") === (round === 1));
+}
+
+export const TACTIC_VP = 5;
+export const TACTIC_STEPS = ["affray", "strike", "domination"] as const;

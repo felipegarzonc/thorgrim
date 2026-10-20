@@ -19,7 +19,23 @@ export function detectFaction(text: string): string | undefined {
     .find((f) => t.includes(norm(f)));
 }
 
-export function parseList(text: string, factionHint?: string): Pick<ArmyList, "faction" | "units" | "unmatched"> {
+const LISTED_POINTS = /\(\s*(\d+)\s*(?:pts|points)?\s*\)\s*$|\b(\d+)\s*(?:pts|points)\s*$/i;
+const TACTICS_LINE = /^battle\s*tactics?(?:\s*cards?)?\s*[:\-–]\s*(.+)$/i;
+
+/** Battle tactic card names mentioned on a "Battle Tactic Cards: A, B" line. */
+function tacticCardsIn(line: string): string[] {
+  const m = TACTICS_LINE.exec(line.trim());
+  if (!m) return [];
+  const known = gameData()
+    .core.filter((r) => r.ability.kind === "Battle Tactic Card")
+    .map((r) => r.ability.name);
+  return m[1]
+    .split(/,|;|\||\band\b/i)
+    .map((part) => known.find((k) => norm(k) === norm(part)))
+    .filter((k): k is string => Boolean(k));
+}
+
+export function parseList(text: string, factionHint?: string): Pick<ArmyList, "faction" | "units" | "unmatched" | "tacticCards"> {
   const d = gameData();
   const faction = factionHint || detectFaction(text) || "";
   const base = faction.split(" - ")[0];
@@ -43,6 +59,8 @@ export function parseList(text: string, factionHint?: string): Pick<ArmyList, "f
 
   const units: ListUnit[] = [];
   const unmatched: string[] = [];
+  const tacticCards: string[] = [];
+  const listed = new Map<ListUnit, number>();
   let last: ListUnit | undefined;
 
   for (const rawLine of text.split(/\r?\n/)) {
@@ -50,12 +68,19 @@ export function parseList(text: string, factionHint?: string): Pick<ArmyList, "f
     if (!line) continue;
     const isBullet = BULLET.test(rawLine);
     const content = line.replace(BULLET, "");
+    const cards = tacticCardsIn(content);
+    if (cards.length) {
+      for (const c of cards) if (!tacticCards.includes(c)) tacticCards.push(c);
+      continue;
+    }
     if (isBullet && last) {
       if (/^reinforced$/i.test(content.trim())) last.reinforced = true;
       else last.notes.push(content);
       continue;
     }
     const qty = Number(QTY.exec(content)?.[1] ?? 1);
+    const pm = LISTED_POINTS.exec(content);
+    const listedPoints = pm ? Number(pm[1] ?? pm[2]) / qty : undefined;
     const name = content.replace(QTY, "").replace(POINTS, "");
     const unit = match(name);
     if (unit) {
@@ -69,6 +94,7 @@ export function parseList(text: string, factionHint?: string): Pick<ArmyList, "f
           notes: [],
         };
         units.push(last);
+        if (listedPoints !== undefined) listed.set(last, listedPoints);
       }
     } else if (UNIT_LINE.test(content) && !content.includes("/")) {
       // Looks like a unit line ("Something (150)") but we don't know it.
@@ -76,5 +102,12 @@ export function parseList(text: string, factionHint?: string): Pick<ArmyList, "f
       last = undefined;
     }
   }
-  return { faction, units, unmatched };
+  // The list's own points win (they include reinforcement); otherwise use
+  // the army data's cost, doubled for reinforced units.
+  for (const u of units) {
+    const p = listed.get(u);
+    if (p !== undefined) u.points = p;
+    else if (u.points !== undefined && u.reinforced) u.points *= 2;
+  }
+  return { faction, units, unmatched, tacticCards };
 }

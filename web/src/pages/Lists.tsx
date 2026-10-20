@@ -3,7 +3,7 @@ import type { ArmyList, Unit } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { Card, RulesText, useLoad, useMeta } from "../ui.tsx";
 
-type Parsed = Pick<ArmyList, "faction" | "units" | "unmatched">;
+type Parsed = Pick<ArmyList, "faction" | "units" | "unmatched" | "tacticCards">;
 
 export function ListsPage({ selectedId }: { selectedId?: string }) {
   const [lists, reload] = useLoad<ArmyList[]>("/lists");
@@ -21,7 +21,7 @@ export function ListsPage({ selectedId }: { selectedId?: string }) {
               </a>
               <span className={`tag ${l.owner}`}>{l.owner === "me" ? "Mine" : "Opponent"}</span>
               <span className="muted">
-                {l.faction || "faction?"} · {l.units.length} units · {l.units.reduce((s, u) => s + (u.points ?? 0) * (u.reinforced ? 2 : 1), 0)} pts
+                {l.faction || "faction?"} · {l.units.length} units · {l.units.reduce((s, u) => s + (u.points ?? 0), 0)} pts
               </span>
             </li>
           ))}
@@ -101,11 +101,12 @@ function ListForm({ onSaved }: { onSaved: () => void }) {
             {parsed.units.map((u) => (
               <li key={u.key}>
                 {u.name}
-                {u.reinforced ? " (Reinforced)" : ""} {u.points ? <span className="muted">{u.points * (u.reinforced ? 2 : 1)} pts</span> : null}
+                {u.reinforced ? " (Reinforced)" : ""} {u.points ? <span className="muted">{u.points} pts</span> : null}
                 {u.notes.length > 0 && <span className="muted"> — {u.notes.join(", ")}</span>}
               </li>
             ))}
           </ul>
+          {parsed.tacticCards && parsed.tacticCards.length > 0 && <p>Battle tactic cards: <strong>{parsed.tacticCards.join(", ")}</strong></p>}
           {parsed.unmatched.length > 0 && <p className="warning">Not recognised: {parsed.unmatched.join(" · ")}</p>}
         </div>
       )}
@@ -135,7 +136,8 @@ function ListView({ list, onDeleted }: { list: ArmyList; onDeleted: () => void }
       }
     >
       <p className="muted">
-        {list.owner === "me" ? "My list" : "Opponent list"} · {list.faction}
+        {list.owner === "me" ? "My list" : "Opponent list"} · {list.faction} · {list.units.reduce((s, u) => s + (u.points ?? 0), 0)} pts
+        {list.tacticCards?.length ? ` · Tactics: ${list.tacticCards.join(", ")}` : ""}
       </p>
       {list.unmatched.length > 0 && <p className="warning">Not recognised: {list.unmatched.join(" · ")}</p>}
       <div className="stack">

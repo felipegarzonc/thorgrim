@@ -8,7 +8,7 @@ import { damageBySave, expectedDamage, simulate, type AttackProfile, type Target
 import type { ArmyList, Game, GameState, LibraryDoc } from "../shared/types.ts";
 import { hasCredentials, saveApiKey } from "./anthropic.ts";
 import { askCoach, conversations, PROMPTS, resetConversation } from "./coach.ts";
-import { gameData, warscrollText } from "./data.ts";
+import { gameData, listRules, warscrollText } from "./data.ts";
 import { addDocument, deleteDocument, docFile, getPages, libraryDocs, searchLibrary } from "./library.ts";
 import { parseList } from "./listParser.ts";
 import { resumePendingTranscriptions, transcribeDocument } from "./transcribe.ts";
@@ -80,6 +80,10 @@ app.get("/api/lists", (_req, res) => res.json(lists.list().sort((a, b) => b.crea
 app.get("/api/lists/:id", (req, res) => {
   const l = lists.get(param(req, "id"));
   return l ? res.json(l) : res.status(404).json({ error: "Not found" });
+});
+app.get("/api/lists/:id/rules", (req, res) => {
+  const l = lists.get(param(req, "id"));
+  return l ? res.json(listRules(l)) : res.status(404).json({ error: "Not found" });
 });
 app.post("/api/lists/parse", (req, res) => res.json(parseList(String(req.body.text ?? ""), req.body.faction)));
 app.post("/api/lists", (req, res) => {
@@ -153,6 +157,9 @@ app.delete("/api/library/:id", (req, res) => {
 
 // ---------- games ----------
 
+const tacticsFrom = (list?: ArmyList) =>
+  (list?.tacticCards ?? []).slice(0, 2).map((card) => ({ card, affray: false, strike: false, domination: false }));
+
 function newState(attacker: GameState["attacker"]): GameState {
   return {
     round: 1,
@@ -165,6 +172,7 @@ function newState(attacker: GameState["attacker"]): GameState {
     fury: { me: attacker === "me" ? 1 : 2, opponent: attacker === "opponent" ? 1 : 2 },
     rage: { me: 0, opponent: 0 },
     tactics: [],
+    opponentTactics: [],
     underdog: null,
     seizedInitiative: null,
     units: {},
@@ -188,7 +196,11 @@ app.post("/api/games", (req, res) => {
     battleplan: b.battleplan ?? "",
     battleplanNotes: b.battleplanNotes ?? "",
     references: b.references ?? [],
-    state: newState(b.attacker ?? "me"),
+    state: {
+      ...newState(b.attacker ?? "me"),
+      tactics: tacticsFrom(lists.get(b.myListId ?? "")),
+      opponentTactics: tacticsFrom(lists.get(b.opponentListId ?? "")),
+    },
     log: [],
     createdAt: new Date().toISOString(),
   };

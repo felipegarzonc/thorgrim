@@ -826,14 +826,18 @@ table.calc select {
   background: var(--line);
   overflow: hidden;
 }
-.hp > div {
+.hp {
+  display: block;
+}
+.hp > span {
+  display: block;
   height: 100%;
   border-radius: 3px;
 }
-.hp.me > div {
+.hp.me > span {
   background: var(--me);
 }
-.hp.opponent > div {
+.hp.opponent > span {
   background: var(--opp);
 }
 .unit-row.destroyed .unit-top {
@@ -1086,4 +1090,109 @@ p .kpi {
 .ask-intro ul {
   margin: 0.2rem 0 0.6rem;
   padding-left: 1.1rem;
+}
+
+/* units: tap a unit for quick damage buttons */
+.unit-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  border: 0;
+  padding: 0.25rem 0;
+  min-height: 44px;
+  width: 100%;
+  font-weight: 400;
+}
+.unit-toggle:hover:not(:disabled) {
+  border: 0;
+}
+.unit-row .unit-top {
+  display: flex;
+  justify-content: space-between;
+}
+.quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  width: 100%;
+  padding-bottom: 0.3rem;
+}
+.quick button {
+  flex: 1;
+  min-width: 3.2rem;
+  font-weight: 600;
+}
+.quick .dmg {
+  border-color: var(--me-line);
+}
+.quick .kill {
+  flex: 2;
+  background: var(--me);
+  border-color: var(--me);
+  color: #fff;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.seg button {
+  border: 0;
+  border-radius: 0;
+  min-height: 36px;
+  padding: 0.25rem 0.8rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.seg button.active.me {
+  background: var(--me);
+  color: #fff;
+}
+.seg button.active.opponent {
+  background: var(--opp);
+  color: var(--bg);
+}
+
+/* end-of-turn scoring */
+.score-panel.me {
+  border-color: var(--me-line);
+}
+.score-panel.opponent {
+  border-color: var(--opp-line);
+  background: var(--opp-soft);
+}
+.score-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--line);
+  margin: 0;
+  min-height: 44px;
+}
+.score-line b {
+  font-family: var(--display);
+  font-size: 1.1rem;
+}
+
+/* tactics for both sides */
+.tactic-side h3 {
+  margin-top: 0.2rem;
+}
+.tactic-side.opponent h3 {
+  color: var(--opp);
+}
+.tactic-side.opponent .tile.next {
+  border-color: var(--opp);
+}
+.tactic-side + .tactic-side {
+  border-top: 1px solid var(--line-2);
+  margin-top: 0.6rem;
+  padding-top: 0.4rem;
+}
+.score-line:has(input:disabled) {
+  opacity: 0.45;
 }

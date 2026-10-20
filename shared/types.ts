@@ -72,6 +72,7 @@ export interface ListUnit {
   unitId: string;
   name: string;
   reinforced: boolean;
+  /** Cost of this unit as listed (already doubled when reinforced). */
   points?: number;
   notes: string[]; // enhancements, general, etc.
 }
@@ -84,6 +85,8 @@ export interface ArmyList {
   rawText: string;
   units: ListUnit[];
   unmatched: string[];
+  /** Battle tactic cards named in the list ("Battle Tactic Cards: …"). */
+  tacticCards?: string[];
   createdAt: string;
 }
 
@@ -128,6 +131,9 @@ export interface GameState {
   fury: { me: number; opponent: number };
   rage: { me: number; opponent: number };
   tactics: TacticProgress[];
+  opponentTactics?: TacticProgress[];
+  /** VP scored in the end-of-turn prompt, keyed "round:side", so a turn is scored once. */
+  scoredTurns?: Record<string, number>;
   /** Fewest VP at the start of the round, or the opponent of whoever seized the initiative. */
   underdog?: "me" | "opponent" | null;
   /** Who seized the initiative this round (they can't complete battle tactics this turn). */

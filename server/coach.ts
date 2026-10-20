@@ -246,7 +246,7 @@ function libraryCatalogue(): string {
 
 function battleTacticsText(game?: Game): string {
   const cards = gameData().core.filter((r) => r.ability.kind === "Battle Tactic Card");
-  const chosen = new Set((game?.state.tactics ?? []).map((t) => norm(t.card)));
+  const chosen = new Set([...(game?.state.tactics ?? []), ...(game?.state.opponentTactics ?? [])].map((t) => norm(t.card)));
   const lines = [`Battle tactic cards in the data: ${cards.map((c) => c.ability.name).join(", ")}.`];
   for (const c of cards.filter((c) => chosen.has(norm(c.ability.name)))) {
     lines.push(`\n### ${c.ability.name} (chosen)`);
@@ -304,7 +304,8 @@ function stateText(ctx: CoachContext): string {
     `Round ${s.round}. Attacker: ${s.attacker}. First turn this round: ${s.firstThisRound}. Active player: ${s.activePlayer}. Phase: ${s.phase}.`,
     `Underdog: ${s.underdog ?? "none"}.${s.seizedInitiative ? ` ${s.seizedInitiative} seized the initiative this round (no battle tactics for them this turn).` : ""}`,
     `CP me ${s.cp.me} / opp ${s.cp.opponent}. VP me ${s.vp.me} / opp ${s.vp.opponent}. Fury me ${s.fury.me} / opp ${s.fury.opponent}. Rage dice me ${s.rage.me} / opp ${s.rage.opponent}.`,
-    `My battle tactics: ${s.tactics.map((t) => `${t.card} [Affray ${t.affray ? "done" : "open"}, Strike ${t.strike ? "done" : "open"}, Domination ${t.domination ? "done" : "open"}]`).join("; ") || "none chosen"}.`,
+    `My battle tactics: ${tacticsLine(s.tactics)}.`,
+    `Opponent's battle tactics: ${tacticsLine(s.opponentTactics ?? [])}.`,
     unitLines.length ? `Unit status: ${unitLines.join("; ")}.` : "No damage recorded on units.",
     s.objectives ? `Objectives: ${s.objectives}` : "",
     s.notes ? `Notes: ${s.notes}` : "",
@@ -314,6 +315,10 @@ function stateText(ctx: CoachContext): string {
     .filter(Boolean)
     .join("\n");
 }
+
+const tacticsLine = (ts: Game["state"]["tactics"]) =>
+  ts.map((t) => `${t.card} [Affray ${t.affray ? "done" : "open"}, Strike ${t.strike ? "done" : "open"}, Domination ${t.domination ? "done" : "open"}]`).join("; ") ||
+  "none chosen";
 
 const hash = (s: string) => crypto.createHash("sha256").update(s).digest("hex").slice(0, 16);
 
