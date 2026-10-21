@@ -15,7 +15,7 @@ import type { ArmyList, Game, GameState, LibraryDoc } from "../shared/types.ts";
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
 import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips } from "./coach.ts";
-import { addComment, deleteComment, deletePost, feed, FeedError, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, sharePost, unread, unsharePost } from "./feed.ts";
+import { addComment, deleteComment, deletePost, feed, FeedError, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
 import { markNoticesRead, myNotices } from "./notices.ts";
 import { gameData, listRules, warscrollText } from "./data.ts";
 import {
@@ -46,7 +46,7 @@ import { currentUser, LOCAL_USER, runAs, userPrefix, type UserCtx } from "./cont
 import { jobs, startJob } from "./jobs.ts";
 import { addDocument, deleteDocument, docPath, finishUpload, getPages, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
-import { changeGame, forgetShares, gameLists, joinGame, leaveGame, myGames, openGame, shareGame, stopSharing, viewGame } from "./sharedGames.ts";
+import { changeGame, forgetShares, gameLists, joinGame, leaveGame, myGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
 import { backgroundJobs, resumePendingTranscriptions, transcribeDocument, transcribeStep } from "./transcribe.ts";
 
@@ -497,6 +497,13 @@ const opsFrom = (body: unknown): Op[] => {
   return Array.isArray(ops) ? (ops.slice(0, 2000) as Op[]) : [];
 };
 
+// Save a change to a game; its club post, if it has one, follows.
+const change = async (o: OpenGame, ops: Op[]) => {
+  const next = await changeGame(o, ops);
+  await syncPost(next).catch((e: Error) => console.error(`Updating the club post of game ${o.game.id} failed:`, e));
+  return next;
+};
+
 app.get("/api/games", async (_req, res) => res.json(newestFirst(await myGames())));
 app.get("/api/games/:id", async (req, res) => {
   const o = await openOr404(req, res);
@@ -534,16 +541,16 @@ app.post("/api/games", async (req, res) => {
 // Changes as small edits on the player's own view, applied to the latest game.
 app.patch("/api/games/:id", async (req, res) => {
   const o = await openOr404(req, res);
-  if (o) res.json(viewGame(await changeGame(o, opsFrom(req.body))));
+  if (o) res.json(viewGame(await change(o, opsFrom(req.body))));
 });
 // The whole game (older pages): saved as the edits it makes.
 app.put("/api/games/:id", async (req, res) => {
   const o = await openOr404(req, res);
-  if (o) res.json(viewGame(await changeGame(o, diff(viewGame(o), { ...viewGame(o), ...(req.body as Partial<Game>) }))));
+  if (o) res.json(viewGame(await change(o, diff(viewGame(o), { ...viewGame(o), ...(req.body as Partial<Game>) }))));
 });
 app.post("/api/games/:id/log", async (req, res) => {
   const o = await openOr404(req, res);
-  if (o) res.json(viewGame(await changeGame(o, [{ path: ["log"], push: { at: new Date().toISOString(), text: String(req.body.text ?? "") } }])));
+  if (o) res.json(viewGame(await change(o, [{ path: ["log"], push: { at: new Date().toISOString(), text: String(req.body.text ?? "") } }])));
 });
 // Playing together: the creator makes a join link, opponents with an account open it.
 app.post("/api/games/:id/share", async (req, res) => {
@@ -616,9 +623,8 @@ app.post("/api/games/:id/report", async (req, res) => {
   if (!o) return;
   const game = viewGame(o);
   const [myList, opponentList] = await gameLists(o);
-  const tone = (["saga", "report", "banter"] as const).find((t) => t === req.body?.tone) ?? "report";
   await checkBudget();
-  res.json({ job: await startJob("report", () => battleReport({ game, myList, opponentList }, tone, game.report?.photos ?? [])) });
+  res.json({ job: await startJob("report", () => battleReport({ game, myList, opponentList }, game.report?.photos ?? [])) });
 });
 // Poll a background coach request (see server/jobs.ts).
 app.get("/api/jobs/:id", async (req, res) => {
@@ -672,7 +678,10 @@ app.post("/api/feed/seen", async (_req, res) => {
 });
 app.get("/api/feed/:id", async (req, res) => res.json(postView(await getPost(param(req, "id")))));
 app.delete("/api/feed/:id", async (req, res) => {
-  await deletePost(param(req, "id"));
+  const post = await deletePost(param(req, "id"));
+  // The game forgets its post, so its report can be posted again.
+  const o = await openGame(post.gameId);
+  if (o?.game.report?.postId === post.id) await changeGame(o, [{ path: ["report", "postId"], del: true }]);
   res.json({ ok: true });
 });
 app.post("/api/feed/:id/react", async (req, res) => res.json(postView(await react(param(req, "id"), String(req.body?.emoji ?? "")))));

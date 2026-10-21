@@ -299,10 +299,14 @@ export interface FeedPost {
   comments: { id: string; authorId: string; authorName: string; text: string; at: string }[];
   /** Secret for the public share link, when one was made. */
   shareToken?: string;
+  /** Highlights about the poster, worked out when it was posted (kept when the post follows the game). */
+  playerBadges?: string[];
+  /** The report's photos the copies were made from (to copy again only when they change). */
+  photoSources?: string[];
 }
 
 /** A post as the signed-in member sees it. */
-export interface FeedPostView extends Omit<FeedPost, "reactions" | "shareToken" | "playerIds"> {
+export interface FeedPostView extends Omit<FeedPost, "reactions" | "shareToken" | "playerIds" | "playerBadges" | "photoSources"> {
   reactions: { emoji: string; count: number; mine: boolean }[];
   canEdit: boolean;
   /** The share link's secret (the game's players only). */

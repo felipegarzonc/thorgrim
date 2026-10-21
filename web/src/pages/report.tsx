@@ -1,22 +1,19 @@
 // The battle report at the end of a game: photos of the battle, then the
-// coach tells the story from what the game recorded. The players can edit
-// it and post it to the club feed. One report per game, shared by its players.
+// coach tells the story from what the game recorded, as an epic battle. The
+// players can edit it and post it to the club feed; once posted, the post
+// follows the game (score, names, the report's text and photos). One report
+// per game, shared by its players.
 
 import { useEffect, useRef, useState } from "react";
-import type { BattleReport, FeedPostView, Game, ReportTone } from "../../../shared/types.ts";
+import type { BattleReport, FeedPostView, Game } from "../../../shared/types.ts";
 import { api, pendingJob, runJob, waitForJob, withKey } from "../api.ts";
 import { shrinkPhoto } from "../media.tsx";
-import { Icon, Seg } from "../ui.tsx";
+import { Icon } from "../ui.tsx";
 
 type Mutate = (fn: (g: Game) => Game, log?: string) => Promise<void>;
 
-const TONES: [ReportTone, string][] = [
-  ["saga", "Epic saga"],
-  ["report", "Straight report"],
-  ["banter", "Banter"],
-];
 const MAX_PHOTOS = 8;
-const empty = (tone: ReportTone): BattleReport => ({ title: "", story: "", tone, photos: [] });
+const empty = (): BattleReport => ({ title: "", story: "", tone: "saga", photos: [] });
 
 export const gamePhotoUrl = (gameId: string, path: string) => withKey(`/api/games/${gameId}/photo?path=${encodeURIComponent(path)}`);
 
@@ -34,7 +31,6 @@ export function Story({ text, short }: { text: string; short?: boolean }) {
 
 export function BattleReportCard({ game, mutate, saved }: { game: Game; mutate: Mutate; saved: () => Promise<unknown> }) {
   const report = game.report;
-  const [tone, setTone] = useState<ReportTone>(report?.tone ?? "saga");
   const [title, setTitle] = useState(report?.title ?? "");
   const [story, setStory] = useState(report?.story ?? "");
   const [writing, setWriting] = useState(false);
@@ -52,17 +48,17 @@ export function BattleReportCard({ game, mutate, saved }: { game: Game; mutate: 
     setStory(report?.story ?? "");
   }, [report?.title, report?.story]);
 
-  const setReport = (fn: (r: BattleReport) => BattleReport) => mutate((g) => ({ ...g, report: fn(g.report ?? empty(tone)) }));
+  const setReport = (fn: (r: BattleReport) => BattleReport) => mutate((g) => ({ ...g, report: fn(g.report ?? empty()) }));
 
   const keep = (r: { title: string; story: string }) =>
-    setReport((cur) => ({ ...cur, title: r.title, story: r.story, tone, writtenAt: new Date().toISOString() }));
+    setReport((cur) => ({ ...cur, title: r.title, story: r.story, tone: "saga", writtenAt: new Date().toISOString() }));
   const write = async () => {
     if (report?.story && !confirm("Write the report again? The current text is replaced.")) return;
     setWriting(true);
     setError(undefined);
     try {
       await saved();
-      keep(await runJob<{ title: string; story: string }>(`/games/${game.id}/report`, { tone }, jobKey));
+      keep(await runJob<{ title: string; story: string }>(`/games/${game.id}/report`, {}, jobKey));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -134,7 +130,7 @@ export function BattleReportCard({ game, mutate, saved }: { game: Game; mutate: 
       <h2 className="report-head">
         <Icon name="spark" /> Battle report
       </h2>
-      <p className="small muted">Snap the battlefield, your best models and the key moments. The coach then tells the story of the game from what you recorded.</p>
+      <p className="small muted">Snap the battlefield, your best models and the key moments. The coach then tells the game as an epic battle, from what you recorded.</p>
 
       <div className="report-photos">
         {photos.map((p) => (
@@ -154,7 +150,6 @@ export function BattleReportCard({ game, mutate, saved }: { game: Game; mutate: 
         <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={(e) => void addPhotos(e.target.files)} />
       </div>
 
-      <Seg label="Tone of the report" value={tone} options={TONES} onChange={setTone} />
       <button type="button" className={report?.story ? "outline wide" : "primary wide"} disabled={writing || !!uploading} onClick={write}>
         <Icon name="spark" /> {writing ? "The coach is writing…" : report?.story ? "Write it again" : "Write the report"}
       </button>
@@ -189,14 +184,12 @@ export function BattleReportCard({ game, mutate, saved }: { game: Game; mutate: 
             />
           </label>
           {report.postId ? (
-            <div className="two-buttons">
-              <button type="button" className="primary" disabled={busy} onClick={post}>
-                <Icon name="refresh" /> {busy ? "Updating…" : "Update the post"}
-              </button>
-              <a className="button outline" href={`#/club/${report.postId}`}>
+            <>
+              <a className="button outline wide" href={`#/club/${report.postId}`}>
                 <Icon name="club" /> See it in Club
               </a>
-            </div>
+              <p className="small muted">Posted. Changes to this game (score, names, this report and its photos) show in the post too.</p>
+            </>
           ) : (
             <button type="button" className="primary wide" disabled={busy || !game.finished} onClick={post}>
               <Icon name="send" /> {busy ? "Posting…" : "Post to the club"}

@@ -4,14 +4,17 @@
 // copies of the photos, so they stay when a game is deleted.
 //
 // Nothing is posted automatically: a player taps Post on the game's report.
+// After that the post follows the game: changes to the score, the names or
+// the report update it (syncPost).
 
 import crypto from "node:crypto";
 import { result } from "../shared/scoring.ts";
-import type { ArmyList, FeedPost, FeedPostView } from "../shared/types.ts";
+import { flipGame } from "../shared/perspective.ts";
+import type { ArmyList, FeedPost, FeedPostView, Game } from "../shared/types.ts";
 import { blobs } from "./blobs.ts";
 import { currentUser } from "./context.ts";
 import { noticesIn, notify, seenIn } from "./notices.ts";
-import { gameBadges, playerBadges, reportSides } from "./report.ts";
+import { gameBadges, playerBadges, reportSides, type ReportSides } from "./report.ts";
 import { changeGame, gameLists, myGames, viewGame, type OpenGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
 
@@ -48,7 +51,7 @@ const isPlayer = (p: FeedPost) => p.playerIds.includes(currentUser().id) || p.au
 
 export function postView(p: FeedPost): FeedPostView {
   const me = currentUser();
-  const { reactions, shareToken, playerIds: _players, ...rest } = p;
+  const { reactions, shareToken, playerIds: _players, photoSources: _sources, playerBadges: _pb, ...rest } = p;
   return {
     ...rest,
     reactions: REACTIONS.map((emoji) => ({ emoji, count: reactions[emoji]?.length ?? 0, mine: !!reactions[emoji]?.includes(me.id) })),
@@ -67,46 +70,31 @@ export async function getPost(id: string): Promise<FeedPost> {
   return p;
 }
 
-/** Post the game's battle report to the club feed, or update the post made from it. */
-export async function publishReport(o: OpenGame): Promise<FeedPost> {
-  const game = viewGame(o);
-  const report = game.report;
-  if (!report?.story.trim()) throw new FeedError("Write the battle report first.");
-  const me = currentUser();
-  const [myList, opponentList] = await gameLists(o);
-  const sides = reportSides(game, myList, opponentList);
-  const existing = report.postId ? await posts.get(report.postId) : undefined;
-  if (existing && !isPlayer(existing) && !me.isAdmin) throw new FeedError("Only the game's players can change its post.", 403);
-  const id = existing?.id ?? newId();
+/** The game's players: its creator and everyone who joined. */
+function playersOf(o: OpenGame): string[] {
+  const me = currentUser().id;
+  const ownerId = o.role === "owner" ? me : o.game.share?.ownerId;
+  return [...new Set([...(ownerId ? [ownerId] : []), ...(o.game.share?.players.map((p) => p.id) ?? []), ...(o.role === "player" ? [me] : [])])];
+}
 
-  // The post keeps its own copies of the photos.
-  const photos = report.photos.slice(0, MAX_PHOTOS);
+/** The post keeps its own copies of the photos; copied again only when they changed. */
+async function copyPhotos(id: string, sources: string[], existing?: FeedPost): Promise<number> {
+  if (existing && JSON.stringify(existing.photoSources ?? []) === JSON.stringify(sources)) return existing.photos;
   let count = 0;
-  for (const p of photos) {
+  for (const p of sources) {
     const data = await blobs().read(p);
     if (data) await blobs().write(photoPath(id, count++), data, "image/jpeg");
   }
   for (let n = count; n < (existing?.photos ?? 0); n++) await blobs().remove(photoPath(id, n));
+  return count;
+}
 
-  const ownerId = o.role === "owner" ? me.id : o.game.share?.ownerId;
-  const playerIds = [...new Set([...(ownerId ? [ownerId] : []), ...(o.game.share?.players.map((p) => p.id) ?? []), me.id])];
-  const history = await myGames();
-  const ownLists = await new Collection<ArmyList>("lists", me.prefix).list();
-  const factionOf = (g: (typeof history)[number]) => ownLists.find((l) => l.id === g.myListId)?.faction || g.myFaction || "";
-  const badges = [...gameBadges(game, sides), ...playerBadges(game, sides.me.faction, history.map((g) => ({ game: g, faction: g.id === game.id ? sides.me.faction : factionOf(g) })))];
-
-  const post: FeedPost = {
-    id,
-    createdAt: existing?.createdAt ?? new Date().toISOString(),
-    ...(existing ? { updatedAt: new Date().toISOString() } : {}),
-    authorId: existing?.authorId ?? me.id,
-    authorName: existing?.authorName || me.name || sides.me.name,
-    gameId: game.id,
-    playerIds,
+/** What a post shows from its game, seen from the side of the player who posted it. */
+function fromGame(game: Game, sides: ReportSides, playerBadgeList: string[]) {
+  const report = game.report!;
+  return {
     title: report.title.trim() || `${sides.me.name} vs ${sides.opponent.name}`,
     story: report.story.trim(),
-    tone: report.tone,
-    photos: count,
     sides: [
       { name: sides.me.name, faction: sides.me.faction, vp: game.state.vp.me },
       { name: sides.opponent.name, faction: sides.opponent.faction, vp: game.state.vp.opponent },
@@ -115,23 +103,93 @@ export async function publishReport(o: OpenGame): Promise<FeedPost> {
     battleplan: game.battleplan,
     points: game.points,
     date: game.date,
-    badges,
-    reactions: existing?.reactions ?? {},
-    comments: existing?.comments ?? [],
-    ...(existing?.shareToken ? { shareToken: existing.shareToken } : {}),
+    badges: [...gameBadges(game, sides), ...playerBadgeList],
+    playerBadges: playerBadgeList,
+  };
+}
+
+/** Post the game's battle report to the club feed (once; after that the post follows the game). */
+export async function publishReport(o: OpenGame): Promise<FeedPost> {
+  const game = viewGame(o);
+  const report = game.report;
+  if (!report?.story.trim()) throw new FeedError("Write the battle report first.");
+  const existing = report.postId ? await posts.get(report.postId) : undefined;
+  if (existing) {
+    if (!isPlayer(existing) && !currentUser().isAdmin) throw new FeedError("Only the game's players can change its post.", 403);
+    return (await syncPost(o)) ?? existing;
+  }
+  const me = currentUser();
+  const [myList, opponentList] = await gameLists(o);
+  const sides = reportSides(game, myList, opponentList);
+  const id = newId();
+  const photoSources = report.photos.slice(0, MAX_PHOTOS);
+  const photos = await copyPhotos(id, photoSources);
+  // Highlights about the poster ("First game with…", win streaks) are worked out once, from their own games.
+  const history = await myGames();
+  const ownLists = await new Collection<ArmyList>("lists", me.prefix).list();
+  const factionOf = (g: Game) => ownLists.find((l) => l.id === g.myListId)?.faction || g.myFaction || "";
+  const mine = playerBadges(game, sides.me.faction, history.map((g) => ({ game: g, faction: g.id === game.id ? sides.me.faction : factionOf(g) })));
+  const playerIds = [...new Set([...playersOf(o), me.id])];
+  const post: FeedPost = {
+    id,
+    createdAt: new Date().toISOString(),
+    authorId: me.id,
+    authorName: me.name || sides.me.name,
+    gameId: game.id,
+    playerIds,
+    ...fromGame(game, sides, mine),
+    tone: "saga",
+    photos,
+    photoSources,
+    reactions: {},
+    comments: [],
   };
   await posts.save(post);
-  if (report.postId !== id) await changeGame(o, [{ path: ["report", "postId"], set: id }]);
-  if (!existing) await notify(playerIds, `${me.name || sides.me.name} posted the report of your game: ${post.title}`, `#/club/${id}`);
+  await changeGame(o, [{ path: ["report", "postId"], set: id }]);
+  await notify(playerIds, `${me.name || sides.me.name} posted the report of your game: ${post.title}`, `#/club/${id}`);
   return post;
 }
 
-export async function deletePost(id: string) {
+/**
+ * After a game changed: bring its club post up to date (score, names,
+ * factions, highlights, the report's text and photos). Quietly: no
+ * notifications. Returns the post when there is one.
+ */
+export async function syncPost(o: OpenGame): Promise<FeedPost | undefined> {
+  const report = o.game.report;
+  if (!report?.postId || !report.story.trim()) return undefined;
+  const existing = await posts.get(report.postId);
+  if (!existing || existing.gameId !== o.game.id) return undefined;
+  // Seen from the side of whoever posted it, as when it was posted.
+  const me = currentUser().id;
+  const ownerId = o.role === "owner" ? me : o.game.share?.ownerId;
+  const authorIsOwner = existing.authorId === me ? o.role === "owner" : o.role === "player" ? !ownerId || existing.authorId === ownerId : false;
+  const { share: _s, viewers: _v, listSpaces: _l, ...stored } = o.game;
+  const game = authorIsOwner ? (stored as Game) : flipGame(stored as Game);
+  let [mine, theirs] = await gameLists(o);
+  if ((o.role === "owner") !== authorIsOwner) [mine, theirs] = [theirs, mine];
+  const photoSources = report.photos.slice(0, MAX_PHOTOS);
+  const photos = await copyPhotos(existing.id, photoSources, existing);
+  const next: FeedPost = {
+    ...existing,
+    ...fromGame(game, reportSides(game, mine, theirs), existing.playerBadges ?? []),
+    playerIds: [...new Set([...existing.playerIds, ...playersOf(o)])],
+    photos,
+    photoSources,
+  };
+  const { updatedAt: _a, ...a } = next;
+  const { updatedAt: _b, ...b } = existing;
+  if (JSON.stringify(a) === JSON.stringify(b)) return existing;
+  return posts.save({ ...next, updatedAt: new Date().toISOString() });
+}
+
+export async function deletePost(id: string): Promise<FeedPost> {
   const p = await getPost(id);
   if (!isPlayer(p) && !currentUser().isAdmin) throw new FeedError("Only the game's players can remove its post.", 403);
   for (let n = 0; n < p.photos; n++) await blobs().remove(photoPath(id, n));
   if (p.shareToken) await shareLinks.delete(p.shareToken);
   await posts.delete(id);
+  return p;
 }
 
 export async function react(id: string, emoji: string): Promise<FeedPost> {

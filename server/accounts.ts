@@ -178,7 +178,9 @@ export async function findInvite(token: string): Promise<Invite | undefined> {
 // ---------- coach usage and the monthly limit ----------
 
 // Claude Opus 5.5 list prices per million tokens (estimate; the bill is the source of truth).
+// USD per million tokens: the coach's model (Opus), and Haiku for battle reports.
 const PRICE = { input: 4, output: 20, cacheWrite: 5, cacheRead: 0.2, webSearch: 0.01 };
+export const HAIKU_PRICE = { input: 0.1, output: 0.5, cacheWrite: 0.125, cacheRead: 0.01, webSearch: 0.01 };
 const month = () => new Date().toISOString().slice(0, 7);
 const usagePath = (userId: string, m = month()) => `usage/${userId}/${m}.json`;
 const emptyUsage = (): Usage => ({ requests: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, webSearches: 0, costUsd: 0 });
@@ -186,7 +188,7 @@ const emptyUsage = (): Usage => ({ requests: 0, inputTokens: 0, outputTokens: 0,
 export const usageOf = (userId: string, m = month()) => readJson<Usage>(usagePath(userId, m), emptyUsage());
 
 /** Add one Claude response to the current user's usage this month. */
-export async function recordUsage(usage: Anthropic.Beta.BetaUsage | undefined) {
+export async function recordUsage(usage: Anthropic.Beta.BetaUsage | undefined, price: typeof PRICE = PRICE) {
   if (!usage) return;
   const id = currentUser().id;
   const u = await usageOf(id);
@@ -198,12 +200,12 @@ export async function recordUsage(usage: Anthropic.Beta.BetaUsage | undefined) {
   u.cacheWriteTokens += usage.cache_creation_input_tokens ?? 0;
   u.webSearches += web;
   u.costUsd +=
-    ((usage.input_tokens ?? 0) * PRICE.input +
-      (usage.output_tokens ?? 0) * PRICE.output +
-      (usage.cache_creation_input_tokens ?? 0) * PRICE.cacheWrite +
-      (usage.cache_read_input_tokens ?? 0) * PRICE.cacheRead) /
+    ((usage.input_tokens ?? 0) * price.input +
+      (usage.output_tokens ?? 0) * price.output +
+      (usage.cache_creation_input_tokens ?? 0) * price.cacheWrite +
+      (usage.cache_read_input_tokens ?? 0) * price.cacheRead) /
       1_000_000 +
-    web * PRICE.webSearch;
+    web * price.webSearch;
   await writeJson(usagePath(id), u).catch((e) => console.error("Could not save usage:", e));
 }
 

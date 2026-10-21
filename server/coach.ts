@@ -10,13 +10,13 @@ import crypto from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { castChance, chargeChance, damageBySave, expectedDamage, parseCrit, parseTarget, simulate, type AttackProfile } from "../engine/dice.ts";
-import type { ArmyList, Game, GamePlan, ReportTone, TurnTips } from "../shared/types.ts";
+import type { ArmyList, Game, GamePlan, TurnTips } from "../shared/types.ts";
 import { battleplanText } from "../shared/battleplans.ts";
 import { isBattleplanDoc, scoringFor } from "../shared/season.ts";
 import { factionRulesText, findUnit, gameData, listDossier, matchedPlayRule, norm, warscrollText } from "./data.ts";
 import { blobs } from "./blobs.ts";
 import { docPath, getPages, libraryDocs, listDocuments, parsePageRange, searchLibrary } from "./library.ts";
-import { checkBudget, recordUsage } from "./accounts.ts";
+import { checkBudget, HAIKU_PRICE, recordUsage } from "./accounts.ts";
 import { anthropic } from "./anthropic.ts";
 import { reportFacts, reportSides } from "./report.ts";
 import { Collection } from "./store.ts";
@@ -639,15 +639,13 @@ Tell what happened from the facts you are given: who went first, the score round
 - Use only those facts. Never invent kills, dice rolls, unit deaths or moments that are not in them; where the facts are thin, keep it short rather than making things up. Photos are for colour (the table, the terrain, the armies' paint), not for new events.
 - Name the players by name and both factions; be fair to both sides, whoever posts it.
 - Do not quote rules text, warscroll text or battleplan text.
+- Tell it as an epic war saga, in the voice of a chronicler of the Mortal Realms: dramatic and grand, but every event true to the facts.
 - title: at most 8 words, evocative, no quotes around it.
 - story: 150-350 words in short paragraphs separated by a blank line; plain text, no headings or lists, no markdown.
 - Write in the language of the game's log and notes when they are not in English; otherwise in English.`;
 
-const TONES: Record<ReportTone, string> = {
-  saga: "Tone: an epic war saga, in the voice of a chronicler of the Mortal Realms. Dramatic, but every event must be true to the facts.",
-  report: "Tone: a straight match report, like a sports journalist: clear, round by round, with the key turning points.",
-  banter: "Tone: friendly club banter: light, funny, teasing both players kindly. Never mean.",
-};
+/** Reports are short creative writing from a fact sheet: the cheapest model does them well. */
+const REPORT_MODEL = process.env.REPORT_MODEL ?? "claude-haiku-5-5";
 
 const reportSchema = {
   type: "object",
@@ -657,7 +655,7 @@ const reportSchema = {
 };
 
 /** The story of a game, from its recorded facts and the battle photos. */
-export async function battleReport(ctx: CoachContext, tone: ReportTone, photoPaths: string[]): Promise<{ title: string; story: string }> {
+export async function battleReport(ctx: CoachContext, photoPaths: string[]): Promise<{ title: string; story: string }> {
   await checkBudget();
   const started = Date.now();
   const game = ctx.game!;
@@ -668,19 +666,17 @@ export async function battleReport(ctx: CoachContext, tone: ReportTone, photoPat
     if (data) content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: data.toString("base64") } });
   }
   if (paths.length) content.push({ type: "text", text: `${paths.length} photo(s) of the battle above.` });
-  content.push({ type: "text", text: `${TONES[tone] ?? TONES.report}\nWrite the battle report.` });
+  content.push({ type: "text", text: "Write the battle report." });
   const response = await anthropic()
     .beta.messages.stream({
-      model: MODEL,
+      model: REPORT_MODEL,
       max_tokens: 8000,
       system: REPORT_SYSTEM,
       messages: [{ role: "user", content }],
-      output_config: { effort: "medium", format: { type: "json_schema", schema: reportSchema } },
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
+      output_config: { effort: "low", format: { type: "json_schema", schema: reportSchema } },
     })
     .finalMessage();
-  await recordUsage(response.usage);
+  await recordUsage(response.usage, HAIKU_PRICE);
   console.log(`battle report: ${Date.now() - started} ms, stop ${response.stop_reason}, ${response.usage?.output_tokens ?? "?"} output tokens`);
   if (response.stop_reason === "refusal") throw new Error("The coach couldn't write a report for this game.");
   if (response.stop_reason === "max_tokens") throw new Error("The report came out too long. Try again.");

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { diff } from "../shared/patch.ts";
 import { emptyRound, emptySideRound } from "../shared/scoring.ts";
 import type { ArmyList, Game } from "../shared/types.ts";
 import { runAs, type UserCtx } from "./context.ts";
@@ -141,10 +142,41 @@ describe("club feed", () => {
     await runAs(ben, () => feed.markFeedSeen());
     await runAs(ben, () => notices.markNoticesRead());
     expect(await runAs(ben, () => feed.unread())).toEqual({ notices: 0, posts: 0 });
-    // Posting again updates the same post.
+    // Posting again keeps the same post, still from the poster's side.
     const again = await runAs(ben, async () => feed.publishReport((await sg.openGame("g2"))!));
     expect(again.id).toBe(post.id);
-    expect(again.sides[0].name).toBe("Ben"); // the poster's side first
+    expect(again.sides[0].name).toBe("Ana");
+  });
+
+  it("follows the game: score, report and photos, whoever changes them", async () => {
+    const [post] = await runAs(ana, () => feed.feed());
+    // Ben corrects his last round's VP and retitles the report, from his own (flipped) view.
+    const updated = await runAs(ben, async () => {
+      const o = (await sg.openGame("g2"))!;
+      const view = sg.viewGame(o);
+      const edited = structuredClone(view);
+      edited.state.rounds![2].me.extraVp += 5;
+      edited.report!.title = "Fire, Frost and Fury";
+      return feed.syncPost(await sg.changeGame(o, diff(view, edited)));
+    });
+    expect(updated?.id).toBe(post.id);
+    expect(updated?.title).toBe("Fire, Frost and Fury");
+    // Totals are worked out from the rounds (Ana's round 2 tactic adds 5): still Ana's side first.
+    expect(updated?.sides.map((s) => `${s.name} ${s.vp}`)).toEqual(["Ana 35", "Ben 27"]);
+    expect(updated?.updatedAt).toBeTruthy();
+    expect(updated?.photos).toBe(1);
+    // The post's own highlights about Ana are kept.
+    expect(updated?.badges).toEqual(expect.arrayContaining((await runAs(ana, () => feed.getPost(post.id))).playerBadges ?? []));
+    // Nothing changed: nothing saved.
+    const same = await runAs(ana, async () => feed.syncPost((await sg.openGame("g2"))!));
+    expect(same?.updatedAt).toBe(updated?.updatedAt);
+    // A removed photo goes from the post too.
+    const fewer = await runAs(ana, async () => {
+      const o = (await sg.openGame("g2"))!;
+      return feed.syncPost(await sg.changeGame(o, [{ path: ["report", "photos"], set: [] }]));
+    });
+    expect(fewer?.photos).toBe(0);
+    expect(await blobs.blobs().read(`club/post-photos/${post.id}/0.jpg`)).toBeUndefined();
   });
 
   it("lets members react and comment, and tells the players", async () => {
@@ -159,7 +191,7 @@ describe("club feed", () => {
 
     const commented = await runAs(cid, () => feed.addComment(post.id, "  What a comeback!  "));
     expect(commented.comments.map((c) => `${c.authorName}: ${c.text}`)).toEqual(["Cid: What a comeback!"]);
-    expect((await runAs(ana, () => notices.myNotices()))[0].text).toBe('Cid commented on "Fire and Frost": What a comeback!');
+    expect((await runAs(ana, () => notices.myNotices()))[0].text).toBe('Cid commented on "Fire, Frost and Fury": What a comeback!');
     expect((await runAs(ben, () => notices.myNotices()))[0].text).toMatch(/^Cid commented/);
     expect(await runAs(cid, () => notices.myNotices())).toEqual([]);
 
@@ -174,7 +206,7 @@ describe("club feed", () => {
     await expect(runAs(cid, () => feed.sharePost(post.id))).rejects.toThrow(/players/);
     const token = (await runAs(ana, () => feed.sharePost(post.id))).shareToken!;
     const found = await feed.publicPost(token);
-    expect(found?.view.title).toBe("Fire and Frost");
+    expect(found?.view.title).toBe("Fire, Frost and Fury");
     expect(Object.keys(found!.view)).not.toContain("comments");
     expect(await feed.publicPost("f".repeat(32))).toBeUndefined();
     await runAs(ben, () => feed.unsharePost(post.id));
@@ -187,6 +219,5 @@ describe("club feed", () => {
     await runAs(ana, () => feed.deletePost(post.id));
     expect(await runAs(ana, () => feed.feed())).toEqual([]);
     expect(await runAs(ana, () => feed.readPostPhoto(post.id, 0))).toBeUndefined();
-    expect(await blobs.blobs().read(`club/post-photos/${post.id}/0.jpg`)).toBeUndefined();
   });
 });
