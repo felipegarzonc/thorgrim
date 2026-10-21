@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { BATTLE_ROUNDS, isBattleplanDoc, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
 import { derive, emptyRound, nextTacticStep, planBasis, result, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
 import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TurnTips } from "../../../shared/types.ts";
-import { api, withKey } from "../api.ts";
+import { api, pendingJob, runJob, waitForJob, withKey } from "../api.ts";
 import { gameDate, sideInfo } from "../gameView.tsx";
 import { shrinkPhoto, VoiceButton } from "../media.tsx";
 import { Avatar, Counter, FactionPicker, Group, Icon, RulesText, Seg, Sheet, useLoad, useMeta } from "../ui.tsx";
@@ -615,10 +615,7 @@ function WhatHappened(props: {
     setBusy("Re-planning the rest of the turn…");
     await saved();
     const key = `${n}:${s.activePlayer}`;
-    const t = await api<TurnTips>(`/games/${game.id}/tips`, {
-      method: "POST",
-      json: { round: n, side: s.activePlayer, event: note, phase: s.phase, previous: s.tips?.[key] },
-    });
+    const t = await runJob<TurnTips>(`/games/${game.id}/tips`, { round: n, side: s.activePlayer, event: note, phase: s.phase, previous: s.tips?.[key] });
     await onTips(t);
   };
   const run = async (fn: () => Promise<void>) => {
@@ -734,7 +731,7 @@ function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; sav
       await saved(); // the server reads the saved game
       const basis = planBasis(game);
       const started = (game.state.rounds?.length ?? 0) > 0 && game.state.phase !== "Deployment";
-      const p = await api<Omit<GamePlan, "basis">>(`/games/${game.id}/plan`, { method: "POST", json: { replan: started } });
+      const p = await runJob<Omit<GamePlan, "basis">>(`/games/${game.id}/plan`, { replan: started }, `plan:${game.id}`);
       await mutate((g) => ({ ...g, plan: { ...p, basis } }), "Coach wrote the game plan.");
     } catch (e) {
       setError((e as Error).message);
@@ -742,8 +739,24 @@ function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; sav
       setBusy(false);
     }
   };
+  // A plan still being written (page reloaded, phone locked): pick it up.
+  const resume = async (id: string) => {
+    asked.current = true;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const p = await waitForJob<Omit<GamePlan, "basis">>(id, `plan:${game.id}`);
+      await mutate((g) => ({ ...g, plan: { ...p, basis: planBasis(g) } }), "Coach wrote the game plan.");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
   useEffect(() => {
-    if (!plan && ready && meta?.coachReady && !asked.current) void make();
+    const pending = pendingJob(`plan:${game.id}`);
+    if (pending && !asked.current) void resume(pending);
+    else if (!plan && ready && meta?.coachReady && !asked.current) void make();
   }, [meta?.coachReady]);
 
   const section = (title: string, items: string[], tone = "") =>
@@ -779,7 +792,7 @@ function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; sav
         <div className="card plan-wait">
           <Icon name="spark" />
           <p className="thinking">Studying both armies, the battleplan and your battle tactics…</p>
-          <p className="muted small">About a minute. You can keep this page open.</p>
+          <p className="muted small">About a minute or two. You can lock the phone or leave this page: the plan keeps being written and shows up when you come back.</p>
         </div>
       ) : error ? (
         <p className="error">
@@ -850,7 +863,7 @@ function Replan({ game, mutate, saved }: { game: Game; mutate: Mutate; saved: ()
     try {
       await saved();
       const basis = planBasis(game);
-      const p = await api<Omit<GamePlan, "basis">>(`/games/${game.id}/plan`, { method: "POST", json: { replan: true } });
+      const p = await runJob<Omit<GamePlan, "basis">>(`/games/${game.id}/plan`, { replan: true }, `plan:${game.id}`);
       await mutate((g) => ({ ...g, plan: { ...p, basis } }), `Coach re-planned the game in round ${game.state.round}.`);
     } catch (e) {
       setError((e as Error).message);
@@ -1004,7 +1017,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0]) {
     setError(undefined);
     try {
       await saved(); // the server reads the saved game
-      const t = await api<TurnTips>(`/games/${game.id}/tips`, { method: "POST", json: { round: n, side: active } });
+      const t = await runJob<TurnTips>(`/games/${game.id}/tips`, { round: n, side: active });
       await mutate((g) => ({ ...g, state: { ...g.state, tips: { ...(g.state.tips ?? {}), [key]: t } } }));
     } catch (e) {
       setError((e as Error).message);

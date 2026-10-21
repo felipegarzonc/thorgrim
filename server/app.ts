@@ -19,6 +19,7 @@ import {
   accountSettings,
   accountsEnabled,
   AuthError,
+  checkBudget,
   createInvite,
   createLogin,
   findInvite,
@@ -39,6 +40,7 @@ import {
   type Session,
 } from "./accounts.ts";
 import { currentUser, LOCAL_USER, runAs, userPrefix, type UserCtx } from "./context.ts";
+import { jobs, startJob } from "./jobs.ts";
 import { addDocument, canEdit, deleteDocument, docPath, finishUpload, getPages, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
 import { Collection, newId } from "./store.ts";
@@ -530,14 +532,23 @@ app.post("/api/games/:id/tips", async (req, res) => {
   const round = Number(req.body.round) || game.state.round;
   const [myList, opponentList] = await Promise.all([lists.get(game.myListId), lists.get(game.opponentListId)]);
   const event = req.body.event ? { text: String(req.body.event).slice(0, 2000), phase: String(req.body.phase ?? game.state.phase), previous: req.body.previous } : undefined;
-  res.json(await turnTips({ game, myList, opponentList }, round, side, event));
+  await checkBudget();
+  res.json({ job: await startJob("tips", () => turnTips({ game, myList, opponentList }, round, side, event)) });
 });
 // The coach's strategy for the game. The page stores it with the game.
 app.post("/api/games/:id/plan", async (req, res) => {
   const game = await games.get(param(req, "id"));
   if (!game) return res.status(404).json({ error: "Game not found" });
   const [myList, opponentList] = await Promise.all([lists.get(game.myListId), lists.get(game.opponentListId)]);
-  res.json(await gamePlan({ game, myList, opponentList }, { replan: !!req.body?.replan }));
+  await checkBudget();
+  const replan = !!req.body?.replan;
+  res.json({ job: await startJob("plan", () => gamePlan({ game, myList, opponentList }, { replan })) });
+});
+// Poll a background coach request (see server/jobs.ts).
+app.get("/api/jobs/:id", async (req, res) => {
+  const job = await jobs.get(param(req, "id"));
+  if (!job) return res.status(404).json({ error: "That coach request was not found." });
+  res.json(job);
 });
 // A photo of the table (the page shrinks it first). The page stores the path in the game.
 app.post("/api/games/:id/photo", express.raw({ type: "image/*", limit: "8mb" }), async (req, res) => {

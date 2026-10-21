@@ -112,3 +112,57 @@ export async function publicApi<T>(path: string, json?: unknown): Promise<T> {
   if (!res.ok) throw new Error(errorText(res, data));
   return data as T;
 }
+
+// ---------- background coach requests ----------
+// The server answers at once with a job and keeps working; we check back
+// every few seconds. A dropped connection (screen locked, bad signal) just
+// means checking again, and a job can be picked up after a reload.
+
+interface Job<T> {
+  id: string;
+  status: "running" | "done" | "failed";
+  result?: T;
+  error?: string;
+  startedAt: string;
+}
+
+const JOB_KEY = (key: string) => `thorgrim-job:${key}`;
+export const pendingJob = (key: string) => read(JOB_KEY(key));
+const MAX_WAIT_MS = 6 * 60_000;
+
+export async function waitForJob<T>(id: string, key?: string): Promise<T> {
+  const started = Date.now();
+  for (;;) {
+    let job: Job<T> | undefined;
+    try {
+      job = await api<Job<T>>(`/jobs/${id}`);
+    } catch (e) {
+      // Network hiccup: try again; a missing job is final.
+      if (/not found/i.test((e as Error).message)) {
+        if (key) write(JOB_KEY(key), null);
+        throw e;
+      }
+    }
+    if (job?.status === "done") {
+      if (key) write(JOB_KEY(key), null);
+      return job.result as T;
+    }
+    if (job?.status === "failed") {
+      if (key) write(JOB_KEY(key), null);
+      throw new Error(job.error || "The coach request failed.");
+    }
+    const age = job ? Date.now() - Date.parse(job.startedAt) : Date.now() - started;
+    if (age > MAX_WAIT_MS) {
+      if (key) write(JOB_KEY(key), null);
+      throw new Error("The coach took too long to answer.");
+    }
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+}
+
+/** Start a coach job (POST returning {job}) and wait for its result. `key` lets the page pick it up after a reload. */
+export async function runJob<T>(path: string, json: unknown, key?: string): Promise<T> {
+  const { job } = await api<{ job: { id: string } }>(path, { method: "POST", json });
+  if (key) write(JOB_KEY(key), job.id);
+  return waitForJob<T>(job.id, key);
+}
