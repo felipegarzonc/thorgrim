@@ -500,6 +500,7 @@ export interface TurnEvent {
 
 export async function turnTips(ctx: CoachContext, round: number, side: "me" | "opponent", event?: TurnEvent): Promise<TurnTips> {
   await checkBudget();
+  const started = Date.now();
   const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game)), ...(await tablePhoto(ctx.game))];
   content.push({ type: "text", text: stateText(ctx) });
   const ask =
@@ -520,12 +521,14 @@ export async function turnTips(ctx: CoachContext, round: number, side: "me" | "o
     system: TIPS_SYSTEM,
     messages: [{ role: "user", content }],
     cache_control: { type: "ephemeral" },
-    output_config: { effort: "medium", format: { type: "json_schema", schema: tipsSchema } },
+    output_config: { effort: "low", format: { type: "json_schema", schema: tipsSchema } },
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
   });
   await recordUsage(response.usage);
+  console.log(`turn tips: ${Date.now() - started} ms, stop ${response.stop_reason}, ${response.usage?.output_tokens ?? "?"} output tokens`);
   if (response.stop_reason === "refusal") throw new Error("The coach couldn't write tips for this turn.");
+  if (response.stop_reason === "max_tokens") throw new Error("The coach's answer was cut off. Try again.");
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)
@@ -572,6 +575,7 @@ const planSchema = {
 
 export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {}): Promise<Omit<GamePlan, "basis">> {
   await checkBudget();
+  const started = Date.now();
   const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game)), ...(await tablePhoto(ctx.game))];
   content.push({ type: "text", text: stateText(ctx) });
   const s = ctx.game?.state;
@@ -589,12 +593,13 @@ export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {
       system: PLAN_SYSTEM,
       messages: [{ role: "user", content }],
       cache_control: { type: "ephemeral" },
-      output_config: { effort: "high", format: { type: "json_schema", schema: planSchema } },
+      output_config: { effort: "medium", format: { type: "json_schema", schema: planSchema } },
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
     })
     .finalMessage();
   await recordUsage(response.usage);
+  console.log(`game plan: ${Date.now() - started} ms, stop ${response.stop_reason}, ${response.usage?.output_tokens ?? "?"} output tokens`);
   if (response.stop_reason === "refusal") throw new Error("The coach couldn't write a plan for this game.");
   if (response.stop_reason === "max_tokens") throw new Error("The plan came out too long. Try again.");
   const text = response.content

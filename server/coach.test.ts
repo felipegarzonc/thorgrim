@@ -125,7 +125,7 @@ describe.skipIf(!hasData)("turnTips", () => {
 });
 
 describe.skipIf(!hasData)("gamePlan", () => {
-  it("streams a high-effort JSON plan and returns it", async () => {
+  it("streams a JSON plan and returns it", async () => {
     const { gamePlan } = await import("./coach.ts");
     const plan = {
       summary: "Win the objective game early, then hold.",
@@ -151,7 +151,7 @@ describe.skipIf(!hasData)("gamePlan", () => {
     expect(out.summary).toBe(plan.summary);
     expect(out.rounds).toHaveLength(5);
     const req = calls[before];
-    expect(req.output_config).toMatchObject({ effort: "high", format: { type: "json_schema" } });
+    expect(req.output_config).toMatchObject({ effort: "medium", format: { type: "json_schema" } });
     expect(req.system).toContain("game plan");
   });
 });

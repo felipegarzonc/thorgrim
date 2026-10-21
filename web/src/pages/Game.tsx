@@ -1084,7 +1084,11 @@ function TurnCard(props: Parameters<typeof RoundStep>[0]) {
               <p className="muted small">Nothing special this phase.</p>
             )}
           </>
-        ) : null}
+        ) : (
+          <button type="button" className="small primary" onClick={() => fetchTips(true)}>
+            <Icon name="spark" /> Get the plan for this turn
+          </button>
+        )}
         <button type="button" className="small ghost accent" onClick={openCoach}>
           Ask the coach
         </button>

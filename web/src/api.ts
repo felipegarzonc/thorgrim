@@ -93,14 +93,22 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
     if (!retried && session() && (await refresh())) return api<T>(path, init, true);
     window.dispatchEvent(new Event(LOGIN_EVENT));
   }
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
+  if (!res.ok) throw new Error(errorText(res, data));
   return data as T;
+}
+
+/** Always a readable message, also when the host answers with no JSON (timeouts). */
+function errorText(res: Response, data: unknown): string {
+  const msg = (data as { error?: string }).error;
+  if (msg) return msg;
+  if (res.status === 504 || res.status === 502) return "The coach took too long to answer and the server cut it off.";
+  return `Something went wrong (HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ""}).`;
 }
 
 /** Calls that work before signing in (status, login, join). */
 export async function publicApi<T>(path: string, json?: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, json === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(json) });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
+  if (!res.ok) throw new Error(errorText(res, data));
   return data as T;
 }
