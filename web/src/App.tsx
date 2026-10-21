@@ -46,6 +46,9 @@ export function App() {
     return () => window.removeEventListener(LOGIN_EVENT, on);
   }, []);
 
+  // The rules library is for developers only (app password); players never see it.
+  const developer = !!meta?.user?.developer;
+  const tabs = TABS.filter(([key]) => key !== "library" || developer);
   if (tab === "join" && id) return <Join token={id} />;
   if (needLogin) return <Login />;
 
@@ -66,7 +69,7 @@ export function App() {
             <h1>{TITLES[tab]}</h1>
           </div>
         )}
-        {meta && !meta.coachReady && (tab === "library" || tab === "calc") && (
+        {meta && !meta.coachReady && tab === "calc" && (
           <p className="notice small">
             {meta.user?.isAdmin ? (
               <>
@@ -80,7 +83,8 @@ export function App() {
         {tab === "home" && <HomePage />}
         {tab === "games" && <GamesPage />}
         {tab === "lists" && <ListsPage selectedId={id} />}
-        {tab === "library" && <LibraryPage />}
+        {tab === "library" && developer && <LibraryPage />}
+        {tab === "library" && meta && !developer && <Redirect to="#/home" />}
         {tab === "calc" && <CalculatorPage />}
         {tab === "profile" && <ProfilePage />}
         {tab === "ask" && (
@@ -104,8 +108,8 @@ export function App() {
           Army data: BSData {meta.commit} ({meta.builtAt.slice(0, 10)}). Rules text belongs to Games Workshop — personal use only.
         </footer>
       )}
-      <nav className="bottom-nav" aria-label="Sections">
-        {TABS.map(([key, label, icon]) => (
+      <nav className="bottom-nav" aria-label="Sections" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
+        {tabs.map(([key, label, icon]) => (
           <a key={key} href={`#/${key}`} className={tab === key ? "active" : ""} aria-current={tab === key ? "page" : undefined}>
             <span className="ico-wrap">
               <Icon name={icon} />
@@ -133,4 +137,11 @@ function AskIntro() {
       <p className="small muted">Try one of these:</p>
     </div>
   );
+}
+
+function Redirect({ to }: { to: string }) {
+  useEffect(() => {
+    window.location.replace(to);
+  }, [to]);
+  return null;
 }
