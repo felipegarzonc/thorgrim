@@ -74,8 +74,9 @@ export class SupabaseBlobStore implements BlobStore {
     storageUrl: string,
     serviceKey: string,
     readonly bucket = "thorgrim",
+    fetchImpl?: typeof fetch,
   ) {
-    this.client = new StorageClient(storageUrl, { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` });
+    this.client = new StorageClient(storageUrl, { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` }, fetchImpl);
   }
   /** Create the private bucket on first use. */
   private ensureBucket() {
@@ -95,7 +96,9 @@ export class SupabaseBlobStore implements BlobStore {
   }
   async read(p: string) {
     await this.ensureBucket();
-    const { data, error } = await this.files.download(safe(p));
+    // Records are overwritten in place, so never accept a cached copy: a fresh
+    // nonce gets past the storage CDN and no-store past any fetch cache.
+    const { data, error } = await this.files.download(safe(p), { cacheNonce: `${Date.now()}-${Math.random()}` }, { cache: "no-store" });
     if (error) {
       if (/not.?found|does not exist|404/i.test(`${error.message} ${(error as { statusCode?: string }).statusCode ?? ""}`)) return undefined;
       throw new Error(`Supabase storage read ${p}: ${error.message}`);
@@ -105,7 +108,9 @@ export class SupabaseBlobStore implements BlobStore {
   async write(p: string, data: Buffer | string, contentType = "application/json") {
     await this.ensureBucket();
     const body = typeof data === "string" ? Buffer.from(data, "utf8") : data;
-    const { error } = await this.files.upload(safe(p), body, { upsert: true, contentType });
+    // The SDK otherwise sends max-age=3600, and reads would get the old
+    // version of an overwritten record for up to an hour.
+    const { error } = await this.files.upload(safe(p), body, { upsert: true, contentType, cacheControl: "0" });
     if (error) throw new Error(`Supabase storage write ${p}: ${error.message}`);
   }
   async remove(p: string) {
