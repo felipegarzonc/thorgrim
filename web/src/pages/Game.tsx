@@ -3,14 +3,14 @@
 // screen also runs the live turn (phases) with the coach's plan for it.
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { BATTLE_ROUNDS, CORE_COMMANDS, isBattleplanDoc, SEASON_ABILITIES, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
+import { baseFaction, BATTLE_ROUNDS, CORE_COMMANDS, isBattleplanDoc, SEASON_ABILITIES, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
 import { derive, emptyRound, nextTacticStep, planBasis, result, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
-import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type GlossaryEntry, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TurnTips, type Unit } from "../../../shared/types.ts";
+import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type GlossaryEntry, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TacticStep, type TurnTips, type Unit } from "../../../shared/types.ts";
 import { applyOps, diff } from "../../../shared/patch.ts";
 import { api, pendingJob, runJob, waitForJob, withKey } from "../api.ts";
 import { gameDate, sideInfo } from "../gameView.tsx";
 import { shrinkPhoto, VoiceButton } from "../media.tsx";
-import { Avatar, Counter, FactionPicker, Group, Icon, RulesText, Seg, Sheet, useLoad, useMeta } from "../ui.tsx";
+import { armyColor, Avatar, Counter, FactionPicker, Group, Icon, RulesText, Seg, Sheet, useLoad, useMeta } from "../ui.tsx";
 import { CoachChat } from "./CoachChat.tsx";
 import { BoardInfo, LogCard, OddsCard, other, PhaseChecklist, UnitsCard, useUnits, type Army, type Side, type Update } from "./gameTools.tsx";
 import { battleplanInfo } from "../../../shared/battleplans.ts";
@@ -18,6 +18,7 @@ import { BattleplanCard } from "../battleplanView.tsx";
 import { drawResult, shareImage, type ShareRow } from "../shareImage.ts";
 import { WarscrollCard } from "./Lists.tsx";
 import { BattleReportCard } from "./report.tsx";
+import { doubleTurns, gameBadges, reportSides, runningScore } from "../../../shared/report.ts";
 
 type Step = string;
 const ROUND_STEPS = Array.from({ length: BATTLE_ROUNDS }, (_, i) => `round-${i + 1}`);
@@ -1198,9 +1199,14 @@ function RoundStep(props: {
     return vp[other(side)] - vp[side] >= SEIZE_EXCEPTION_LEAD ? "double turn (11+ VP behind: tactics allowed)" : "double turn: seizes the initiative";
   };
   const future = n > liveRound + 1;
+  const factions: Record<Side, string> = {
+    me: armies.me.list?.faction || game.myFaction || "",
+    opponent: armies.opponent.list?.faction || game.opponentFaction || "",
+  };
 
   return (
     <div className="stack">
+      <Scoreboard game={game} names={names} factions={factions} isLive={isLive} />
       <Group className="priority">
         {n > 1 && (
           <div className="question">
@@ -1230,10 +1236,10 @@ function RoundStep(props: {
         </div>
       )}
 
-      {isLive && <TurnCard {...props} />}
+      {isLive && <TurnCard {...props} color={armyColor(factions[s.activePlayer])} />}
 
       {(["me", "opponent"] as const).map((side) => (
-        <SideBlock key={side} side={side} game={game} n={n} mutate={mutate} isLive={isLive} name={names[side]} />
+        <SideBlock key={side} side={side} game={game} n={n} mutate={mutate} isLive={isLive} name={names[side]} faction={factions[side]} />
       ))}
 
       {game.battleplan && battleplanInfo(game.battleplan)?.map && (
@@ -1269,8 +1275,66 @@ function RoundStep(props: {
   );
 }
 
+/** Both armies at a glance: VP, command points as coins, fury as flames, and whose turn it is. */
+function Scoreboard({ game, names, factions, isLive }: { game: Game; names: Record<Side, string>; factions: Record<Side, string>; isLive: boolean }) {
+  const s = game.state;
+  return (
+    <section className="scoreboard" aria-label="Scoreboard">
+      {(["me", "opponent"] as const).map((side) => {
+        const active = isLive && s.activePlayer === side;
+        const cp = s.cp[side];
+        const fury = s.fury[side];
+        return (
+          <div key={side} className={`score-card ${active ? "active" : ""}`} style={{ ["--army" as string]: armyColor(factions[side]) }}>
+            <div className="score-card-head">
+              <Avatar faction={factions[side]} size={2.1} />
+              <span>
+                <b>{names[side]}</b>
+                <small>{factions[side] ? baseFaction(factions[side]) : "No army yet"}</small>
+              </span>
+            </div>
+            {isLive && <span className={`turn-tag ${active ? "on" : ""}`}>{active ? (side === "me" ? "YOUR TURN" : "THEIR TURN") : "WAITING"}</span>}
+            <div className="score-vp">
+              <span className="big-score">{s.vp[side]}</span>
+              <small>VP</small>
+            </div>
+            <div className="pips" role="img" aria-label={`${cp} command points`}>
+              <span className="pips-label">CP</span>
+              {Array.from({ length: Math.max(cp, 4) }, (_, i) => (
+                <span key={i} className={`coin ${i < cp ? "on" : ""}`} />
+              ))}
+            </div>
+            <div className="pips" role="img" aria-label={`Fury ${fury}`}>
+              <span className="pips-label">Fury</span>
+              {Array.from({ length: Math.min(7, Math.max(fury, 3)) }, (_, i) => (
+                <svg key={i} className={`flame ${i < fury ? "on" : ""}`} viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-7 0 2 1 3 2 3 0-3 0-5 1-8z" />
+                </svg>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+/** A battle tactic card's three steps as seals: done, next, later. */
+function TacticSeals({ done, next }: { done: Set<TacticStep>; next?: TacticStep }) {
+  const steps: TacticStep[] = ["affray", "strike", "domination"];
+  return (
+    <span className="seals" role="img" aria-label={steps.map((st) => `${cap(st)} ${done.has(st) ? "done" : st === next ? "next" : "open"}`).join(", ")}>
+      {steps.map((st) => (
+        <span key={st} className={`seal ${done.has(st) ? "done" : st === next ? "next" : ""}`}>
+          {st[0].toUpperCase()}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /** The live turn: phases, the coach's plan for this phase, and what not to forget. */
-function TurnCard(props: Parameters<typeof RoundStep>[0]) {
+function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
   const { game, n, mutate, update, saved, armies, units, names, go, openCoach } = props;
   const meta = useMeta();
   const s = game.state;
@@ -1318,7 +1382,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0]) {
   const phaseTips = tips?.phases[s.phase] ?? [];
 
   return (
-    <section className={`turn-card ${active}`}>
+    <section className={`turn-card ${active}`} style={{ ["--army" as string]: props.color }}>
       <div className="turn-head">
         <span className="turn-label">
           Turn {turnNo} · <b>{active === "me" ? "Your turn" : `${names.opponent}'s turn`}</b>
@@ -1417,7 +1481,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0]) {
   );
 }
 
-function SideBlock({ side, game, n, mutate, isLive, name }: { side: Side; game: Game; n: number; mutate: Mutate; isLive: boolean; name: string }) {
+function SideBlock({ side, game, n, mutate, isLive, name, faction }: { side: Side; game: Game; n: number; mutate: Mutate; isLive: boolean; name: string; faction: string }) {
   const meta = useMeta();
   const s = game.state;
   const rounds = s.rounds ?? [];
@@ -1442,6 +1506,7 @@ function SideBlock({ side, game, n, mutate, isLive, name }: { side: Side; game: 
   return (
     <section className="side-block">
       <div className="side-name">
+        <Avatar faction={faction} size={2} />
         <h1>{name}</h1>
         {isLive && s.underdog === side && <span className="badge">Underdog</span>}
         {rec.first && <span className="muted small">Turn {rec.first === side ? 1 : 2}</span>}
@@ -1515,8 +1580,11 @@ function SideBlock({ side, game, n, mutate, isLive, name }: { side: Side; game: 
               <span className="grow">
                 {t.card}
                 <small className="muted">{step ? `${cap(step)}${goal ? `: ${goal}` : ""}` : "All done"}</small>
+                <span className="tactic-progress">
+                  <TacticSeals done={tacticSteps(rounds, side, t.card)} next={nextTacticStep(rounds, side, t.card)} />
+                  <span className="muted tactic-total">{total}/15</span>
+                </span>
               </span>
-              <span className="muted">{total}/15</span>
               {doneHere ? (
                 <button
                   type="button"
@@ -1546,6 +1614,65 @@ function SideBlock({ side, game, n, mutate, isLive, name }: { side: Side; game: 
 }
 
 // ---------- results ----------
+
+/** Each side's VP round by round: a comeback shows as the lines crossing; double turns are marked. */
+function VpChart({ game, names, colors }: { game: Game; names: Record<Side, string>; colors: Record<Side, string> }) {
+  const totals = runningScore(game);
+  const doubles = doubleTurns(game);
+  const W = 330;
+  const H = 170;
+  const top = Math.max(30, Math.ceil(Math.max(...totals.flatMap((t) => [t.me, t.opponent])) / 10) * 10);
+  const x = (i: number) => 34 + (i * (W - 50)) / (BATTLE_ROUNDS - 1);
+  const y = (v: number) => 140 - (v / top) * 120;
+  const line = (side: Side) => totals.map((t, i) => `${x(i)},${y(t[side])}`).join(" ");
+  const last = totals[totals.length - 1];
+  const summary = `${names.me} ${totals.map((t) => t.me).join(", ")}; ${names.opponent} ${totals.map((t) => t.opponent).join(", ")}`;
+  return (
+    <section className="card vp-chart" aria-label="Victory points round by round">
+      <div className="vp-chart-head">
+        <span className="grow">The battle</span>
+        <span className="legend">
+          <i style={{ background: colors.me }} />
+          {names.me}
+        </span>
+        <span className="legend">
+          <i style={{ background: colors.opponent }} />
+          {names.opponent}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Score after each round: ${summary}`}>
+        {[0, top / 2, top].map((v) => (
+          <g key={v}>
+            <line x1="30" x2={W - 10} y1={y(v)} y2={y(v)} className="grid" />
+            <text x="0" y={y(v) + 4} className="axis">
+              {v}
+            </text>
+          </g>
+        ))}
+        {Array.from({ length: BATTLE_ROUNDS }, (_, i) => (
+          <text key={i} x={x(i) - 7} y={H - 6} className="axis">
+            R{i + 1}
+          </text>
+        ))}
+        {(["opponent", "me"] as const).map((side) => (
+          <polyline key={side} points={line(side)} fill="none" stroke={colors[side]} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+        ))}
+        {last &&
+          (["me", "opponent"] as const).map((side) => <circle key={side} cx={x(totals.length - 1)} cy={y(last[side])} r="5" fill={colors[side]} />)}
+        {doubles.map((d) =>
+          totals[d.round - 1] ? (
+            <g key={d.round}>
+              <circle cx={x(d.round - 1)} cy={y(totals[d.round - 1][d.side])} r="9" fill="none" stroke="var(--brass)" strokeWidth="1.5" />
+              <text x={Math.min(x(d.round - 1) + 12, W - 80)} y={y(totals[d.round - 1][d.side]) + 22} className="axis brass">
+                DOUBLE TURN
+              </text>
+            </g>
+          ) : null,
+        )}
+      </svg>
+    </section>
+  );
+}
 
 const CONCLUSIONS = [
   ["played", "Played to end of game"],
@@ -1645,8 +1772,43 @@ function ResultsStep({ game, lists, mutate, saved, openCoach }: { game: Game; li
     }
   };
 
+  const badges = gameBadges(game, reportSides(game, me.list, opp.list));
+
   return (
     <div className="stack">
+      <section className="victory" aria-label="Result">
+        <div className="victory-ornament" aria-hidden="true">
+          <span />
+          <Icon name="flag" />
+          <span />
+        </div>
+        <h1 className={`victory-title ${r ?? ""}`}>{status}</h1>
+        <div className="victory-score">
+          <span className="right">
+            <b>{me.name}</b>
+            <small style={{ color: armyColor(me.faction) }}>{me.base}</small>
+          </span>
+          <span className="big-score">
+            {s.vp.me}
+            <span className="score-dot">·</span>
+            {s.vp.opponent}
+          </span>
+          <span>
+            <b>{opp.name}</b>
+            <small style={{ color: armyColor(opp.faction) }}>{opp.base}</small>
+          </span>
+        </div>
+      </section>
+      {rounds.some((x) => x.first) && <VpChart game={game} names={{ me: me.name, opponent: opp.name }} colors={{ me: armyColor(me.faction), opponent: armyColor(opp.faction) }} />}
+      {badges.length > 0 && (
+        <div className="post-badges">
+          {badges.map((b) => (
+            <span key={b} className="badge">
+              {b}
+            </span>
+          ))}
+        </div>
+      )}
       <label className="field">
         <span className="field-label">Game conclusion</span>
         <span className="field-box">

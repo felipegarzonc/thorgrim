@@ -18,7 +18,7 @@ import { blobs } from "./blobs.ts";
 import { docPath, getPages, libraryDocs, listDocuments, parsePageRange, searchLibrary } from "./library.ts";
 import { checkBudget, HAIKU_PRICE, recordUsage } from "./accounts.ts";
 import { anthropic } from "./anthropic.ts";
-import { reportFacts, reportSides } from "./report.ts";
+import { reportFacts, reportSides } from "../shared/report.ts";
 import { currentUser } from "./context.ts";
 import { Collection } from "./store.ts";
 

@@ -19,7 +19,7 @@ import { Icon, MetaContext, type IconName, type Meta } from "./ui.tsx";
 const TABS: [string, string, IconName][] = [
   ["home", "Home", "home"],
   ["games", "Games", "games"],
-  ["ask", "Coach", "coach"],
+  ["ask", "Coach", "spark"],
   ["club", "Club", "club"],
   ["lists", "Lists", "lists"],
   ["library", "Rules", "rules"],
@@ -102,7 +102,7 @@ export function App() {
             )}
           </p>
         )}
-        {tab === "home" && <HomePage />}
+        {tab === "home" && <HomePage unread={unread.notices + unread.posts} />}
         {tab === "games" && <GamesPage />}
         {tab === "club" && <ClubPage postId={id} unreadNotices={unread.notices} />}
         {tab === "lists" && <ListsPage selectedId={id} />}
@@ -133,7 +133,7 @@ export function App() {
       )}
       <nav className="bottom-nav" aria-label="Sections" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
         {tabs.map(([key, label, icon]) => (
-          <a key={key} href={`#/${key}`} className={tab === key ? "active" : ""} aria-current={tab === key ? "page" : undefined}>
+          <a key={key} href={`#/${key}`} className={[tab === key ? "active" : "", key === "ask" ? "nav-coach" : ""].join(" ").trim()} aria-current={tab === key ? "page" : undefined}>
             <span className="ico-wrap">
               <Icon name={icon} />
               {key === "club" && unread.notices + unread.posts > 0 && <span className="nav-dot">{Math.min(unread.notices + unread.posts, 99)}</span>}

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { result } from "../../../shared/scoring.ts";
-import type { ArmyList, Game } from "../../../shared/types.ts";
-import { api } from "../api.ts";
-import { GameCard, gameHref, sideInfo } from "../gameView.tsx";
-import { Icon, useLoad, useMeta } from "../ui.tsx";
+import { baseFaction } from "../../../shared/season.ts";
+import type { ArmyList, FeedPostView, Game } from "../../../shared/types.ts";
+import { api, withKey } from "../api.ts";
+import { gameDate, gameHref, sideInfo } from "../gameView.tsx";
+import { Avatar, Icon, useLoad, useMeta } from "../ui.tsx";
+import { gamePhotoUrl } from "./report.tsx";
 
 export async function newGame() {
   const g = await api<Game>("/games", { method: "POST", json: {} });
@@ -12,86 +14,174 @@ export async function newGame() {
 
 const byDate = (a: Game, b: Game) => (a.date ?? a.createdAt).localeCompare(b.date ?? b.createdAt) || a.createdAt.localeCompare(b.createdAt);
 
-export function HomePage() {
+export function HomePage({ unread = 0 }: { unread?: number }) {
   const meta = useMeta();
   const [games] = useLoad<Game[]>("/games");
   const [lists] = useLoad<ArmyList[]>("/lists");
+  const [posts] = useLoad<FeedPostView[]>("/feed");
   if (!games) return <p className="muted">Loading…</p>;
 
   const live = games.filter((g) => !g.finished).sort(byDate).reverse()[0];
   const finished = games.filter((g) => g.finished).sort(byDate);
   const latest = finished[finished.length - 1];
+  const hero = live ?? latest;
+  const post = posts?.[0];
 
   return (
-    <div className="stack">
-      <div className="page-head">
+    <div className="stack home">
+      <div className="page-head home-head">
         <a className="me-link" href="#/profile" aria-label="Your profile">
-          <span className="avatar">{(meta?.user?.name || "T").slice(0, 1).toUpperCase()}</span>
+          <span className="avatar me-avatar">{(meta?.user?.name || "T").slice(0, 1).toUpperCase()}</span>
         </a>
-        <h1 className="grow">Thorgrim</h1>
-        <a className="button small ghost" href="#/calc">
-          <Icon name="calc" /> Calculator
+        <span className="wordmark grow">THORGRIM</span>
+        <a className="icon-button" href="#/club" aria-label={unread ? `Club, ${unread} new` : "Club activity"}>
+          <Icon name="bell" />
+          {unread > 0 && <span className="count-dot">{Math.min(unread, 99)}</span>}
         </a>
       </div>
 
       {!games.length && (
         <section className="card empty">
-          <h2>Ready for your first game?</h2>
-          <p className="muted">Tap + to set up a game: both armies, the battleplan and your battle tactics. The coach then gives you a plan for every turn.</p>
+          <h2>Ready for your first battle?</h2>
+          <p className="muted">Set up a game: both armies, the battleplan and your battle tactics. The coach then gives you a plan for every turn.</p>
           <button type="button" className="primary" onClick={newGame}>
             <Icon name="plus" /> New game
           </button>
         </section>
       )}
 
-      {live && (
+      {hero && <GameHero game={hero} lists={lists} />}
+
+      <div className="quick-actions">
+        <button type="button" className="quick" onClick={newGame}>
+          <span className="quick-ico">
+            <Icon name="plus" />
+          </span>
+          New game
+        </button>
+        <a className="quick" href="#/ask">
+          <span className="quick-ico">
+            <Icon name="spark" />
+          </span>
+          Ask the coach
+        </a>
+      </div>
+
+      {finished.length > 0 && <Season games={finished} lists={lists} />}
+
+      {post && (
         <section>
-          <h2 className="section-title">Game in progress</h2>
-          <GameCard
-            game={live}
-            lists={lists}
-            actions={
-              <a className="button primary-container" href={gameHref(live)}>
-                CONTINUE
-              </a>
-            }
-          />
+          <div className="row spread section-row">
+            <h2 className="section-title">From the club</h2>
+            <a className="small" href="#/club">
+              See all
+            </a>
+          </div>
+          <a className="club-teaser" href={`#/club/${post.id}`}>
+            {post.photos > 0 ? (
+              <img src={withKey(`/api/feed/${post.id}/photo/0?v=${encodeURIComponent(post.updatedAt ?? post.createdAt)}`)} alt="" loading="lazy" />
+            ) : (
+              <span className="teaser-photo">
+                <Icon name="club" />
+              </span>
+            )}
+            <span className="teaser-text">
+              <b className="teaser-title">{post.title}</b>
+              <small className="muted">
+                {post.authorName} · {post.sides.map((x) => `${x.faction ? baseFaction(x.faction).split(" ")[0] : x.name} ${x.vp}`).join(" – ")}
+              </small>
+              <small className="muted">
+                {post.reactions.reduce((n, r) => n + r.count, 0)} reactions · {post.comments.length} comments
+              </small>
+            </span>
+          </a>
         </section>
       )}
-
-      {latest && (
-        <section>
-          <h2 className="section-title">Latest game</h2>
-          <GameCard
-            game={latest}
-            lists={lists}
-            actions={
-              <>
-                <a className="button primary-container" href={`#/games/${latest.id}/results`}>
-                  VIEW RESULTS
-                </a>
-                <a className="button ghost accent" href={`#/games/${latest.id}/players`}>
-                  EDIT
-                </a>
-              </>
-            }
-          />
-        </section>
-      )}
-
-      {finished.length >= 2 && (
-        <section>
-          <h2 className="section-title">Win rate over time</h2>
-          <WinRateChart games={finished} lists={lists} />
-        </section>
-      )}
-
-      {finished.length > 0 && <Stats games={finished} />}
-
-      <button type="button" className="fab" aria-label="New game" onClick={newGame}>
-        <Icon name="plus" />
-      </button>
     </div>
+  );
+}
+
+/** The game that matters now: the one being played, else the last one, with its photo. */
+function GameHero({ game, lists }: { game: Game; lists?: ArmyList[] }) {
+  const me = sideInfo(game, lists, "me");
+  const opp = sideInfo(game, lists, "opponent");
+  const s = game.state;
+  const photo = s.tablePhoto?.path ?? game.report?.photos[0];
+  const r = result(game);
+  const started = (s.rounds?.length ?? 0) > 0 && s.phase !== "Deployment";
+  const tag = game.finished ? (r === "win" ? "VICTORY" : r === "loss" ? "DEFEAT" : "DRAW") : started ? `LIVE · ROUND ${s.round}` : "SETTING UP";
+  const turn = game.finished ? gameDate(game) : started ? `${s.activePlayer === "me" ? "Your turn" : `${opp.name}'s turn`} · ${s.phase}` : "Armies and battleplan";
+  return (
+    <section className="hero card" aria-label={game.finished ? "Your last battle" : "Battle in progress"}>
+      <div className="hero-photo">
+        {photo ? <img src={gamePhotoUrl(game.id, photo)} alt="The table" /> : <Icon name="castle" />}
+        <span className={`hero-tag ${game.finished ? "" : "live"}`}>{tag}</span>
+      </div>
+      <div className="hero-body">
+        <div className="hero-score">
+          <span className="hero-side">
+            <Avatar faction={me.faction} size={2.5} />
+            <b>{me.name}</b>
+            <small>{me.base}</small>
+          </span>
+          <span className="big-score">
+            {s.vp.me}
+            <span className="score-dot">·</span>
+            {s.vp.opponent}
+          </span>
+          <span className="hero-side">
+            <Avatar faction={opp.faction} size={2.5} />
+            <b>{opp.name}</b>
+            <small>{opp.base}</small>
+          </span>
+        </div>
+        <p className="small muted hero-sub">{[game.battleplan, turn].filter(Boolean).join(" · ")}</p>
+        <a className="button primary wide hero-go" href={gameHref(game)}>
+          {game.finished ? "SEE THE RESULTS" : "CONTINUE THE BATTLE"} <Icon name="right" />
+        </a>
+      </div>
+    </section>
+  );
+}
+
+/** Won, lost, drawn, the last five results; the chart and the numbers behind a tap. */
+function Season({ games, lists }: { games: Game[]; lists?: ArmyList[] }) {
+  const results = games.map(result);
+  const count = (r: string) => results.filter((x) => x === r).length;
+  const last = results.slice(-5);
+  return (
+    <section>
+      <h2 className="section-title">Your season</h2>
+      <div className="card season">
+        <div className="season-counts">
+          <span>
+            <b className="won">{count("win")}</b>
+            <small>won</small>
+          </span>
+          <span>
+            <b>{count("loss")}</b>
+            <small>lost</small>
+          </span>
+          <span>
+            <b>{count("draw")}</b>
+            <small>drawn</small>
+          </span>
+          <small className="grow muted season-last">Last {last.length}</small>
+        </div>
+        <div className="form-bar" role="img" aria-label={`Last ${last.length} results: ${last.join(", ")}`}>
+          {last.map((r, i) => (
+            <span key={i} className={r ?? ""} />
+          ))}
+        </div>
+        {games.length >= 2 && (
+          <details className="more-stats">
+            <summary>More stats</summary>
+            <WinRateChart games={games} lists={lists} />
+            <Stats games={games} />
+          </details>
+        )}
+      </div>
+    </section>
   );
 }
 

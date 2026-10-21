@@ -1,11 +1,11 @@
 // What a battle report is built from: the facts the game recorded (who went
 // first, the score round by round, tactics completed, units destroyed, the
 // log), and the highlights shown as badges on a club feed post. The coach
-// writes the story from these facts only (coach.ts, battleReport).
+// writes the story from these facts only (server/coach.ts, battleReport).
 
-import { baseFaction } from "../shared/season.ts";
-import { result, sideRoundVp } from "../shared/scoring.ts";
-import type { ArmyList, Game } from "../shared/types.ts";
+import { baseFaction } from "./season.ts";
+import { result, sideRoundVp } from "./scoring.ts";
+import type { ArmyList, Game } from "./types.ts";
 
 type Side = "me" | "opponent";
 const other = (s: Side): Side => (s === "me" ? "opponent" : "me");
@@ -37,7 +37,7 @@ export function runningScore(game: Game): { me: number; opponent: number }[] {
 }
 
 /** Who took a double turn in which round (went first right after going second). */
-function doubleTurns(game: Game): { round: number; side: Side }[] {
+export function doubleTurns(game: Game): { round: number; side: Side }[] {
   const rounds = game.state.rounds ?? [];
   return rounds.flatMap((rec, i) => (i > 0 && rec.first && rounds[i - 1].first && rec.first === other(rounds[i - 1].first!) ? [{ round: i + 1, side: rec.first }] : []));
 }

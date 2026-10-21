@@ -78,7 +78,7 @@ const ogors: ArmyList = {
 
 describe("report facts and badges", () => {
   it("tells the game round by round, by name", async () => {
-    const { reportFacts, reportSides } = await import("./report.ts");
+    const { reportFacts, reportSides } = await import("../shared/report.ts");
     const facts = reportFacts(finishedGame(), reportSides(finishedGame(), ogors));
     expect(facts).toContain("Ana (Ogor Mawtribes) vs Ben (Skaven)");
     expect(facts).toContain("Round 1: Ben took the first turn.");
@@ -92,7 +92,7 @@ describe("report facts and badges", () => {
   });
 
   it("finds the highlights", async () => {
-    const { gameBadges, playerBadges, reportSides } = await import("./report.ts");
+    const { gameBadges, playerBadges, reportSides } = await import("../shared/report.ts");
     const g = finishedGame();
     expect(gameBadges(g, reportSides(g, ogors))).toEqual(["Comeback win for Ana", "Double turn", "Ana mastered Smokescreen"]);
     const won = (id: string, date: string): Game => ({ ...finishedGame(), id, date });

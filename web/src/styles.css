@@ -1,36 +1,44 @@
-/* Thorgrim — dark scoreboard look (in the style of Tabletop Battles):
-   near-black ground, raised dark cards, a light-blue accent, big numbers.
-   "me" is the blue accent, the opponent a warm gold, used sparingly. */
+/* Thorgrim — "war table": iron-black ground, steel cards, bone text.
+   Brass is the one action colour (one brass button per screen: the next
+   thing to do); each army wears its grand alliance's colour (see ui.tsx,
+   ARMY). Cinzel capitals for scores and titles, Inter for reading.
+   (--me is the brass accent; --opp a cool steel for the other side.) */
 
 :root {
-  --bg: #111318;
-  --bg-deep: #0c0e12;
-  --panel: #1b1e24;
-  --panel-2: #2a2d33;
-  --panel-3: #383b42;
-  --line: #2a2d34;
-  --line-2: #44474e;
+  --bg: #0f1115;
+  --bg-deep: #0b0d10;
+  --panel: #191c22;
+  --panel-2: #23272f;
+  --panel-3: #2e333c;
+  --line: #2e333c;
+  --line-2: #4a4e57;
   --dash: #5b5e66;
-  --text: #e3e3e8;
-  --muted: #b6b9c2;
-  --faint: #8d9099;
-  --me: #a8c7fa;
-  --me-text: #a8c7fa;
-  --me-ink: #0a2a55;
-  --me-soft: #1b2a40;
-  --me-line: #2f4c76;
-  --fab: #1f4a85;
-  --opp: #e3c27e;
-  --opp-soft: #2a2416;
-  --opp-line: #5a4a26;
-  --good: #a6d5a0;
-  --good-fill: #23402a;
-  --warn: #f0b36a;
-  --bad: #f2a8a0;
+  --text: #ece6da;
+  --muted: #a8a396;
+  --faint: #8e8a80;
+  --me: #d9ae55;
+  --me-text: #d9ae55;
+  --me-ink: #1e1608;
+  --me-soft: #2a2418;
+  --me-line: #5a4a26;
+  --fab: #d9ae55;
+  --opp: #9fb4c8;
+  --opp-soft: #1c232b;
+  --opp-line: #3a4a5a;
+  --good: #9cbf5e;
+  --good-fill: #24301a;
+  --warn: #e08a4a;
+  --bad: #e0645a;
+  --brass: #d9ae55;
+  --brass-soft: #1e1a12;
+  --order: #7fa8f5;
+  --chaos: #e0645a;
+  --death: #b49ce8;
+  --destruction: #9cbf5e;
   --radius: 18px;
-  --display: "Roboto", system-ui, sans-serif;
+  --display: "Cinzel", Georgia, serif;
   color-scheme: dark;
-  font-family: "Roboto", system-ui, -apple-system, sans-serif;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
   font-size: 16px;
   line-height: 1.45;
   letter-spacing: 0.01em;
@@ -51,15 +59,12 @@ a {
   color: var(--me-text);
 }
 
-h1,
-h2,
-h3 {
-  font-family: var(--display);
-}
 h1 {
-  font-size: 1.75rem;
+  font-family: var(--display);
+  font-size: 1.6rem;
   font-weight: 700;
   line-height: 1.15;
+  letter-spacing: 0.08em;
   margin: 0;
 }
 h2 {
@@ -107,9 +112,10 @@ main {
   z-index: 20;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  background: #1d2026;
+  background: #14171c;
   border-top: 1px solid var(--line);
   padding: 0.45rem 0.25rem calc(0.55rem + env(safe-area-inset-bottom));
+  align-items: start;
 }
 .bottom-nav a {
   display: flex;
@@ -133,7 +139,21 @@ main {
   font-weight: 600;
 }
 .bottom-nav a.active .ico-wrap {
-  background: #3a4252;
+  background: var(--me-soft);
+  color: var(--brass);
+}
+/* The coach: raised brass button in the middle of the bar. */
+.bottom-nav a.nav-coach .ico-wrap {
+  width: 3.4rem;
+  height: 3.4rem;
+  margin-top: -1.5rem;
+  background: var(--brass);
+  color: var(--me-ink);
+  box-shadow: 0 0 0 5px #14171c;
+}
+.bottom-nav a.nav-coach.active .ico-wrap {
+  background: #ecc879;
+  color: var(--me-ink);
 }
 .ico {
   width: 1.4rem;
@@ -151,7 +171,7 @@ main {
   border-radius: 18px;
   border: 0;
   background: var(--fab);
-  color: #d6e3ff;
+  color: var(--me-ink);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 .fab:hover:not(:disabled) {
@@ -1298,7 +1318,11 @@ p .kpi {
   width: 100%;
 }
 .section-title {
-  font-size: 1.6rem;
+  font-family: var(--display);
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
   font-weight: 700;
   margin: 0.6rem 0 0.8rem;
 }
@@ -1388,8 +1412,9 @@ button.primary-container {
   padding-top: 1.2rem;
 }
 .big-score {
+  font-family: var(--display);
   font-size: clamp(2.2rem, 10vw, 3.3rem);
-  font-weight: 500;
+  font-weight: 700;
   line-height: 1;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
@@ -1584,6 +1609,20 @@ fieldset.group legend {
   letter-spacing: 0.04em;
   flex: none;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
+}
+/* An army's crest: its grand alliance's mark, ringed in its colour. */
+.crest {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  flex: none;
+  color: var(--army, var(--faint));
+  border: 1.5px solid var(--army, var(--line-2));
+  background: color-mix(in srgb, var(--army, #4a4e57) 16%, transparent);
+}
+.crest svg {
+  width: 56%;
+  height: 56%;
 }
 .avatar-space {
   width: 2.4rem;
@@ -1979,12 +2018,12 @@ body.sheet-open {
 }
 .badge {
   font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  background: var(--opp-soft);
-  color: var(--opp);
-  border: 1px solid var(--opp-line);
+  background: var(--brass-soft);
+  color: var(--brass);
+  border: 1px solid var(--me-line);
   border-radius: 999px;
   padding: 0.12rem 0.55rem;
 }
@@ -2088,10 +2127,8 @@ body.sheet-open {
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
-  border-top: 4px solid var(--me);
-}
-.turn-card.opponent {
-  border-top-color: var(--opp);
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--army, var(--me));
 }
 .turn-head {
   display: flex;
@@ -2111,33 +2148,30 @@ body.sheet-open {
 }
 .phase-chips button {
   flex: none;
-  min-height: 38px;
-  padding: 0.2rem 0.75rem;
-  border-radius: 999px;
-  font-size: 0.9rem;
-  background: transparent;
-  border: 1px solid var(--line-2);
-  color: var(--muted);
+  min-width: 62px;
+  min-height: 50px;
+  padding: 0.2rem 0.7rem;
+  border-radius: 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
 }
 .phase-chips button.past {
-  color: var(--faint);
-  border-color: var(--line);
+  color: #6f6a60;
 }
 .phase-chips button.current {
-  background: var(--me);
+  background: var(--brass);
   color: var(--me-ink);
-  border-color: var(--me);
-  font-weight: 600;
-}
-.turn-card.opponent .phase-chips button.current {
-  background: var(--opp);
-  border-color: var(--opp);
-  color: #2b2210;
+  border-color: var(--brass);
+  font-weight: 800;
 }
 .tips {
-  background: #22262e;
-  border-radius: 14px;
-  padding: 0.75rem 0.85rem 0.5rem;
+  background: var(--brass-soft);
+  border: 1px solid var(--me-line);
+  border-radius: 16px;
+  padding: 0.8rem 0.9rem 0.5rem;
 }
 .tips-head {
   display: flex;
@@ -2145,9 +2179,7 @@ body.sheet-open {
   gap: 0.5rem;
   color: var(--me-text);
 }
-.turn-card.opponent .tips-head {
-  color: var(--opp);
-}
+
 .tips-head b {
   flex: 1;
   font-weight: 600;
@@ -2469,6 +2501,7 @@ button.mic.on {
   width: 2.6rem;
   height: 2.6rem;
   background: var(--fab);
+  color: var(--me-ink);
   font-size: 1.1rem;
 }
 .profile-card {
@@ -3072,4 +3105,635 @@ button.term:hover:not(:disabled) {
 .public-foot {
   text-align: center;
   margin-top: 1.2rem;
+}
+
+/* ---------- home (war table) ---------- */
+.wordmark {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: 0.14em;
+  color: var(--brass);
+}
+.me-link .me-avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  background: var(--me-soft);
+  color: var(--brass);
+  box-shadow: inset 0 0 0 1px var(--me-line);
+}
+.icon-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+}
+.count-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--bad);
+  color: #2b0c08;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.1rem;
+  text-align: center;
+}
+.hero {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.hero-photo {
+  position: relative;
+  height: 210px;
+  background: var(--panel-2);
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+}
+.hero-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.hero-photo > .ico {
+  width: 2.4rem;
+  height: 2.4rem;
+}
+.hero-tag {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(15, 17, 21, 0.85);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.hero-tag.live::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bad);
+}
+.hero-body {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.hero-score {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+}
+.hero-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+  text-align: center;
+}
+.hero-side .crest {
+  margin-bottom: 0.2rem;
+}
+.hero-side b {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hero-side small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+.hero .big-score {
+  font-size: 2.1rem;
+}
+.score-dot {
+  color: #6f6a60;
+  padding: 0 0.25rem;
+}
+.hero-sub {
+  margin: 0;
+}
+.hero-go,
+a.button.primary {
+  background: var(--brass);
+  color: var(--me-ink);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  border: 0;
+  min-height: 50px;
+  border-radius: 14px;
+}
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.quick {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 64px;
+  padding: 0 0.9rem;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  text-align: left;
+}
+.quick-ico {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--me-soft);
+  color: var(--brass);
+  flex: none;
+}
+.section-row {
+  align-items: baseline;
+  margin: 0.4rem 0 0.6rem;
+}
+.section-row .section-title {
+  margin: 0;
+}
+.season {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  border: 1px solid var(--line);
+}
+.season-counts {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.2rem;
+}
+.season-counts span {
+  display: flex;
+  flex-direction: column;
+}
+.season-counts b {
+  font-family: var(--display);
+  font-size: 1.7rem;
+  line-height: 1.1;
+}
+.season-counts b.won {
+  color: var(--good);
+}
+.season-counts small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.season-last {
+  text-align: right;
+  align-self: center;
+}
+.form-bar {
+  display: flex;
+  gap: 6px;
+}
+.form-bar span {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line-2);
+}
+.form-bar span.win {
+  background: var(--good);
+}
+.form-bar span.draw {
+  background: var(--muted);
+}
+.more-stats summary {
+  cursor: pointer;
+  color: var(--brass);
+  font-size: 0.9rem;
+  font-weight: 600;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.club-teaser {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.6rem;
+  border-radius: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  text-decoration: none;
+}
+.club-teaser img,
+.club-teaser .teaser-photo {
+  flex: none;
+  width: 84px;
+  height: 84px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--panel-2);
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+}
+.teaser-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.teaser-title {
+  font-family: var(--display);
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+/* ---------- round: scoreboard, coins, flames, seals ---------- */
+.scoreboard {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.score-card {
+  border-radius: 20px;
+  padding: 0.85rem;
+  background: var(--panel);
+  border: 2px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.score-card.active {
+  border-color: var(--army);
+  background: color-mix(in srgb, var(--army) 7%, var(--panel));
+}
+.score-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.score-card-head > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.score-card-head b,
+.score-card-head small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.score-card-head small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.turn-tag {
+  align-self: flex-start;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  background: var(--panel-3);
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+.turn-tag.on {
+  background: var(--army);
+  color: #14171c;
+}
+.score-vp {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+.score-vp .big-score {
+  font-size: 2.8rem;
+}
+.score-vp small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.pips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.pips-label {
+  width: 2.4rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.coin {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+}
+.coin.on {
+  background: var(--brass);
+  border-color: var(--brass);
+}
+.flame {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--line-2);
+  stroke-width: 1.8;
+}
+.flame.on {
+  fill: var(--warn);
+  stroke: var(--warn);
+}
+.seals {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex: none;
+}
+.seal {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  color: #6f6a60;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+.seal.next {
+  border: 2px dashed var(--brass);
+  color: var(--brass);
+}
+.seal.done {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: var(--me-ink);
+}
+.tactic-total {
+  font-size: 0.8rem;
+}
+.side-name .crest {
+  margin-right: 0.1rem;
+}
+
+/* ---------- results: victory banner and VP chart ---------- */
+.victory {
+  text-align: center;
+  padding-top: 0.4rem;
+}
+.victory-ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--brass);
+}
+.victory-ornament span {
+  width: 48px;
+  height: 1px;
+  background: var(--me-line);
+}
+.victory-title {
+  margin: 0.35rem 0 0;
+  font-size: 2.4rem;
+  letter-spacing: 0.16em;
+  color: var(--brass);
+}
+.victory-title.loss,
+.victory-title.draw {
+  color: var(--muted);
+}
+.victory-score {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+}
+.victory-score > span:not(.big-score) {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  text-align: left;
+}
+.victory-score > span.right {
+  text-align: right;
+}
+.victory-score small {
+  font-size: 0.75rem;
+}
+.vp-chart {
+  border: 1px solid var(--line);
+  padding: 0.9rem 0.9rem 0.6rem;
+}
+.vp-chart-head {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+.vp-chart-head .grow {
+  font-family: var(--display);
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.legend i {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+.vp-chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.vp-chart .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.vp-chart .axis {
+  fill: #8e8a80;
+  font-size: 10px;
+  font-family: Inter, sans-serif;
+}
+.vp-chart .axis.brass {
+  fill: var(--brass);
+  font-weight: 600;
+}
+
+/* ---------- club (war table) ---------- */
+.post {
+  border: 1px solid var(--line);
+}
+.post-who {
+  display: flex;
+  flex-direction: column;
+}
+.post .post-avatar {
+  background: var(--me-soft);
+  color: var(--brass);
+  box-shadow: inset 0 0 0 1px var(--me-line);
+}
+.post-photos img {
+  height: 250px;
+  border-radius: 0;
+}
+.post-photos {
+  gap: 4px;
+}
+.post-title {
+  font-family: var(--display);
+}
+.post-score {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.post-score-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.post-score-row > span:not(.post-vp) {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+.post-score-row small {
+  font-size: 0.75rem;
+}
+.post-score-row .right {
+  text-align: right;
+}
+.post-vp {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+.score-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.post-actions {
+  align-items: center;
+}
+.post-actions .react .ico {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+.post-actions .react.on {
+  background: var(--me-soft);
+  border-color: var(--me-line);
+  color: var(--brass);
+}
+.comment-peek {
+  justify-content: flex-start;
+  text-align: left;
+  min-height: 44px;
+  padding: 0.5rem 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: #cfc8ba;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comment-peek b {
+  color: var(--text);
+}
+.filter-chips {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: -0.4rem 0 0;
+}
+.filter-chips button {
+  flex: none;
+  min-height: 38px;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+.filter-chips button.on {
+  background: var(--text);
+  color: #14171c;
+  border-color: var(--text);
+  font-weight: 700;
+}
+button.icon-button {
+  border: 0;
+  padding: 0;
+  min-height: 44px;
+}
+button.icon-button.on {
+  background: var(--panel-2);
+}
+.tactic-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+.hero-score {
+  align-items: start;
+}
+.hero-score > .big-score {
+  align-self: center;
 }

@@ -14,7 +14,7 @@ import type { ArmyList, FeedPost, FeedPostView, Game } from "../shared/types.ts"
 import { blobs } from "./blobs.ts";
 import { currentUser } from "./context.ts";
 import { noticesIn, notify, seenIn } from "./notices.ts";
-import { gameBadges, playerBadges, reportSides, type ReportSides } from "./report.ts";
+import { gameBadges, playerBadges, reportSides, type ReportSides } from "../shared/report.ts";
 import { changeGame, gameLists, myGames, viewGame, type OpenGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
 
@@ -56,6 +56,7 @@ export function postView(p: FeedPost): FeedPostView {
     ...rest,
     reactions: REACTIONS.map((emoji) => ({ emoji, count: reactions[emoji]?.length ?? 0, mine: !!reactions[emoji]?.includes(me.id) })),
     canEdit: isPlayer(p) || me.isAdmin,
+    mine: isPlayer(p),
     ...(isPlayer(p) && shareToken ? { shareToken } : {}),
   };
 }

@@ -309,6 +309,8 @@ export interface FeedPost {
 export interface FeedPostView extends Omit<FeedPost, "reactions" | "shareToken" | "playerIds" | "playerBadges" | "photoSources"> {
   reactions: { emoji: string; count: number; mine: boolean }[];
   canEdit: boolean;
+  /** One of the signed-in member's own games. */
+  mine: boolean;
   /** The share link's secret (the game's players only). */
   shareToken?: string;
 }

@@ -6,8 +6,17 @@ import { useEffect, useState } from "react";
 import type { FeedPost, FeedPostView, Notice } from "../../../shared/types.ts";
 import { api, withKey } from "../api.ts";
 import { baseFaction } from "../../../shared/season.ts";
-import { Icon, Seg, useLoad, useMeta } from "../ui.tsx";
+import { armyColor, Icon, useLoad, useMeta, type IconName } from "../ui.tsx";
 import { Story } from "./report.tsx";
+
+/** Reactions keep their emoji keys on the server; the page shows them as themed icons. */
+const REACTION_LOOK: Record<string, { icon: IconName; label: string }> = {
+  "⚔️": { icon: "swords", label: "Charge" },
+  "🔥": { icon: "flame", label: "Fire" },
+  "😂": { icon: "laugh", label: "Ha!" },
+  "👏": { icon: "flag", label: "Salute" },
+  "💀": { icon: "skull", label: "Brutal" },
+};
 
 /** Tells the bottom bar to re-count what's unread. */
 export const CLUB_SEEN = "thorgrim-club-seen";
@@ -22,22 +31,12 @@ const when = (iso: string) => {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: mins > 300 * 24 * 60 ? "numeric" : undefined });
 };
 
-/** The report itself: title, highlights, photos, score and story. Also used on the public page. */
+/** The report itself, photo first: photos, title, the score in both armies' colours, highlights and story. Also used on the public page. */
 export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; photoUrl: (n: number) => string; short?: boolean; onMore?: () => void }) {
   const [a, b] = post.sides;
   const paras = post.story.split(/\n\s*\n/).filter((p) => p.trim()).length;
   return (
     <>
-      <h2 className="post-title">{post.title}</h2>
-      {!!post.badges.length && (
-        <div className="post-badges">
-          {post.badges.map((x) => (
-            <span key={x} className="badge">
-              {x}
-            </span>
-          ))}
-        </div>
-      )}
       {post.photos > 0 && (
         <div className="post-photos" aria-label="Battle photos">
           {Array.from({ length: post.photos }, (_, n) => (
@@ -47,19 +46,35 @@ export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; ph
           ))}
         </div>
       )}
+      <h2 className="post-title">{post.title}</h2>
       {a && b && (
         <div className="post-score">
-          <span className="post-side">
-            <b>{a.name}</b>
-            <small>{a.faction ? baseFaction(a.faction) : ""}</small>
-          </span>
-          <span className="big-score">
-            {a.vp}-{b.vp}
-          </span>
-          <span className="post-side right">
-            <b>{b.name}</b>
-            <small>{b.faction ? baseFaction(b.faction) : ""}</small>
-          </span>
+          <div className="post-score-row">
+            <span>
+              <b>{a.name}</b>
+              <small style={{ color: armyColor(a.faction) }}>{a.faction ? baseFaction(a.faction) : ""}</small>
+            </span>
+            <span className="post-vp">
+              {a.vp}–{b.vp}
+            </span>
+            <span className="right">
+              <b>{b.name}</b>
+              <small style={{ color: armyColor(b.faction) }}>{b.faction ? baseFaction(b.faction) : ""}</small>
+            </span>
+          </div>
+          <div className="score-bar" aria-hidden="true">
+            <span style={{ flex: Math.max(a.vp, 1), background: armyColor(a.faction) }} />
+            <span style={{ flex: Math.max(b.vp, 1), background: armyColor(b.faction) }} />
+          </div>
+        </div>
+      )}
+      {!!post.badges.length && (
+        <div className="post-badges">
+          {post.badges.map((x) => (
+            <span key={x} className="badge">
+              {x}
+            </span>
+          ))}
         </div>
       )}
       <p className="small muted post-meta">{[post.battleplan, post.points && `${post.points}pts`, post.date].filter(Boolean).join(" · ")}</p>
@@ -102,34 +117,47 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
     <article className={`card post ${single ? "single" : ""}`}>
       <header className="post-head">
         <span className="avatar post-avatar">{(post.authorName || "?").slice(0, 1).toUpperCase()}</span>
-        <span className="grow">
+        <span className="grow post-who">
           <b>{post.authorName}</b>
-          <small className="muted"> · {when(post.createdAt)}</small>
+          <small className="muted">
+            {when(post.createdAt)}
+            {post.battleplan ? ` · ${post.battleplan}` : ""}
+          </small>
         </span>
       </header>
       <PostBody post={post} photoUrl={(n) => withKey(`/api/feed/${post.id}/photo/${n}?v=${encodeURIComponent(post.updatedAt ?? post.createdAt)}`)} short={!open} onMore={() => setOpen(true)} />
 
       <div className="post-actions">
-        {post.reactions.map((r) => (
-          <button
-            key={r.emoji}
-            type="button"
-            className={`react ${r.mine ? "on" : ""}`}
-            aria-pressed={r.mine}
-            aria-label={`React ${r.emoji}`}
-            disabled={busy}
-            onClick={() => call(() => api<FeedPostView>(`/feed/${post.id}/react`, { method: "POST", json: { emoji: r.emoji } }))}
-          >
-            {r.emoji}
-            {r.count > 0 && <span>{r.count}</span>}
-          </button>
-        ))}
-        <button type="button" className="react" onClick={() => setOpen(!open)} aria-expanded={open}>
+        {post.reactions.map((r) => {
+          const look = REACTION_LOOK[r.emoji] ?? { icon: "spark" as const, label: r.emoji };
+          return (
+            <button
+              key={r.emoji}
+              type="button"
+              className={`react ${r.mine ? "on" : ""}`}
+              aria-pressed={r.mine}
+              aria-label={`${look.label}${r.count ? `, ${r.count}` : ""}`}
+              title={look.label}
+              disabled={busy}
+              onClick={() => call(() => api<FeedPostView>(`/feed/${post.id}/react`, { method: "POST", json: { emoji: r.emoji } }))}
+            >
+              <Icon name={look.icon} />
+              {r.count > 0 && <span>{r.count}</span>}
+            </button>
+          );
+        })}
+        <span className="grow" />
+        <button type="button" className="react" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={`${post.comments.length} comments`}>
           <Icon name="coach" />
           <span>{post.comments.length || ""}</span>
         </button>
       </div>
       {!open && reactors.length === 0 && post.comments.length === 0 && <p className="small muted">Be the first to react.</p>}
+      {!open && post.comments.length > 0 && (
+        <button type="button" className="comment-peek" onClick={() => setOpen(true)}>
+          <b>{post.comments[post.comments.length - 1].authorName}</b> {post.comments[post.comments.length - 1].text}
+        </button>
+      )}
 
       {open && (
         <div className="comments">
@@ -254,6 +282,7 @@ export function ClubPage({ postId, unreadNotices }: { postId?: string; unreadNot
   const [posts, setPosts] = useState<FeedPostView[]>();
   const [error, setError] = useState<string>();
   const [view, setView] = useState<"feed" | "activity">("feed");
+  const [filter, setFilter] = useState("all");
 
   useEffect(() => {
     api<FeedPostView[]>("/feed")
@@ -263,26 +292,38 @@ export function ClubPage({ postId, unreadNotices }: { postId?: string; unreadNot
   }, [postId]);
 
   const changed = (id: string) => (p: FeedPostView | null) => setPosts((cur) => (p ? cur?.map((x) => (x.id === id ? p : x)) : cur?.filter((x) => x.id !== id)));
-  const shown = postId ? posts?.filter((p) => p.id === postId) : posts;
+  const armies = [...new Set((posts ?? []).flatMap((p) => p.sides.map((x) => (x.faction ? baseFaction(x.faction) : ""))).filter(Boolean))].sort();
+  const filtered = posts?.filter((p) => filter === "all" || (filter === "mine" ? p.mine : p.sides.some((x) => x.faction && baseFaction(x.faction) === filter)));
+  const shown = postId ? posts?.filter((p) => p.id === postId) : filtered;
 
   return (
     <div className="stack">
       <div className="page-head">
-        <h1 className="grow">Club</h1>
+        <h1 className="grow">{view === "activity" ? "Activity" : "Club"}</h1>
+        <button
+          type="button"
+          className={`icon-button ${view === "activity" ? "on" : ""}`}
+          aria-pressed={view === "activity"}
+          aria-label={unreadNotices ? `Activity, ${unreadNotices} new` : "Activity"}
+          onClick={() => setView(view === "activity" ? "feed" : "activity")}
+        >
+          <Icon name={view === "activity" ? "close" : "bell"} />
+          {view !== "activity" && unreadNotices > 0 && <span className="count-dot">{unreadNotices}</span>}
+        </button>
       </div>
-      <Seg
-        label="Club"
-        value={view}
-        options={[
-          ["feed", "Feed"],
-          ["activity", unreadNotices ? `Activity (${unreadNotices})` : "Activity"],
-        ]}
-        onChange={setView}
-      />
       {view === "activity" ? (
         <Activity />
       ) : (
         <>
+          {!postId && posts && posts.length > 0 && (
+            <div className="filter-chips" role="group" aria-label="Show">
+              {[["all", "All reports"], ["mine", "My games"], ...armies.map((a) => [a, a])].map(([key, label]) => (
+                <button key={key} type="button" className={filter === key ? "on" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {error && <p className="error">{error}</p>}
           {!posts && !error && <p className="muted">Loading…</p>}
           {postId && posts && (

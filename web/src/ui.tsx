@@ -166,6 +166,11 @@ const ICONS = {
   mic: "M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M5 11a7 7 0 0 0 14 0 M12 18v3",
   camera: "M4 8h3l2-3h6l2 3h3v11H4z M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
   send: "M4 12l16-8-6 16-2-7z",
+  bell: "M6 16V11a6 6 0 0 1 12 0v5l2 2H4z M10 21h4",
+  flame: "M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-7 0 2 1 3 2 3 0-3 0-5 1-8z",
+  swords: "M4 4l10 10 M4 4h4 M4 4v4 M20 4L10 14 M20 4h-4 M20 4v4 M7 17l-3 3 M17 17l3 3 M9 15l-2 2 M15 15l2 2",
+  skull: "M12 3a8 8 0 0 0-5 14v3h10v-3a8 8 0 0 0-5-14z M9 12h.01 M15 12h.01 M10 20v-2 M14 20v-2",
+  laugh: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M8 14a4 4 0 0 0 8 0z M9 9h.01 M15 9h.01",
   club: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z M2.5 20a6.5 6.5 0 0 1 13 0 M16 4.5a3.5 3.5 0 0 1 0 6.5 M18 14a6.5 6.5 0 0 1 3.5 6",
 } as const;
 export type IconName = keyof typeof ICONS;
@@ -246,20 +251,26 @@ export function Sheet({ title, onClose, children, actions }: { title: ReactNode;
   );
 }
 
-const ALLIANCE_COLOR: Record<string, string> = { Order: "#2c5a8f", Chaos: "#7a2e2e", Death: "#35574f", Destruction: "#6b5520" };
+/** Each grand alliance's colour and mark (our own simple shapes, no Games Workshop art). */
+export const ARMY: Record<Alliance, { color: string; mark: string }> = {
+  Order: { color: "#7fa8f5", mark: "M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z M12 7v9 M8.5 10.5h7" },
+  Chaos: { color: "#e0645a", mark: "M12 2v20 M2 12h20 M5 5l14 14 M19 5L5 19" },
+  Death: { color: "#b49ce8", mark: "M7 3h10 M7 21h10 M8 3c0 5 8 6 8 9s-8 4-8 9 M16 3c0 5-8 6-8 9s8 4 8 9" },
+  Destruction: { color: "#9cbf5e", mark: "M3 19l4-11 3 6 2-9 2 9 3-6 4 11z" },
+};
+const NEUTRAL = "#8e8a80";
 
-/** Round badge with the faction's initials, coloured by grand alliance. */
+/** The colour an army plays in (its grand alliance's), or a neutral grey. */
+export const armyColor = (faction?: string) => (faction && ARMY[allianceOf(faction) ?? ("" as Alliance)]?.color) || NEUTRAL;
+
+/** An army's crest: its grand alliance's mark, ringed in the alliance colour. */
 export function Avatar({ faction, size = 2.4 }: { faction?: string; size?: number }) {
-  const base = faction ? baseFaction(faction) : "";
-  const initials = base
-    .split(/[\s-]+/)
-    .filter((w) => /^[A-Z]/.test(w) && !["of", "the"].includes(w))
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("");
+  const army = faction ? ARMY[allianceOf(faction) ?? ("" as Alliance)] : undefined;
   return (
-    <span className="avatar" style={{ width: `${size}rem`, height: `${size}rem`, fontSize: `${size * 0.38}rem`, background: ALLIANCE_COLOR[allianceOf(base) ?? ""] ?? "#3a3d44" }} aria-hidden="true">
-      {initials || "?"}
+    <span className="crest" style={{ width: `${size}rem`, height: `${size}rem`, ["--army" as string]: army?.color ?? NEUTRAL }} aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <path d={army?.mark ?? "M12 3l8 4v6c0 4-3.5 7-8 8-4.5-1-8-4-8-8V7z"} />
+      </svg>
     </span>
   );
 }
