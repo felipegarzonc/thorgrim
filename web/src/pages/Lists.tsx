@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ArmyList, Unit } from "../../../shared/types.ts";
+import { listPoints, type ArmyList, type Unit } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { Card, RulesText, useLoad, useMeta } from "../ui.tsx";
 
@@ -21,7 +21,7 @@ export function ListsPage({ selectedId }: { selectedId?: string }) {
               </a>
               <span className={`tag ${l.owner}`}>{l.owner === "me" ? "Mine" : "Opponent"}</span>
               <span className="muted">
-                {l.faction || "faction?"} · {l.units.length} units · {l.units.reduce((s, u) => s + (u.points ?? 0), 0)} pts
+                {l.faction || "faction?"} · {l.units.length} units · {listPoints(l)} pts
               </span>
             </li>
           ))}
@@ -136,7 +136,7 @@ function ListView({ list, onDeleted }: { list: ArmyList; onDeleted: () => void }
       }
     >
       <p className="muted">
-        {list.owner === "me" ? "My list" : "Opponent list"} · {list.faction} · {list.units.reduce((s, u) => s + (u.points ?? 0), 0)} pts
+        {list.owner === "me" ? "My list" : "Opponent list"} · {list.faction}{list.formation ? ` · ${list.formation.name}${list.formation.points ? ` (${list.formation.points} pts)` : ""}` : ""} · {listPoints(list)} pts
         {list.tacticCards?.length ? ` · Tactics: ${list.tacticCards.join(", ")}` : ""}
       </p>
       {list.unmatched.length > 0 && <p className="warning">Not recognised: {list.unmatched.join(" · ")}</p>}

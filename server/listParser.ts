@@ -35,7 +35,7 @@ function tacticCardsIn(line: string): string[] {
     .filter((k): k is string => Boolean(k));
 }
 
-export function parseList(text: string, factionHint?: string): Pick<ArmyList, "faction" | "units" | "unmatched" | "tacticCards"> {
+export function parseList(text: string, factionHint?: string): Pick<ArmyList, "faction" | "units" | "unmatched" | "tacticCards" | "formation"> {
   const d = gameData();
   const faction = factionHint || detectFaction(text) || "";
   const base = faction.split(" - ")[0];
@@ -60,6 +60,7 @@ export function parseList(text: string, factionHint?: string): Pick<ArmyList, "f
   const units: ListUnit[] = [];
   const unmatched: string[] = [];
   const tacticCards: string[] = [];
+  let formation: ArmyList["formation"];
   const listed = new Map<ListUnit, number>();
   let last: ListUnit | undefined;
 
@@ -108,7 +109,12 @@ export function parseList(text: string, factionHint?: string): Pick<ArmyList, "f
         if (listedPoints !== undefined) listed.set(last, listedPoints);
       }
     } else if (content.includes("|")) {
-      // GW app header, "Grand Alliance Destruction | Ogor Mawtribes | Maw-Cult Fanatics (10 Points)": not a unit.
+      // GW app header, "Grand Alliance Destruction | Ogor Mawtribes | Maw-Cult Fanatics (10 Points)":
+      // the last part is the battle formation and its cost.
+      const part = content.split("|").at(-1)!.trim();
+      const fp = LISTED_POINTS.exec(part);
+      const fname = part.replace(POINTS, "").trim();
+      if (fname && !/grand alliance/i.test(fname) && norm(fname) !== norm(faction)) formation = { name: fname, points: fp ? Number(fp[1] ?? fp[2]) : undefined };
       last = undefined;
     } else if (UNIT_LINE.test(content) && !content.includes("/")) {
       // Looks like a unit line ("Something (150)") but we don't know it.
@@ -123,5 +129,5 @@ export function parseList(text: string, factionHint?: string): Pick<ArmyList, "f
     if (p !== undefined) u.points = p;
     else if (u.points !== undefined && u.reinforced) u.points *= 2;
   }
-  return { faction, units, unmatched, tacticCards };
+  return { faction, units, unmatched, tacticCards, formation };
 }

@@ -85,6 +85,8 @@ export interface ArmyList {
   rawText: string;
   units: ListUnit[];
   unmatched: string[];
+  /** Battle formation and what it costs (the GW app lists it on the header line). */
+  formation?: { name: string; points?: number };
   /** Battle tactic cards named in the list ("Battle Tactic Cards: …"). */
   tacticCards?: string[];
   createdAt: string;
@@ -243,3 +245,6 @@ export interface Game {
   log: { at: string; text: string }[];
   createdAt: string;
 }
+
+/** Points of a list: its units plus the battle formation's cost. */
+export const listPoints = (l: Pick<ArmyList, "units" | "formation">) => l.units.reduce((s, u) => s + (u.points ?? 0), 0) + (l.formation?.points ?? 0);

@@ -334,9 +334,10 @@ app.get("/api/units/:id", (req, res) => {
 // Lists saved with lines the reader didn't know are read again (the reader
 // improves over time); kept when that recognises more.
 async function refreshList(l: ArmyList): Promise<ArmyList> {
-  if (!l.unmatched?.length || !l.rawText) return l;
+  const missingFormation = !l.formation && l.rawText?.includes("|");
+  if ((!l.unmatched?.length && !missingFormation) || !l.rawText) return l;
   const again = parseList(l.rawText, l.faction || undefined);
-  if (again.unmatched.length >= l.unmatched.length) return l;
+  if (again.unmatched.length > (l.unmatched?.length ?? 0) || (again.unmatched.length === (l.unmatched?.length ?? 0) && !(missingFormation && again.formation))) return l;
   return lists.save({ ...l, ...again, tacticCards: again.tacticCards?.length ? again.tacticCards : l.tacticCards });
 }
 app.get("/api/lists", async (_req, res) => res.json(newestFirst(await Promise.all((await lists.list()).map(refreshList)))));

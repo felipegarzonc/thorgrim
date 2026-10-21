@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { scoringFor } from "../shared/season.ts";
+import { listPoints } from "../shared/types.ts";
 import { parseList } from "./listParser.ts";
 
 const hasData = fs.existsSync(path.resolve("data", "aos.json"));
@@ -70,5 +71,7 @@ describe.skipIf(!hasData)("GW app extras", () => {
     const huskard = r.units.find((u) => /Huskard/.test(u.name));
     expect(huskard?.name).toBe("Huskard on Thundertusk (Scourge of Aqshy)");
     expect(huskard?.points).toBe(260);
+    expect(r.formation).toEqual({ name: "Maw-Cult Fanatics", points: 10 });
+    expect(listPoints(r)).toBe(470);
   });
 });
