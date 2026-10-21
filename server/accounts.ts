@@ -177,8 +177,8 @@ export async function findInvite(token: string): Promise<Invite | undefined> {
 
 // ---------- coach usage and the monthly limit ----------
 
-// Claude Opus 5.5 list prices per million tokens (estimate; the bill is the source of truth).
-// USD per million tokens: the coach's model (Opus), and Haiku for battle reports.
+// List prices in USD per million tokens (estimate; the bill is the source of truth):
+// Claude Opus 5.5 for the admin's coach, Claude Haiku 5.5 for players and battle reports.
 const PRICE = { input: 4, output: 20, cacheWrite: 5, cacheRead: 0.2, webSearch: 0.01 };
 export const HAIKU_PRICE = { input: 0.1, output: 0.5, cacheWrite: 0.125, cacheRead: 0.01, webSearch: 0.01 };
 const month = () => new Date().toISOString().slice(0, 7);

@@ -106,6 +106,6 @@ npm run typecheck
 
 ## Notes
 
-- The coach uses `claude-opus-5-5` by default (`COACH_MODEL` overrides it). In-game questions run at medium effort, briefs and reviews at high effort. Server-side refusal fallback is on (`fallbacks: "default"`).
+- The coach uses `claude-opus-5-5` for the admin (`COACH_MODEL` overrides it) and `claude-haiku-5-5`, the cheapest model, for players (`PLAYER_MODEL` overrides it). Battle reports are written with `claude-haiku-5-5` for everyone (`REPORT_MODEL`). In-game questions run at medium effort, briefs and reviews at high effort. Server-side refusal fallback is on for Opus (`fallbacks: "default"`); Haiku has none. Each person's monthly usage is priced at their model's rates.
 - Rules text belongs to Games Workshop. Keep this app private and for personal use, and only upload books you own.
 - Photos of book pages, scanned PDFs and images are read by Claude once after upload: it transcribes the rules on pages that have no text layer, so they become searchable. This takes about a minute per 10 pages and needs the API key. Progress shows on the Rules page, and on your computer an interrupted read resumes when the server restarts (online it continues when you open the Rules page again).

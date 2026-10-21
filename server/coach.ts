@@ -19,6 +19,7 @@ import { docPath, getPages, libraryDocs, listDocuments, parsePageRange, searchLi
 import { checkBudget, HAIKU_PRICE, recordUsage } from "./accounts.ts";
 import { anthropic } from "./anthropic.ts";
 import { reportFacts, reportSides } from "./report.ts";
+import { currentUser } from "./context.ts";
 import { Collection } from "./store.ts";
 
 type Msg = Anthropic.Beta.BetaMessageParam;
@@ -43,6 +44,21 @@ export interface Conversation {
 export const conversations = new Collection<Conversation>("conversations");
 
 const MODEL = process.env.COACH_MODEL ?? "claude-opus-5-5";
+/** Players' coach runs on the cheapest model; the admin keeps the full coach. */
+const PLAYER_MODEL = process.env.PLAYER_MODEL ?? "claude-haiku-5-5";
+const isHaiku = (model: string) => model.includes("haiku");
+
+/** The model for the signed-in person, and what goes with it (Haiku has no refusal fallback; usage is priced per model). */
+function coachModel() {
+  const model = currentUser().isAdmin ? MODEL : PLAYER_MODEL;
+  const haiku = isHaiku(model);
+  return {
+    model,
+    extra: haiku ? {} : { betas: ["server-side-fallback-2026-07-01"] as Anthropic.AnthropicBeta[], fallbacks: "default" as const },
+    price: haiku ? HAIKU_PRICE : undefined,
+    haiku,
+  };
+}
 
 // ---------- system prompt (frozen) ----------
 
@@ -136,6 +152,12 @@ const TOOLS: Anthropic.Beta.BetaToolUnion[] = [
   ...customTools,
   { type: "web_search_20260209", name: "web_search", max_uses: 4, allowed_domains: RESEARCH_DOMAINS },
   { type: "web_fetch_20260209", name: "web_fetch", max_uses: 4, allowed_domains: RESEARCH_DOMAINS },
+];
+// Haiku takes the basic web search and fetch tools (the 2026 versions with filtering are for Opus and Sonnet).
+const HAIKU_TOOLS: Anthropic.Beta.BetaToolUnion[] = [
+  ...customTools,
+  { type: "web_search_20250305", name: "web_search", max_uses: 4, allowed_domains: RESEARCH_DOMAINS },
+  { type: "web_fetch_20250910", name: "web_fetch", max_uses: 4, allowed_domains: RESEARCH_DOMAINS },
 ];
 
 function toProfile(a: z.infer<typeof attackSchema>): AttackProfile {
@@ -400,19 +422,19 @@ export async function askCoach(
   const toolsUsed: string[] = [];
   let finalText = "";
 
+  const coach = coachModel();
   for (let iteration = 0; iteration < 12; iteration++) {
     const response = await anthropic().beta.messages.create({
-      model: MODEL,
+      model: coach.model,
       max_tokens: 16000,
       system: SYSTEM,
-      tools: TOOLS,
+      tools: coach.haiku ? HAIKU_TOOLS : TOOLS,
       messages,
       cache_control: { type: "ephemeral" },
       output_config: { effort: opts.effort ?? "medium" },
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
+      ...coach.extra,
     });
-    await recordUsage(response.usage);
+    await recordUsage(response.usage, coach.price);
     messages.push({ role: "assistant", content: response.content as Block[] });
 
     for (const block of response.content) {
@@ -532,17 +554,17 @@ export async function turnTips(ctx: CoachContext, round: number, side: "me" | "o
         } Rewrite the plan for the rest of this turn (the ${event.phase} phase and the phases after it) around what happened; leave earlier phases empty. The headline says what changes.`
       : ask,
   });
+  const coach = coachModel();
   const response = await anthropic().beta.messages.create({
-    model: MODEL,
+    model: coach.model,
     max_tokens: 16000,
     system: TIPS_SYSTEM,
     messages: [{ role: "user", content }],
     cache_control: { type: "ephemeral" },
     output_config: { effort: "low", format: { type: "json_schema", schema: tipsSchema } },
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    ...coach.extra,
   });
-  await recordUsage(response.usage);
+  await recordUsage(response.usage, coach.price);
   console.log(`turn tips: ${Date.now() - started} ms, stop ${response.stop_reason}, ${response.usage?.output_tokens ?? "?"} output tokens`);
   if (response.stop_reason === "refusal") throw new Error("The coach couldn't write tips for this turn.");
   if (response.stop_reason === "max_tokens") throw new Error("The coach's answer was cut off. Try again.");
@@ -608,19 +630,19 @@ export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {
         ? `The game is under way: battle round ${s.round}, ${s.vp.me}-${s.vp.opponent} VP (me-opponent). Rewrite my game plan from here, using the game state, the log and the table photo if there is one: what has changed, the threats that are left, and a new plan for rounds ${s.round}-5. For rounds already played, one line on what happened.`
         : "Write my game plan for this game.",
   });
+  const coach = coachModel();
   const response = await anthropic()
     .beta.messages.stream({
-      model: MODEL,
+      model: coach.model,
       max_tokens: 32000,
       system: PLAN_SYSTEM,
       messages: [{ role: "user", content }],
       cache_control: { type: "ephemeral" },
       output_config: { effort: "medium", format: { type: "json_schema", schema: planSchema } },
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
+      ...coach.extra,
     })
     .finalMessage();
-  await recordUsage(response.usage);
+  await recordUsage(response.usage, coach.price);
   console.log(`game plan: ${Date.now() - started} ms, stop ${response.stop_reason}, ${response.usage?.output_tokens ?? "?"} output tokens`);
   if (response.stop_reason === "refusal") throw new Error("The coach couldn't write a plan for this game.");
   if (response.stop_reason === "max_tokens") throw new Error("The plan came out too long. Try again.");
