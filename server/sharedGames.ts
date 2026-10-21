@@ -10,6 +10,7 @@ import { flipGame } from "../shared/perspective.ts";
 import { derive } from "../shared/scoring.ts";
 import type { ArmyList, Game } from "../shared/types.ts";
 import { currentUser } from "./context.ts";
+import { notify } from "./notices.ts";
 import { Collection } from "./store.ts";
 
 interface GameLink {
@@ -121,7 +122,7 @@ export async function shareGame(o: OpenGame): Promise<OpenGame> {
   if (o.game.share?.token) return o;
   const token = crypto.randomBytes(16).toString("hex");
   await invites.save({ id: token, gameId: o.game.id, ownerPrefix: o.prefix });
-  const share = { ownerName: o.game.myName || currentUser().name, players: [], ...o.game.share, token };
+  const share = { ownerName: o.game.myName || currentUser().name, ownerId: currentUser().id, players: [], ...o.game.share, token };
   return { ...o, game: await save(o, { ...o.game, share }) };
 }
 
@@ -148,6 +149,7 @@ export async function joinGame(token: string): Promise<string> {
     // The first player to join is the opponent: use their name if none was typed.
     const opponentName = first && !game.opponentName && me.name ? me.name : game.opponentName;
     await save({ game, prefix: invite.ownerPrefix, role: "owner" }, { ...game, share, opponentName });
+    if (game.share.ownerId) await notify([game.share.ownerId], `${me.name || "Your opponent"} joined your game${game.battleplan ? ` (${game.battleplan})` : ""}.`, `#/games/${game.id}`);
   }
   await linksIn(me.prefix).save({ id: game.id, ownerPrefix: invite.ownerPrefix });
   return game.id;

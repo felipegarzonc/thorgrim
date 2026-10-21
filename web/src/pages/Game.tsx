@@ -17,6 +17,7 @@ import { battleplanInfo } from "../../../shared/battleplans.ts";
 import { BattleplanCard } from "../battleplanView.tsx";
 import { drawResult, shareImage, type ShareRow } from "../shareImage.ts";
 import { WarscrollCard } from "./Lists.tsx";
+import { BattleReportCard } from "./report.tsx";
 
 type Step = string;
 const ROUND_STEPS = Array.from({ length: BATTLE_ROUNDS }, (_, i) => `round-${i + 1}`);
@@ -222,7 +223,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
             openCoach={() => setSheet("coach")}
           />
         )}
-        {current === "results" && <ResultsStep game={game} lists={lists} mutate={mutate} openCoach={() => setSheet("coach")} />}
+        {current === "results" && <ResultsStep game={game} lists={lists} mutate={mutate} saved={() => saving.current} openCoach={() => setSheet("coach")} />}
       </div>
 
       <footer className="step-bar">
@@ -1553,7 +1554,7 @@ const CONCLUSIONS = [
   ["conceded-me", "I conceded"],
 ] as const;
 
-function ResultsStep({ game, lists, mutate, openCoach }: { game: Game; lists?: ArmyList[]; mutate: Mutate; openCoach: () => void }) {
+function ResultsStep({ game, lists, mutate, saved, openCoach }: { game: Game; lists?: ArmyList[]; mutate: Mutate; saved: () => Promise<unknown>; openCoach: () => void }) {
   const [conclusion, setConclusion] = useState<NonNullable<Game["finished"]>["conclusion"]>(game.finished?.conclusion ?? "played");
   const s = game.state;
   const rounds = s.rounds ?? [];
@@ -1703,6 +1704,7 @@ function ResultsStep({ game, lists, mutate, openCoach }: { game: Game; lists?: A
           <img src={image.url} alt={`Result image: ${summary}`} />
         </details>
       )}
+      <BattleReportCard game={game} mutate={mutate} saved={saved} />
     </div>
   );
 }

@@ -2825,3 +2825,251 @@ button.term:hover:not(:disabled) {
 .bp-scoring li {
   margin: 0.2rem 0;
 }
+
+/* ---------- battle report and club feed ---------- */
+.button.outline {
+  background: transparent;
+  border: 1px solid var(--me);
+  color: var(--me-text);
+  border-radius: 999px;
+}
+.button.ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.report-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+.report-card .field-label {
+  background: var(--panel);
+}
+.report-card label.field > textarea {
+  padding-top: 0.9rem;
+  line-height: 1.55;
+}
+.report-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+.report-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 0.5rem;
+}
+.report-photos figure {
+  position: relative;
+  margin: 0;
+  aspect-ratio: 1;
+}
+.report-photos img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.report-photos .photo-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-height: 32px;
+  width: 32px;
+  background: rgba(12, 14, 18, 0.75);
+}
+.report-photos .add-photo {
+  aspect-ratio: 1;
+  flex-direction: column;
+  border: 1px dashed var(--dash);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.story p {
+  margin: 0 0 0.75rem;
+  line-height: 1.6;
+}
+.post {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.post-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.post-avatar {
+  width: 2.2rem;
+  height: 2.2rem;
+  background: var(--me-soft);
+}
+.small-avatar {
+  width: 1.8rem;
+  height: 1.8rem;
+  font-size: 0.8rem;
+}
+.post-title {
+  margin: 0.2rem 0 0;
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+.post-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.post-photos {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  margin: 0 -1.1rem;
+  padding: 0 1.1rem;
+}
+.post-photos a {
+  flex: 0 0 auto;
+  scroll-snap-align: center;
+}
+.post-photos img {
+  height: 240px;
+  max-width: 82vw;
+  object-fit: cover;
+  border-radius: 12px;
+  display: block;
+}
+.post-photos a:only-child img {
+  width: 100%;
+  max-width: 100%;
+}
+.post-photos a:only-child {
+  flex: 1;
+}
+.post-score {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.6rem;
+}
+.post-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.post-side.right {
+  text-align: right;
+}
+.post-side small {
+  color: var(--muted);
+}
+.post-meta {
+  margin: 0;
+}
+.read-more {
+  align-self: flex-start;
+  min-height: 36px;
+  color: var(--me-text);
+}
+.post-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.post-actions .react {
+  min-height: 38px;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border-color: transparent;
+  gap: 0.3rem;
+}
+.post-actions .react.on {
+  background: var(--me-soft);
+  border-color: var(--me-line);
+}
+.post-actions .react .ico {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.comments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.6rem;
+}
+.comment {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+.comment p {
+  margin: 0.15rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.comment-form {
+  display: flex;
+  gap: 0.4rem;
+}
+.comment-form input {
+  flex: 1;
+  min-width: 0;
+}
+.post-owner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.6rem;
+}
+.notices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.notices a {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.8rem 0.9rem;
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+}
+.notices li.unread a {
+  background: var(--me-soft);
+  box-shadow: inset 3px 0 0 var(--me);
+}
+.bottom-nav a .ico-wrap {
+  position: relative;
+}
+.nav-dot {
+  position: absolute;
+  top: -2px;
+  right: 8px;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--bad);
+  color: #3a0d09;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.1rem;
+  text-align: center;
+}
+.public-report {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1rem 16px 3rem;
+}
+.public-foot {
+  text-align: center;
+  margin-top: 1.2rem;
+}

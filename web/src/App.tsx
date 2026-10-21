@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, LOGIN_EVENT } from "./api.ts";
 import { CalculatorPage } from "./pages/Calculator.tsx";
+import { CLUB_SEEN, ClubPage } from "./pages/Club.tsx";
+import { PublicReport } from "./pages/PublicReport.tsx";
 import { CoachChat } from "./pages/CoachChat.tsx";
 import { GamePage } from "./pages/Game.tsx";
 import { GamesPage } from "./pages/Games.tsx";
@@ -15,6 +17,7 @@ import { Icon, MetaContext, type IconName, type Meta } from "./ui.tsx";
 const TABS: [string, string, IconName][] = [
   ["home", "Home", "home"],
   ["games", "Games", "games"],
+  ["club", "Club", "club"],
   ["lists", "Lists", "lists"],
   ["library", "Rules", "rules"],
   ["ask", "Coach", "coach"],
@@ -39,6 +42,20 @@ export function App() {
   const [tab = "home", id, step] = route;
 
   const [needLogin, setNeedLogin] = useState(false);
+  const [unread, setUnread] = useState({ notices: 0, posts: 0 });
+
+  // What's new in the club, for the badge on its tab: checked now and then, and when a page says it was seen.
+  useEffect(() => {
+    if (!meta?.user || tab === "r") return;
+    const check = () => void api<typeof unread>("/club/unread").then(setUnread).catch(() => undefined);
+    check();
+    const t = setInterval(() => !document.hidden && check(), 60_000);
+    window.addEventListener(CLUB_SEEN, check);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener(CLUB_SEEN, check);
+    };
+  }, [meta?.user?.id, tab]);
 
   useEffect(() => {
     const on = () => setNeedLogin(true);
@@ -51,6 +68,7 @@ export function App() {
   const developer = !!meta?.user?.developer;
   const tabs = TABS.filter(([key]) => key !== "library" || developer);
   if (tab === "join" && id) return <Join token={id} />;
+  if (tab === "r" && id) return <PublicReport token={id} />;
   if (needLogin) return <Login />;
   if (tab === "play" && id) return <JoinGame token={id} />;
 
@@ -84,6 +102,7 @@ export function App() {
         )}
         {tab === "home" && <HomePage />}
         {tab === "games" && <GamesPage />}
+        {tab === "club" && <ClubPage postId={id} unreadNotices={unread.notices} />}
         {tab === "lists" && <ListsPage selectedId={id} />}
         {tab === "library" && developer && <LibraryPage />}
         {tab === "library" && meta && !developer && <Redirect to="#/home" />}
@@ -115,6 +134,7 @@ export function App() {
           <a key={key} href={`#/${key}`} className={tab === key ? "active" : ""} aria-current={tab === key ? "page" : undefined}>
             <span className="ico-wrap">
               <Icon name={icon} />
+              {key === "club" && unread.notices + unread.posts > 0 && <span className="nav-dot">{Math.min(unread.notices + unread.posts, 99)}</span>}
             </span>
             {label}
           </a>

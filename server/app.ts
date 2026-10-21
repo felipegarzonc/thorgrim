@@ -14,7 +14,9 @@ import { diff, type Op } from "../shared/patch.ts";
 import type { ArmyList, Game, GameState, LibraryDoc } from "../shared/types.ts";
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
-import { askCoach, conversations, gamePlan, PROMPTS, resetConversation, turnTips } from "./coach.ts";
+import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips } from "./coach.ts";
+import { addComment, deleteComment, deletePost, feed, FeedError, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, sharePost, unread, unsharePost } from "./feed.ts";
+import { markNoticesRead, myNotices } from "./notices.ts";
 import { gameData, listRules, warscrollText } from "./data.ts";
 import {
   accountSettings,
@@ -106,6 +108,7 @@ async function accountCtx(userId: string): Promise<UserCtx> {
 app.use("/api", async (req, res, next) => {
   if (missingPassword) return res.status(503).json({ error: "Set APP_ACCESS_KEY (the app password, 8+ characters) in the hosting settings, then redeploy." });
   if (req.path.startsWith("/auth/")) return next(); // sign-in routes check for themselves
+  if (req.path.startsWith("/public/")) return next(); // shared battle reports: anyone with the link
   if (tooMany(req)) return res.status(429).json({ error: "Too many wrong passwords. Try again in 15 minutes." });
   try {
     const master = req.get("x-access-key") ?? (typeof req.query.key === "string" ? req.query.key : undefined);
@@ -607,6 +610,16 @@ app.post("/api/games/:id/plan", async (req, res) => {
   const replan = !!req.body?.replan;
   res.json({ job: await startJob("plan", () => gamePlan({ game, myList, opponentList }, { replan })) });
 });
+// The coach's story of the game, from its recorded facts and photos. The page stores it with the game.
+app.post("/api/games/:id/report", async (req, res) => {
+  const o = await openOr404(req, res);
+  if (!o) return;
+  const game = viewGame(o);
+  const [myList, opponentList] = await gameLists(o);
+  const tone = (["saga", "report", "banter"] as const).find((t) => t === req.body?.tone) ?? "report";
+  await checkBudget();
+  res.json({ job: await startJob("report", () => battleReport({ game, myList, opponentList }, tone, game.report?.photos ?? [])) });
+});
 // Poll a background coach request (see server/jobs.ts).
 app.get("/api/jobs/:id", async (req, res) => {
   const job = await jobs.get(param(req, "id"));
@@ -644,6 +657,50 @@ app.post("/api/coach/:id", async (req, res) => {
   res.json(answer);
 });
 
+// ---------- club feed (server/feed.ts) and notifications ----------
+
+app.get("/api/feed", async (_req, res) => res.json(await feed()));
+// Post the game's battle report (or update its post).
+app.post("/api/feed", async (req, res) => {
+  const o = await openGame(String(req.body?.gameId ?? ""));
+  if (!o) return res.status(404).json({ error: "Game not found" });
+  res.json(postView(await publishReport(o)));
+});
+app.post("/api/feed/seen", async (_req, res) => {
+  await markFeedSeen();
+  res.json({ ok: true });
+});
+app.get("/api/feed/:id", async (req, res) => res.json(postView(await getPost(param(req, "id")))));
+app.delete("/api/feed/:id", async (req, res) => {
+  await deletePost(param(req, "id"));
+  res.json({ ok: true });
+});
+app.post("/api/feed/:id/react", async (req, res) => res.json(postView(await react(param(req, "id"), String(req.body?.emoji ?? "")))));
+app.post("/api/feed/:id/comments", async (req, res) => res.json(postView(await addComment(param(req, "id"), String(req.body?.text ?? "")))));
+app.delete("/api/feed/:id/comments/:commentId", async (req, res) => res.json(postView(await deleteComment(param(req, "id"), param(req, "commentId")))));
+app.post("/api/feed/:id/share", async (req, res) => res.json(postView(await sharePost(param(req, "id")))));
+app.delete("/api/feed/:id/share", async (req, res) => res.json(postView(await unsharePost(param(req, "id")))));
+app.get("/api/feed/:id/photo/:n", async (req, res) => {
+  const data = await readPostPhoto(param(req, "id"), Number(param(req, "n")));
+  return data ? res.type("image/jpeg").set("cache-control", "private, max-age=86400").send(data) : res.status(404).end();
+});
+app.get("/api/club/unread", async (_req, res) => res.json(await unread()));
+app.get("/api/notices", async (_req, res) => res.json(await myNotices()));
+app.post("/api/notices/read", async (_req, res) => {
+  await markNoticesRead();
+  res.json({ ok: true });
+});
+// A battle report shared outside the club (no sign-in).
+app.get("/api/public/reports/:token", async (req, res) => {
+  const found = await publicPost(param(req, "token"));
+  return found ? res.json(found.view) : res.status(404).json({ error: "This report isn't shared any more." });
+});
+app.get("/api/public/reports/:token/photo/:n", async (req, res) => {
+  const found = await publicPost(param(req, "token"));
+  const data = found && (await readPostPhoto(found.post.id, Number(param(req, "n"))));
+  return data ? res.type("image/jpeg").set("cache-control", "public, max-age=86400").send(data) : res.status(404).end();
+});
+
 // ---------- calculator (same engine the coach uses) ----------
 
 app.post("/api/calc/damage", (req, res) => {
@@ -667,6 +724,7 @@ if (fs.existsSync(path.join(dist, "index.html"))) {
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof AuthError) return res.status(err.status).json({ error: err.message, needsLogin: err.status === 401 });
+  if (err instanceof FeedError) return res.status(err.status).json({ error: err.message });
   if (/authentication method/i.test(err.message)) {
     return res.status(503).json({ error: "The coach needs your Claude API key.", needsKey: true });
   }

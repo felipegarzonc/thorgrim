@@ -254,11 +254,75 @@ export interface Game {
   listSpaces?: Record<string, string>;
   /** How the signed-in player sees this game (sent to the page only). */
   access?: GameAccess;
+  /** The story of the game, written by the coach at the end (one per game, shared by its players). */
+  report?: BattleReport;
+}
+
+export type ReportTone = "saga" | "report" | "banter";
+
+export interface BattleReport {
+  title: string;
+  story: string;
+  tone: ReportTone;
+  /** Storage paths of the battle photos (see /api/games/:id/photo). */
+  photos: string[];
+  writtenAt?: string;
+  /** The club feed post made from it, once posted. */
+  postId?: string;
+}
+
+/** A battle report posted to the club feed (members only). */
+export interface FeedPost {
+  id: string;
+  createdAt: string;
+  updatedAt?: string;
+  authorId: string;
+  authorName: string;
+  gameId: string;
+  /** Account ids of the game's players (for notifications and editing). */
+  playerIds: string[];
+  title: string;
+  story: string;
+  tone: ReportTone;
+  /** Number of photos (served by /api/feed/:id/photo/:n). */
+  photos: number;
+  /** The poster's side first. */
+  sides: { name: string; faction: string; vp: number }[];
+  result: "win" | "loss" | "draw" | null;
+  battleplan: string;
+  points?: number;
+  date?: string;
+  /** Highlights of the game, e.g. "Comeback win" or "3 wins in a row". */
+  badges: string[];
+  /** Emoji -> account ids who reacted. */
+  reactions: Record<string, string[]>;
+  comments: { id: string; authorId: string; authorName: string; text: string; at: string }[];
+  /** Secret for the public share link, when one was made. */
+  shareToken?: string;
+}
+
+/** A post as the signed-in member sees it. */
+export interface FeedPostView extends Omit<FeedPost, "reactions" | "shareToken" | "playerIds"> {
+  reactions: { emoji: string; count: number; mine: boolean }[];
+  canEdit: boolean;
+  /** The share link's secret (the game's players only). */
+  shareToken?: string;
+}
+
+/** Something that happened for this member (a comment, a report of their game...). */
+export interface Notice {
+  id: string;
+  at: string;
+  text: string;
+  href: string;
+  read?: boolean;
 }
 
 export interface GameShare {
   /** The join link's secret; unset when sharing was stopped. */
   token?: string;
+  /** The creator's account id (for notifications). */
+  ownerId?: string;
   ownerName: string;
   players: { id: string; name: string; prefix: string }[];
 }

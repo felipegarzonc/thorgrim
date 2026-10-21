@@ -10,7 +10,7 @@ import crypto from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { castChance, chargeChance, damageBySave, expectedDamage, parseCrit, parseTarget, simulate, type AttackProfile } from "../engine/dice.ts";
-import type { ArmyList, Game, GamePlan, TurnTips } from "../shared/types.ts";
+import type { ArmyList, Game, GamePlan, ReportTone, TurnTips } from "../shared/types.ts";
 import { battleplanText } from "../shared/battleplans.ts";
 import { isBattleplanDoc, scoringFor } from "../shared/season.ts";
 import { factionRulesText, findUnit, gameData, listDossier, matchedPlayRule, norm, warscrollText } from "./data.ts";
@@ -18,6 +18,7 @@ import { blobs } from "./blobs.ts";
 import { docPath, getPages, libraryDocs, listDocuments, parsePageRange, searchLibrary } from "./library.ts";
 import { checkBudget, recordUsage } from "./accounts.ts";
 import { anthropic } from "./anthropic.ts";
+import { reportFacts, reportSides } from "./report.ts";
 import { Collection } from "./store.ts";
 
 type Msg = Anthropic.Beta.BetaMessageParam;
@@ -628,4 +629,65 @@ export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {
     .map((b) => b.text)
     .join("");
   return { ...(JSON.parse(text) as Omit<GamePlan, "basis" | "generatedAt">), generatedAt: new Date().toISOString() };
+}
+
+// ---------- battle report ----------
+
+const REPORT_SYSTEM = `You write battle reports of Warhammer Age of Sigmar games for a gaming club's private feed, read on phones by the club's members after the game.
+
+Tell what happened from the facts you are given: who went first, the score round by round, battle tactics completed, double turns, units lost, the log and notes. Rules:
+- Use only those facts. Never invent kills, dice rolls, unit deaths or moments that are not in them; where the facts are thin, keep it short rather than making things up. Photos are for colour (the table, the terrain, the armies' paint), not for new events.
+- Name the players by name and both factions; be fair to both sides, whoever posts it.
+- Do not quote rules text, warscroll text or battleplan text.
+- title: at most 8 words, evocative, no quotes around it.
+- story: 150-350 words in short paragraphs separated by a blank line; plain text, no headings or lists, no markdown.
+- Write in the language of the game's log and notes when they are not in English; otherwise in English.`;
+
+const TONES: Record<ReportTone, string> = {
+  saga: "Tone: an epic war saga, in the voice of a chronicler of the Mortal Realms. Dramatic, but every event must be true to the facts.",
+  report: "Tone: a straight match report, like a sports journalist: clear, round by round, with the key turning points.",
+  banter: "Tone: friendly club banter: light, funny, teasing both players kindly. Never mean.",
+};
+
+const reportSchema = {
+  type: "object",
+  properties: { title: { type: "string" }, story: { type: "string" } },
+  required: ["title", "story"],
+  additionalProperties: false,
+};
+
+/** The story of a game, from its recorded facts and the battle photos. */
+export async function battleReport(ctx: CoachContext, tone: ReportTone, photoPaths: string[]): Promise<{ title: string; story: string }> {
+  await checkBudget();
+  const started = Date.now();
+  const game = ctx.game!;
+  const content: Block[] = [{ type: "text", text: `<facts>\n${reportFacts(game, reportSides(game, ctx.myList, ctx.opponentList))}\n</facts>` }];
+  const paths = [...photoPaths, ...(game.state.tablePhoto ? [game.state.tablePhoto.path] : [])].slice(0, 8);
+  for (const p of paths) {
+    const data = await blobs().read(p);
+    if (data) content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: data.toString("base64") } });
+  }
+  if (paths.length) content.push({ type: "text", text: `${paths.length} photo(s) of the battle above.` });
+  content.push({ type: "text", text: `${TONES[tone] ?? TONES.report}\nWrite the battle report.` });
+  const response = await anthropic()
+    .beta.messages.stream({
+      model: MODEL,
+      max_tokens: 8000,
+      system: REPORT_SYSTEM,
+      messages: [{ role: "user", content }],
+      output_config: { effort: "medium", format: { type: "json_schema", schema: reportSchema } },
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+    })
+    .finalMessage();
+  await recordUsage(response.usage);
+  console.log(`battle report: ${Date.now() - started} ms, stop ${response.stop_reason}, ${response.usage?.output_tokens ?? "?"} output tokens`);
+  if (response.stop_reason === "refusal") throw new Error("The coach couldn't write a report for this game.");
+  if (response.stop_reason === "max_tokens") throw new Error("The report came out too long. Try again.");
+  const text = response.content
+    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+  const out = JSON.parse(text) as { title: string; story: string };
+  return { title: out.title.trim(), story: out.story.trim() };
 }
