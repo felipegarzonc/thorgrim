@@ -47,7 +47,7 @@ const MODEL = process.env.COACH_MODEL ?? "claude-opus-5-5";
 const SYSTEM = `You are an expert Warhammer Age of Sigmar (4th edition) coach. Your player plays Ogor Mawtribes in competitive matched play, using the current General's Handbook season. Your job is to help them make better decisions before, during and after games, and to make them a better player over time, not to play for them.
 
 How you work:
-- Ground every rules statement in a source: the army data (warscrolls and faction rules from BSData), or the player's own rules library (core rules, General's Handbook, battletomes, battleplans, maps) via search_rules / read_rules_pages. Cite briefly, e.g. [Warscroll: Tyrant] or [General's Handbook p.34]. If you cannot find a rule, say so plainly and give your best understanding marked as unverified. Never invent rules text.
+- Ground every rules statement in a source: the army data (warscrolls and faction rules from BSData), or the app's rules library (core rules, General's Handbook, battletomes, battleplans, maps) via search_rules / read_rules_pages. Cite briefly, e.g. [Warscroll: Tyrant] or [General's Handbook p.34]. If you cannot find a rule, say so plainly and give your best understanding marked as unverified. Never invent rules text.
 - Use the calculator tools for every probability or damage number (damage_calc, charge_odds, cast_odds). Do not estimate odds in your head.
 - The player's messages carry the current game state (round, priority, CP, VP, fury and rage dice, battle tactic progress, unit damage). Treat it as the truth for the board, and ask for what you need (distances, objective control, positions) when it matters for the decision.
 - Think about the opponent too: what their army can do in response (reactive commands, Counter-charge, Covering Fire, All-out Defence, redeploys, spells, shooting), how many CP they hold, and what they will score.
@@ -60,7 +60,7 @@ Answer style:
 - Explain the why in one sentence so the player learns the principle.
 - Use English.
 
-Web research: you can search and fetch a small set of community sites. Wahapedia (wahapedia.ru/aos4/...) has the core rules, the General's Handbook and faction pages: use it to check a rule when the player's library and the army data don't cover it, and cite the page URL. Prefer the player's own uploaded books when both have it. Listhammer has recent tournament lists, Woehammer faction win rates, Goonhammer and others tactics articles: use them for meta and matchup questions, and say how recent the data is.`;
+Web research: you can search and fetch a small set of community sites. Wahapedia (wahapedia.ru/aos4/...) has the core rules, the General's Handbook and faction pages: use it to check a rule when the player's library and the army data don't cover it, and cite the page URL. Prefer the rules library when both have it. Listhammer has recent tournament lists, Woehammer faction win rates, Goonhammer and others tactics articles: use them for meta and matchup questions, and say how recent the data is.`;
 
 // ---------- tools ----------
 
@@ -111,7 +111,7 @@ type ToolName = keyof typeof toolSchemas;
 
 const toolDescriptions: Record<ToolName, string> = {
   search_rules:
-    "Search the player's uploaded rules library (core rules, General's Handbook, battletomes, battleplans). Returns matching passages with document id, title and page. Use it before answering any rules question that the army data does not cover.",
+    "Search the rules library (core rules, General's Handbook, battletomes, battleplans). Returns matching passages with document id, title and page. Use it before answering any rules question that the army data does not cover.",
   read_rules_pages: "Read full text of specific pages of a library PDF (use after search_rules, or for battleplan pages listed in the dossier).",
   lookup_warscroll: "Get a full warscroll (stats, weapons, abilities with timing) for any unit in the game by name.",
   faction_rules:
@@ -165,7 +165,7 @@ async function runTool(name: string, input: unknown): Promise<string> {
     case "search_rules": {
       const { query, limit } = args as z.infer<typeof toolSchemas.search_rules>;
       const hits = await searchLibrary(query, Math.min(limit ?? 6, 10));
-      if (!hits.length) return "No matches in the rules library. (The player may not have uploaded that book yet.)";
+      if (!hits.length) return "No matches in the rules library. (That book may not be in the library yet.)";
       return hits.map((h) => `[${h.title} p.${h.page} | doc_id=${h.docId}]\n${h.text}`).join("\n\n---\n\n");
     }
     case "read_rules_pages": {
@@ -244,7 +244,7 @@ export interface CoachContext {
 
 async function libraryCatalogue(): Promise<string> {
   const docs = await listDocuments();
-  if (!docs.length) return "The rules library is empty: the player has not uploaded any rules yet. Say so when a rules question needs a book.";
+  if (!docs.length) return "The rules library is empty: no books have been added yet. Say so when a rules question needs a book.";
   return docs.map((d) => `- ${d.title} [${d.category}, ${d.kind}${d.kind === "pdf" ? `, ${d.pages} pages` : ""}] doc_id=${d.id}`).join("\n");
 }
 

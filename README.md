@@ -3,7 +3,7 @@
 A personal Age of Sigmar (4th edition) coach for competitive Ogor Mawtribes play. It's a web app you can open on a computer to prepare and on your phone at the table.
 
 - **Army data** for every faction (warscrolls, weapons, abilities with timing, points, battle tactic cards) comes from the community [BSData](https://github.com/BSData/age-of-sigmar-4th) files.
-- **Your rules library**: upload the PDFs you own (core rules, General's Handbook, battletome, FAQs) and images (battleplan cards, maps, a photo of the table). PDFs are indexed page by page, so the coach can search them and cite pages.
+- **Rules library**: the core rules, General's Handbook, battletomes, FAQs and battleplan cards/maps the coach reads, managed by the developers (see *Managing the rules library*). PDFs are indexed page by page, so the coach can search them and cite pages; players can read and search them.
 - **Lists**: paste your list and your opponent's from the GW app, New Recruit or Listhammer. Units are matched to warscrolls automatically.
 - **Games**: pick both lists, the battleplan, and the rule pages and maps for that game. The tracker covers round, priority/double turn, phase, CP, VP, Fury and Rage dice, battle tactic progress (Affray / Strike / Domination), unit damage and a log.
 - **Phase checklist** ("don't forget"): the abilities you and your opponent can use in the current phase, taken from the warscrolls' timing.
@@ -44,11 +44,26 @@ Online with Supabase, the app has accounts so several people can track their own
 
 - **First time:** open the app, sign in with the app password (`APP_ACCESS_KEY`), then go to your profile (the round badge on Home) and create your admin account. It keeps everything already in the app.
 - **Inviting:** Profile → *Invite a player* creates a one-time link (valid 14 days) to send by WhatsApp or email. They pick their own email and password. Nobody can sign up without a link.
-- **Each player** has their own lists, games and coach conversations. The rules library is shared (the admin's books) plus each player's own uploads, which only they see.
+- **Each player** has their own lists, games and coach conversations. The rules library is shared and read-only for players.
 - **Coach costs** use the admin's Claude key. Each player has a monthly limit (default $5, estimated from Claude's prices), set per player in the profile page; admins have none.
 - **Forgotten password:** the admin gives a new one from the profile page (no email is sent).
 
 Accounts use Supabase Auth in the same Supabase project; nothing else to configure. On your own computer (no Supabase) there are no accounts.
+
+### Managing the rules library (developers)
+
+Players can't upload or remove books. Developers manage the library from the command line with the app password:
+
+```bash
+export THORGRIM_URL=https://thorgrim.vercel.app APP_ACCESS_KEY=…   # the app password
+npm run library -- list
+npm run library -- upload ./ghb-2026-27.pdf --title "General's Handbook 2026-27" --category season
+npm run library -- upload ./into-the-fire.jpg --title "Into the Fire" --category battleplan
+npm run library -- read <id>      # finish reading scanned pages with Claude
+npm run library -- delete <id>
+```
+
+Categories: `core`, `season`, `battletome`, `battleplan`, `map`, `other`. Battleplan cards and maps are matched to games by the battleplan's name in the title. Signing in to the app with the app password (instead of an account) also shows the upload form on the Rules page.
 
 Alternative: the repository also has a Dockerfile and a Render blueprint (`render.yaml`) for a server with a persistent disk (Render Starter, about $7/month plus disk). Set `APP_ACCESS_KEY` there too.
 

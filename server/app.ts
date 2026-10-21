@@ -41,7 +41,7 @@ import {
 } from "./accounts.ts";
 import { currentUser, LOCAL_USER, runAs, userPrefix, type UserCtx } from "./context.ts";
 import { jobs, startJob } from "./jobs.ts";
-import { addDocument, canEdit, deleteDocument, docPath, finishUpload, getPages, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
+import { addDocument, deleteDocument, docPath, finishUpload, getPages, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
 import { Collection, newId } from "./store.ts";
 import { backgroundJobs, resumePendingTranscriptions, transcribeDocument, transcribeStep } from "./transcribe.ts";
@@ -92,7 +92,7 @@ const failed = (req: Request) => {
 
 async function ownerCtx(): Promise<UserCtx> {
   const owner = accountsEnabled() ? (await listAccounts()).find((a) => a.owner) : undefined;
-  return { id: owner?.id ?? "owner", name: owner?.name ?? "", isAdmin: true, prefix: "" };
+  return { id: owner?.id ?? "owner", name: owner?.name ?? "", isAdmin: true, prefix: "", developer: true };
 }
 async function accountCtx(userId: string): Promise<UserCtx> {
   const acc = (await listAccounts()).find((a) => a.id === userId);
@@ -122,6 +122,11 @@ app.use("/api", async (req, res, next) => {
     next(e);
   }
 });
+
+// The rules library is managed by the developers only: with the app password
+// (scripts/library.ts uses it) or on your own computer. Players just read it.
+const requireDeveloper = (_req: Request, res: Response, next: NextFunction) =>
+  currentUser().developer ? next() : res.status(403).json({ error: "The rules library is managed by the Thorgrim team." });
 
 const requireAdmin = (_req: Request, res: Response, next: NextFunction) =>
   currentUser().isAdmin ? next() : res.status(403).json({ error: "Only the admin can do that." });
@@ -285,7 +290,7 @@ app.get("/api/meta", (_req, res) => {
   const d = gameData();
   const u = currentUser();
   res.json({
-    user: { id: u.id, name: u.name, isAdmin: u.isAdmin },
+    user: { id: u.id, name: u.name, isAdmin: u.isAdmin, developer: !!u.developer },
     accounts: accountsEnabled(),
     source: d.source,
     commit: d.commit,
@@ -360,10 +365,10 @@ const startReading = async (doc: LibraryDoc) => {
   if (doc.transcription && hasCredentials() && backgroundJobs()) void transcribeDocument(doc.id);
 };
 
-app.get("/api/library", async (_req, res) => res.json(newestFirst(await listDocuments()).map((d) => ({ ...d, canEdit: canEdit(d) }))));
+app.get("/api/library", async (_req, res) => res.json(newestFirst(await listDocuments()).map((d) => ({ ...d, canEdit: !!currentUser().developer }))));
 
 // Upload in one request (used for small files and by older clients).
-app.post("/api/library", upload.single("file"), async (req, res) => {
+app.post("/api/library", upload.single("file"), requireDeveloper, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file" });
   const doc = await addDocument({
     title: String(req.body.title ?? ""),
@@ -380,7 +385,7 @@ app.post("/api/library", upload.single("file"), async (req, res) => {
 // 1) reserve the document and get where to send the file,
 // 2) the browser sends the file there (storage, or /raw below locally),
 // 3) finish: the server reads the file and indexes it.
-app.post("/api/library/uploads", async (req, res) => {
+app.post("/api/library/uploads", requireDeveloper, async (req, res) => {
   const b = req.body as { title?: string; category?: LibraryDoc["category"]; filename?: string; mime?: string };
   if (!b.filename) return res.status(400).json({ error: "Missing file name" });
   const { doc, target } = await startUpload(
@@ -389,14 +394,14 @@ app.post("/api/library/uploads", async (req, res) => {
   );
   res.json({ doc, target });
 });
-app.put("/api/library/:id/raw", express.raw({ type: () => true, limit: "150mb" }), async (req, res) => {
+app.put("/api/library/:id/raw", requireDeveloper, express.raw({ type: () => true, limit: "150mb" }), async (req, res) => {
   const doc = await libraryDocs.get(param(req, "id"));
   if (!doc?.uploading) return res.status(404).json({ error: "No upload in progress for this document" });
   if (blobs().kind !== "file") return res.status(400).json({ error: "Upload straight to storage instead" });
   await blobs().write(docPath(doc), req.body as Buffer, doc.mime);
   res.json({ ok: true });
 });
-app.post("/api/library/:id/finish", async (req, res) => {
+app.post("/api/library/:id/finish", requireDeveloper, async (req, res) => {
   const doc = await finishUpload(param(req, "id"));
   await startReading(doc);
   res.json(doc);
@@ -404,10 +409,9 @@ app.post("/api/library/:id/finish", async (req, res) => {
 
 // Read photographed/scanned pages: in the background on your computer; online
 // one batch per call (the Rules page keeps calling while it's open).
-app.post("/api/library/:id/transcribe", async (req, res) => {
+app.post("/api/library/:id/transcribe", requireDeveloper, async (req, res) => {
   const doc = await libraryDocs.get(param(req, "id"));
   if (!doc?.transcription) return res.status(404).json({ error: "Nothing to transcribe" });
-  if (!canEdit(doc)) return res.status(403).json({ error: "The admin reads the shared books." });
   if (!hasCredentials()) return res.status(503).json({ error: "Reading scanned pages needs your Claude API key (paste it on the Ask page)." });
   if (backgroundJobs()) {
     void transcribeDocument(doc.id);
@@ -415,7 +419,7 @@ app.post("/api/library/:id/transcribe", async (req, res) => {
   }
   res.json({ ok: true, transcription: await transcribeStep(doc.id) });
 });
-app.post("/api/library/text", async (req, res) => {
+app.post("/api/library/text", requireDeveloper, async (req, res) => {
   const doc = await addDocument({
     title: String(req.body.title ?? "Notes"),
     category: (req.body.category ?? "other") as LibraryDoc["category"],
@@ -436,9 +440,8 @@ app.get("/api/library/:id/file", async (req, res) => {
   if (!data) return res.status(404).end();
   res.type(doc.mime).send(data);
 });
-app.delete("/api/library/:id", async (req, res) => {
+app.delete("/api/library/:id", requireDeveloper, async (req, res) => {
   const doc = await libraryDocs.get(param(req, "id"));
-  if (doc && !canEdit(doc)) return res.status(403).json({ error: "This book is in the shared library: only the admin can remove it." });
   await deleteDocument(param(req, "id"));
   res.json({ ok: true });
 });

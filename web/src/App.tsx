@@ -68,7 +68,13 @@ export function App() {
         )}
         {meta && !meta.coachReady && (tab === "library" || tab === "calc") && (
           <p className="notice small">
-            The coach is off until you add your Claude API key. <a href="#/ask">Set it up</a>
+            {meta.user?.isAdmin ? (
+              <>
+                The coach is off until you add your Claude API key. <a href="#/ask">Set it up</a>
+              </>
+            ) : (
+              "The coach is off: the admin needs to add the Claude API key."
+            )}
           </p>
         )}
         {tab === "home" && <HomePage />}
@@ -121,7 +127,7 @@ function AskIntro() {
       </p>
       <ul className="small muted">
         <li>Knows every faction's warscrolls and points (army data).</li>
-        <li>Searches the books you uploaded under Rules and cites pages.</li>
+        <li>Searches the rules library (core rules, General's Handbook, battletomes) and cites pages.</li>
         <li>Runs the numbers with the calculator, and can check Wahapedia, Listhammer and Woehammer.</li>
       </ul>
       <p className="small muted">Try one of these:</p>

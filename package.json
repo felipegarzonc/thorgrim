@@ -12,7 +12,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build:server": "esbuild server/app.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist-server/app.mjs",
-    "vercel-build": "npm run data && npm run build && npm run build:server"
+    "vercel-build": "npm run data && npm run build && npm run build:server",
+    "library": "tsx scripts/library.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

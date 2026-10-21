@@ -36,8 +36,6 @@ export const libraryDocs = {
   },
 };
 
-/** Can the current user change or remove this entry? (their own, or any shared one as admin) */
-export const canEdit = (doc: LibraryDoc) => (isShared(doc) ? currentUser().isAdmin : doc.owner === currentUser().id);
 
 const pagesPath = (doc: Pick<LibraryDoc, "id" | "owner">) => `${prefixOf(doc)}library-files/${doc.id}.pages.json`;
 export const docPath = (doc: Pick<LibraryDoc, "id" | "filename" | "owner">) =>
@@ -61,8 +59,8 @@ function newDoc(input: NewDoc): LibraryDoc {
     mime: input.mime || "application/octet-stream",
     pages: 1,
     createdAt: new Date().toISOString(),
-    // Admins add to the shared library; players to their own.
-    owner: currentUser().isAdmin ? "shared" : currentUser().id,
+    // Everything uploaded goes to the shared library (developers manage it).
+    owner: "shared",
   };
 }
 

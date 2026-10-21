@@ -11,10 +11,12 @@ export interface UserCtx {
   isAdmin: boolean;
   /** Storage prefix for this user's records: "" for the owner (the original data), "users/<id>/" for everyone else. */
   prefix: string;
+  /** Can manage the rules library: signed in with the app password (developers), or the app on your own computer. */
+  developer?: boolean;
 }
 
 /** On your own computer without accounts: one user who owns everything. */
-export const LOCAL_USER: UserCtx = { id: "local", name: "", isAdmin: true, prefix: "" };
+export const LOCAL_USER: UserCtx = { id: "local", name: "", isAdmin: true, prefix: "", developer: true };
 
 const als = new AsyncLocalStorage<UserCtx>();
 

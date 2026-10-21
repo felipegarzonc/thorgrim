@@ -19,6 +19,8 @@ export function LibraryPage() {
   const [category, setCategory] = useState<LibraryDoc["category"]>("battletome");
   const [busy, setBusy] = useState<string | false>(false);
   const meta = useMeta();
+  // Only developers (app password, or the app on your own computer) manage the books.
+  const canManage = !!meta?.user?.developer;
   const [error, setError] = useState<string>();
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<{ docId: string; title: string; page: number; text: string }[]>();
@@ -93,6 +95,7 @@ export function LibraryPage() {
   // Pick up a read that stopped when the page was closed.
   useEffect(() => {
     if (meta?.backgroundJobs !== false || !meta.coachReady || driving.current) return;
+    if (!canManage) return;
     const next = docs?.find((d) => d.canEdit !== false && (d.transcription?.status === "running" || d.transcription?.status === "pending"));
     if (next) void drive(next);
   }, [docs, meta?.backgroundJobs, meta?.coachReady]);
@@ -111,7 +114,13 @@ export function LibraryPage() {
 
   return (
     <div className="stack">
-      <Card title="Upload rules you own">
+      {!canManage && (
+        <p className="muted small" style={{ margin: 0 }}>
+          The books and battleplan cards the coach reads. They are kept up to date by the Thorgrim team; search them here.
+        </p>
+      )}
+      {canManage && (
+      <Card title="Upload rules (developers)">
         <p className="muted">
           PDFs (core rules, General's Handbook, battletomes, FAQs) are indexed page by page so the coach can search them and cite pages. Photos of
           book pages and scanned PDFs work too: Claude reads those pages once after upload (about a minute per 10 pages). Images (battleplan cards,
@@ -142,9 +151,10 @@ export function LibraryPage() {
         </button>
         {error && <p className="error">{error}</p>}
       </Card>
+      )}
 
-      <Card title="Your rules library">
-        {!docs?.length && <p className="muted">Nothing uploaded yet: add your core rules, General's Handbook and battletome above.</p>}
+      <Card title="Books">
+        {!docs?.length && <p className="muted">No books in the library yet.</p>}
         {docs?.some((d) => d.kind === "pdf") && (
           <>
             <div className="row" style={{ marginTop: 0 }}>
@@ -214,7 +224,7 @@ function BookCard({ doc, category, onStart, onRemove }: { doc: LibraryDoc; categ
         </div>
       )}
       <span className="muted small">
-        <span className={`tag ${doc.owner && doc.owner !== "shared" ? "me" : ""}`}>{doc.owner && doc.owner !== "shared" ? "Yours" : "Shared"}</span> {category} · {size}
+        {category} · {size}
         {t?.status === "done" ? ` · ${total} scanned page${total > 1 ? "s" : ""} read` : ""}
         {t?.status === "running" ? (backgroundJobs === false ? " · keep this page open while it reads" : " · photos and scans are read once, then searchable") : ""}
         {t?.status === "failed" && t.error ? ` · ${t.error}` : ""}
