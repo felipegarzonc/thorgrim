@@ -54,3 +54,21 @@ describe("scoringFor", () => {
     expect(scoringFor("Hidden Under Ash-clouds", 1)).toBeNull();
   });
 });
+
+describe.skipIf(!hasData)("GW app extras", () => {
+  it("reads labelled units and skips the alliance header", () => {
+    const text = [
+      "My list 1990/2000 pts",
+      "Grand Alliance Destruction | Ogor Mawtribes | Maw-Cult Fanatics (10 Points)",
+      "Redd the Maw, High Slaughtermaster (200)",
+      "• General",
+      "Scourge of Aqshy: Huskard on Thundertusk (260)",
+    ].join("\n");
+    const r = parseList(text);
+    expect(r.unmatched).toEqual([]);
+    expect(r.faction).toBe("Ogor Mawtribes");
+    const huskard = r.units.find((u) => /Huskard/.test(u.name));
+    expect(huskard?.name).toBe("Huskard on Thundertusk (Scourge of Aqshy)");
+    expect(huskard?.points).toBe(260);
+  });
+});

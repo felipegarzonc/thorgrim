@@ -81,8 +81,19 @@ export function parseList(text: string, factionHint?: string): Pick<ArmyList, "f
     const qty = Number(QTY.exec(content)?.[1] ?? 1);
     const pm = LISTED_POINTS.exec(content);
     const listedPoints = pm ? Number(pm[1] ?? pm[2]) / qty : undefined;
-    const name = content.replace(QTY, "").replace(POINTS, "");
-    const unit = match(name);
+    let name = content.replace(QTY, "").replace(POINTS, "");
+    let label: string | undefined;
+    let unit = match(name);
+    // "Scourge of Aqshy: Huskard on Thundertusk (260)": a label before the unit.
+    const colon = name.lastIndexOf(":");
+    if (!unit && colon > 0 && !/^https?$/i.test(name.slice(0, colon).trim())) {
+      // The army data may have its own version, e.g. "Huskard on Thundertusk (Scourge of Aqshy)".
+      unit = match(`${name.slice(colon + 1)} (${name.slice(0, colon)})`) ?? match(name.slice(colon + 1));
+      if (unit) {
+        label = name.slice(0, colon).trim();
+        name = name.slice(colon + 1);
+      }
+    }
     if (unit) {
       for (let i = 0; i < qty; i++) {
         last = {
@@ -91,11 +102,14 @@ export function parseList(text: string, factionHint?: string): Pick<ArmyList, "f
           name: unit.name,
           reinforced: /reinforced/i.test(content),
           points: pointsFor(unit.id, faction) ?? pointsFor(unit.id, base),
-          notes: [],
+          notes: label ? [label] : [],
         };
         units.push(last);
         if (listedPoints !== undefined) listed.set(last, listedPoints);
       }
+    } else if (content.includes("|")) {
+      // GW app header, "Grand Alliance Destruction | Ogor Mawtribes | Maw-Cult Fanatics (10 Points)": not a unit.
+      last = undefined;
     } else if (UNIT_LINE.test(content) && !content.includes("/")) {
       // Looks like a unit line ("Something (150)") but we don't know it.
       unmatched.push(content);

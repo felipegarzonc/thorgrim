@@ -331,10 +331,18 @@ app.get("/api/units/:id", (req, res) => {
 
 // ---------- lists ----------
 
-app.get("/api/lists", async (_req, res) => res.json(newestFirst(await lists.list())));
+// Lists saved with lines the reader didn't know are read again (the reader
+// improves over time); kept when that recognises more.
+async function refreshList(l: ArmyList): Promise<ArmyList> {
+  if (!l.unmatched?.length || !l.rawText) return l;
+  const again = parseList(l.rawText, l.faction || undefined);
+  if (again.unmatched.length >= l.unmatched.length) return l;
+  return lists.save({ ...l, ...again, tacticCards: again.tacticCards?.length ? again.tacticCards : l.tacticCards });
+}
+app.get("/api/lists", async (_req, res) => res.json(newestFirst(await Promise.all((await lists.list()).map(refreshList)))));
 app.get("/api/lists/:id", async (req, res) => {
   const l = await lists.get(param(req, "id"));
-  return l ? res.json(l) : res.status(404).json({ error: "Not found" });
+  return l ? res.json(await refreshList(l)) : res.status(404).json({ error: "Not found" });
 });
 app.get("/api/lists/:id/rules", async (req, res) => {
   const l = await lists.get(param(req, "id"));
