@@ -244,6 +244,32 @@ export interface Game {
   state: GameState;
   log: { at: string; text: string }[];
   createdAt: string;
+  /** Goes up with every saved change, so a shared game's players can spot news. */
+  version?: number;
+  /** Who plays this game together (stored, never sent to the page). */
+  share?: GameShare;
+  /** Each joined player's own coach plan and tips (stored, never sent to the page). */
+  viewers?: Record<string, { plan?: GamePlan; tips?: GameState["tips"] }>;
+  /** Where lists picked by a joined player live (list id -> their storage space). */
+  listSpaces?: Record<string, string>;
+  /** How the signed-in player sees this game (sent to the page only). */
+  access?: GameAccess;
+}
+
+export interface GameShare {
+  /** The join link's secret; unset when sharing was stopped. */
+  token?: string;
+  ownerName: string;
+  players: { id: string; name: string; prefix: string }[];
+}
+
+export interface GameAccess {
+  role: "owner" | "player";
+  ownerName: string;
+  /** Names of the players who joined. */
+  players: string[];
+  /** The join link's secret (the creator only). */
+  token?: string;
 }
 
 /** Points of a list: its units plus the battle formation's cost. */

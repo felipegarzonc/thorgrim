@@ -10,6 +10,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import express, { type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 import { castChance, chargeChance, damageBySave, expectedDamage, simulate, type AttackProfile, type TargetProfile } from "../engine/dice.ts";
+import { diff, type Op } from "../shared/patch.ts";
 import type { ArmyList, Game, GameState, LibraryDoc } from "../shared/types.ts";
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
@@ -43,6 +44,7 @@ import { currentUser, LOCAL_USER, runAs, userPrefix, type UserCtx } from "./cont
 import { jobs, startJob } from "./jobs.ts";
 import { addDocument, deleteDocument, docPath, finishUpload, getPages, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
+import { changeGame, forgetShares, gameLists, joinGame, leaveGame, myGames, openGame, shareGame, stopSharing, viewGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
 import { backgroundJobs, resumePendingTranscriptions, transcribeDocument, transcribeStep } from "./transcribe.ts";
 
@@ -481,10 +483,28 @@ function newState(attacker: GameState["attacker"]): GameState {
   };
 }
 
-app.get("/api/games", async (_req, res) => res.json(newestFirst(await games.list())));
+// A game is the signed-in player's own or one they joined (server/sharedGames.ts).
+const openOr404 = async (req: Request, res: Response) => {
+  const o = await openGame(param(req, "id"));
+  if (!o) res.status(404).json({ error: "Game not found" });
+  return o;
+};
+const opsFrom = (body: unknown): Op[] => {
+  const ops = (body as { ops?: unknown })?.ops;
+  return Array.isArray(ops) ? (ops.slice(0, 2000) as Op[]) : [];
+};
+
+app.get("/api/games", async (_req, res) => res.json(newestFirst(await myGames())));
 app.get("/api/games/:id", async (req, res) => {
-  const g = await games.get(param(req, "id"));
-  return g ? res.json(g) : res.status(404).json({ error: "Not found" });
+  const o = await openOr404(req, res);
+  if (o) res.json(viewGame(o));
+});
+// The game's two lists (and their rules), wherever each player keeps theirs.
+app.get("/api/games/:id/lists", async (req, res) => {
+  const o = await openOr404(req, res);
+  if (!o) return;
+  const found = (await gameLists(o)).filter((l): l is ArmyList => !!l);
+  res.json(found.map((list) => ({ list, rules: listRules(list) })));
 });
 app.post("/api/games", async (req, res) => {
   const b = req.body as Partial<Game> & { attacker?: GameState["attacker"] };
@@ -508,22 +528,51 @@ app.post("/api/games", async (req, res) => {
   };
   res.json(await games.save(game));
 });
+// Changes as small edits on the player's own view, applied to the latest game.
+app.patch("/api/games/:id", async (req, res) => {
+  const o = await openOr404(req, res);
+  if (o) res.json(viewGame(await changeGame(o, opsFrom(req.body))));
+});
+// The whole game (older pages): saved as the edits it makes.
 app.put("/api/games/:id", async (req, res) => {
-  const g = await games.get(param(req, "id"));
-  if (!g) return res.status(404).json({ error: "Not found" });
-  const b = req.body as Partial<Game>;
-  res.json(await games.save({ ...g, ...b, id: g.id, createdAt: g.createdAt }));
+  const o = await openOr404(req, res);
+  if (o) res.json(viewGame(await changeGame(o, diff(viewGame(o), { ...viewGame(o), ...(req.body as Partial<Game>) }))));
 });
 app.post("/api/games/:id/log", async (req, res) => {
-  const g = await games.get(param(req, "id"));
-  if (!g) return res.status(404).json({ error: "Not found" });
-  g.log.push({ at: new Date().toISOString(), text: String(req.body.text ?? "") });
-  res.json(await games.save(g));
+  const o = await openOr404(req, res);
+  if (o) res.json(viewGame(await changeGame(o, [{ path: ["log"], push: { at: new Date().toISOString(), text: String(req.body.text ?? "") } }])));
 });
+// Playing together: the creator makes a join link, opponents with an account open it.
+app.post("/api/games/:id/share", async (req, res) => {
+  const o = await openOr404(req, res);
+  if (!o) return;
+  if (o.role !== "owner") return res.status(403).json({ error: "Only the player who created the game can share it." });
+  res.json(viewGame(await shareGame(o)));
+});
+app.delete("/api/games/:id/share", async (req, res) => {
+  const o = await openOr404(req, res);
+  if (!o) return;
+  if (o.role !== "owner") return res.status(403).json({ error: "Only the player who created the game can stop sharing it." });
+  res.json(viewGame(await stopSharing(o)));
+});
+app.post("/api/games/join", async (req, res) => {
+  try {
+    res.json({ id: await joinGame(String(req.body?.token ?? "")) });
+  } catch (e) {
+    res.status(404).json({ error: (e as Error).message });
+  }
+});
+// The creator deletes the game; a player who joined just leaves it.
 app.delete("/api/games/:id", async (req, res) => {
   const id = param(req, "id");
-  await games.delete(id);
+  const o = await openGame(id);
   await resetConversation(id);
+  if (o?.role === "player") {
+    await leaveGame(o);
+    return res.json({ ok: true });
+  }
+  if (o) await forgetShares(o);
+  await games.delete(id);
   const photos = `${currentUser().prefix}game-photos/${id}`;
   for (const name of await blobs().list(photos)) await blobs().remove(`${photos}/${name}`);
   res.json({ ok: true });
@@ -538,20 +587,22 @@ app.delete("/api/coach/:id", async (req, res) => {
 });
 // The coach's plan for one turn. The page stores it in the game state.
 app.post("/api/games/:id/tips", async (req, res) => {
-  const game = await games.get(param(req, "id"));
-  if (!game) return res.status(404).json({ error: "Game not found" });
+  const o = await openOr404(req, res);
+  if (!o) return;
+  const game = viewGame(o);
   const side = req.body.side === "opponent" ? "opponent" : "me";
   const round = Number(req.body.round) || game.state.round;
-  const [myList, opponentList] = await Promise.all([lists.get(game.myListId), lists.get(game.opponentListId)]);
+  const [myList, opponentList] = await gameLists(o);
   const event = req.body.event ? { text: String(req.body.event).slice(0, 2000), phase: String(req.body.phase ?? game.state.phase), previous: req.body.previous } : undefined;
   await checkBudget();
   res.json({ job: await startJob("tips", () => turnTips({ game, myList, opponentList }, round, side, event)) });
 });
 // The coach's strategy for the game. The page stores it with the game.
 app.post("/api/games/:id/plan", async (req, res) => {
-  const game = await games.get(param(req, "id"));
-  if (!game) return res.status(404).json({ error: "Game not found" });
-  const [myList, opponentList] = await Promise.all([lists.get(game.myListId), lists.get(game.opponentListId)]);
+  const o = await openOr404(req, res);
+  if (!o) return;
+  const game = viewGame(o);
+  const [myList, opponentList] = await gameLists(o);
   await checkBudget();
   const replan = !!req.body?.replan;
   res.json({ job: await startJob("plan", () => gamePlan({ game, myList, opponentList }, { replan })) });
@@ -564,28 +615,31 @@ app.get("/api/jobs/:id", async (req, res) => {
 });
 // A photo of the table (the page shrinks it first). The page stores the path in the game.
 app.post("/api/games/:id/photo", express.raw({ type: "image/*", limit: "8mb" }), async (req, res) => {
-  const id = param(req, "id");
-  if (!(await games.get(id))) return res.status(404).json({ error: "Game not found" });
+  const o = await openOr404(req, res);
+  if (!o) return;
   const body = req.body as Buffer;
   if (!Buffer.isBuffer(body) || !body.length) return res.status(400).json({ error: "No photo received" });
-  const path = `${currentUser().prefix}game-photos/${id}/${Date.now()}.jpg`;
+  // Kept with the game, so both players of a shared game see it.
+  const path = `${o.prefix}game-photos/${o.game.id}/${Date.now()}.jpg`;
   await blobs().write(path, body, "image/jpeg");
   res.json({ path });
 });
 app.get("/api/games/:id/photo", async (req, res) => {
   const p = String(req.query.path ?? "");
-  if (!p.startsWith(`${currentUser().prefix}game-photos/${param(req, "id")}/`)) return res.status(400).end();
+  const o = await openGame(param(req, "id"));
+  if (!o || !p.startsWith(`${o.prefix}game-photos/${o.game.id}/`) || p.includes("..")) return res.status(400).end();
   const data = await blobs().read(p);
   return data ? res.type("image/jpeg").send(data) : res.status(404).end();
 });
 app.post("/api/coach/:id", async (req, res) => {
   const id = param(req, "id");
-  const game = id === "general" ? undefined : await games.get(id);
+  const o = id === "general" ? undefined : await openGame(id);
+  const game = o && viewGame(o);
   if (id !== "general" && !game) return res.status(404).json({ error: "Game not found" });
   const preset = req.body.preset as keyof typeof PROMPTS | undefined;
   const question = preset ? PROMPTS[preset] : String(req.body.question ?? "").trim();
   if (!question) return res.status(400).json({ error: "Empty question" });
-  const [myList, opponentList] = game ? await Promise.all([lists.get(game.myListId), lists.get(game.opponentListId)]) : [undefined, undefined];
+  const [myList, opponentList] = o ? await gameLists(o) : [undefined, undefined];
   const answer = await askCoach(id, { game, myList, opponentList }, question, { effort: preset ? "high" : (req.body.effort ?? "medium") });
   res.json(answer);
 });

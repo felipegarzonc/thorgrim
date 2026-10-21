@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { BATTLE_ROUNDS, CORE_COMMANDS, isBattleplanDoc, SEASON_ABILITIES, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
 import { derive, emptyRound, nextTacticStep, planBasis, result, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
 import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type GlossaryEntry, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TurnTips, type Unit } from "../../../shared/types.ts";
+import { applyOps, diff } from "../../../shared/patch.ts";
 import { api, pendingJob, runJob, waitForJob, withKey } from "../api.ts";
 import { gameDate, sideInfo } from "../gameView.tsx";
 import { shrinkPhoto, VoiceButton } from "../media.tsx";
@@ -44,7 +45,9 @@ const SHORT: Record<Phase, string> = {
 };
 
 type Mutate = (fn: (g: Game) => Game, log?: string) => Promise<void>;
-type SheetName = "menu" | "coach" | "armies" | "odds" | "log";
+type SheetName = "menu" | "coach" | "armies" | "odds" | "log" | "share";
+/** How often an open shared game checks for the other player's changes. */
+const SYNC_MS = 2500;
 
 function defaultStep(g: Game): Step {
   if (g.finished) return "results";
@@ -54,25 +57,77 @@ function defaultStep(g: Game): Step {
 
 export function GamePage({ id, step }: { id: string; step?: string }) {
   const [game, setGame] = useState<Game>();
+  // `ref` is the game on screen; `base` the last copy from the server. What
+  // differs between them is still to be sent, as small edits (shared/patch.ts).
   const ref = useRef<Game | undefined>(undefined);
+  const base = useRef<Game | undefined>(undefined);
   const saving = useRef<Promise<unknown>>(Promise.resolve());
-  const [lists, reloadLists] = useLoad<ArmyList[]>("/lists");
+  const [ownLists, reloadOwnLists] = useLoad<ArmyList[]>("/lists");
+  const [gameLists, reloadGameLists] = useLoad<{ list: ArmyList; rules: FactionRule[] }[]>(game ? `/games/${id}/lists?ids=${game.myListId},${game.opponentListId}` : null);
   const [sheet, setSheet] = useState<SheetName | null>(null);
+  const meta = useMeta();
 
   useEffect(() => {
     api<Game>(`/games/${id}`).then((g) => {
+      base.current = g;
       ref.current = g;
       setGame(g);
     });
   }, [id]);
 
+  // Take the server's copy, keeping the changes made here since `seen` on top.
+  const adopt = (server: Game, seen: Game) => {
+    const later = diff(seen, ref.current);
+    base.current = server;
+    const next = later.length ? applyOps(server, later) : server;
+    ref.current = later.length ? { ...next, state: derive(next) } : next;
+    setGame(ref.current);
+  };
+  const send = async () => {
+    const from = base.current;
+    const sent = ref.current;
+    if (!from || !sent) return;
+    const ops = diff(from, sent);
+    if (!ops.length) return;
+    adopt(await api<Game>(`/games/${sent.id}`, { method: "PATCH", json: { ops } }), sent);
+  };
+
+  // A shared game checks for the other player's changes while it is on screen.
+  const shared = !!game && (game.access?.role === "player" || !!game.access?.token || !!game.access?.players.length);
+  useEffect(() => {
+    if (!shared) return;
+    let busy = false;
+    const t = setInterval(() => {
+      if (busy || document.hidden) return;
+      busy = true;
+      saving.current = saving.current
+        .then(async () => {
+          const server = await api<Game>(`/games/${id}`);
+          if (base.current && server.version !== base.current.version) adopt(server, base.current);
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          busy = false;
+        });
+    }, SYNC_MS);
+    return () => clearInterval(t);
+  }, [id, shared]);
+
+  const reloadLists = () => {
+    reloadOwnLists();
+    reloadGameLists();
+  };
+  // Your own lists, plus the other player's list in a shared game.
+  const lists = ownLists && [...ownLists, ...(gameLists ?? []).map((g) => g.list).filter((l) => !ownLists.some((o) => o.id === l.id))];
+  const rulesOf = (listId?: string) => gameLists?.find((g) => g.list.id === listId)?.rules;
   const myList = lists?.find((l) => l.id === game?.myListId);
   const oppList = lists?.find((l) => l.id === game?.opponentListId);
   const units = useUnits([myList, oppList]);
-  const [myRules] = useLoad<FactionRule[]>(myList ? `/lists/${myList.id}/rules` : null);
-  const [oppRules] = useLoad<FactionRule[]>(oppList ? `/lists/${oppList.id}/rules` : null);
+  const myRules = rulesOf(myList?.id);
+  const oppRules = rulesOf(oppList?.id);
 
   if (!game) return <p className="muted">Loading…</p>;
+  const isPlayer = game.access?.role === "player";
 
   // Every change goes through here: derive totals, add a log line, save in order.
   const mutate: Mutate = (fn, log) => {
@@ -81,12 +136,14 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
     next = { ...next, state: derive(next) };
     if (log) {
       const s = cur.state;
-      const prefix = log.startsWith("Battle round") || s.phase === "Deployment" ? "" : `R${s.round} ${s.activePlayer === "me" ? "my" : "their"} ${s.phase}: `;
+      // In a shared game both players write the log: say whose turn by name.
+      const whose = shared ? `${(s.activePlayer === "me" ? me : opp).name}'s` : s.activePlayer === "me" ? "my" : "their";
+      const prefix = log.startsWith("Battle round") || s.phase === "Deployment" ? "" : `R${s.round} ${whose} ${s.phase}: `;
       next = { ...next, log: [...next.log, { at: new Date().toISOString(), text: prefix + log }] };
     }
     ref.current = next;
     setGame(next);
-    saving.current = saving.current.then(() => api(`/games/${next.id}`, { method: "PUT", json: ref.current }).catch((e: Error) => alert(`Could not save: ${e.message}`)));
+    saving.current = saving.current.then(() => send().catch((e: Error) => alert(`Could not save: ${e.message}`)));
     return saving.current.then(() => undefined);
   };
   const update: Update = (patch, log) => void mutate((g) => ({ ...g, state: { ...g.state, ...patch } }), log);
@@ -109,6 +166,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
   const close = async () => {
     const g = ref.current!;
     const untouched =
+      !shared &&
       !g.myListId && !g.opponentListId && !g.battleplan && !g.opponentName && !g.myFaction && !g.opponentFaction && !g.state.rounds?.length && !g.log.length;
     await saving.current;
     if (untouched) await api(`/games/${g.id}`, { method: "DELETE" }).catch(() => undefined);
@@ -186,6 +244,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
                 ["armies", "shield", "Armies & warscrolls", "Both lists, unit by unit"],
                 ["odds", "calc", "Attack odds", "Who can kill what, with current damage"],
                 ["log", "log", "Board notes & game log", "Objectives, positions, what happened"],
+                ...(meta?.accounts ? ([["share", "share", "Play together", isPlayer ? `Shared by ${game.access?.ownerName || "your opponent"}` : "Both players see and edit this game"]] as const) : []),
               ] as const
             ).map(([s, icon, title, sub]) => (
               <li key={s}>
@@ -204,13 +263,17 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
                 type="button"
                 className="ghost danger"
                 onClick={async () => {
-                  if (!confirm("Delete this game and its coach conversation? This can't be undone.")) return;
+                  const question = isPlayer
+                    ? "Leave this game? It stays with the player who shared it."
+                    : `Delete this game and its coach conversation?${shared ? " The players you shared it with lose it too." : ""} This can't be undone.`;
+                  if (!confirm(question)) return;
+                  await saving.current;
                   await api(`/games/${game.id}`, { method: "DELETE" });
                   window.location.hash = "#/games";
                 }}
               >
                 <Icon name="trash" />
-                <span className="grow">Delete game</span>
+                <span className="grow">{isPlayer ? "Leave game" : "Delete game"}</span>
               </button>
             </li>
             {STEPS.map((s) => (
@@ -281,8 +344,81 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
           </div>
         </Sheet>
       )}
+      {sheet === "share" && (
+        <Sheet title="Play together" onClose={() => setSheet(null)}>
+          <ShareGame
+            game={game}
+            changed={async (g) => {
+              await saving.current;
+              adopt(g, ref.current!);
+            }}
+          />
+        </Sheet>
+      )}
     </div>
     </RulesContext.Provider>
+  );
+}
+
+/** The join link for a shared game, and who joined. */
+function ShareGame({ game, changed }: { game: Game; changed: (g: Game) => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const access = game.access;
+  const players = access?.players ?? [];
+  const run = async (fn: () => Promise<Game>) => {
+    setBusy(true);
+    try {
+      await changed(await fn());
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (access?.role === "player")
+    return (
+      <div className="stack">
+        <p>
+          <b>{access.ownerName || "Your opponent"}</b> shared this game with you. You both see the same score, CP, fury and rounds, and either of you can change them.
+        </p>
+        <p className="small muted">Your coach plan, turn tips and coach chat stay yours. To leave the game, use Leave game in the menu.</p>
+      </div>
+    );
+  const link = access?.token ? `${window.location.origin}${window.location.pathname}#/play/${access.token}` : "";
+  const shareLink = async () => {
+    if (navigator.share) return navigator.share({ title: "Join my game on Thorgrim", url: link }).catch(() => undefined);
+    await navigator.clipboard?.writeText(link);
+    setCopied(true);
+  };
+  return (
+    <div className="stack">
+      <p>Send your opponent a link. Once they open it (they need a Thorgrim account), you both see the same score, CP, fury and rounds, and either of you can change them.</p>
+      <p className="small muted">Each of you keeps your own coach plan, turn tips and coach chat.</p>
+      {!link ? (
+        <button type="button" className="primary wide" disabled={busy} onClick={() => run(() => api<Game>(`/games/${game.id}/share`, { method: "POST" }))}>
+          <Icon name="share" /> {busy ? "Making the link…" : "Make a join link"}
+        </button>
+      ) : (
+        <>
+          <input readOnly value={link} aria-label="Join link" onFocus={(e) => e.target.select()} />
+          <button type="button" className="primary wide" onClick={shareLink}>
+            <Icon name="share" /> {copied ? "Link copied" : "Send the link"}
+          </button>
+          <p className="small">{players.length ? `Playing with: ${players.join(", ")}` : "Nobody has joined yet."}</p>
+          <button
+            type="button"
+            className="ghost danger"
+            disabled={busy}
+            onClick={() => {
+              if (confirm("Stop sharing? The link stops working and the players who joined lose this game.")) void run(() => api<Game>(`/games/${game.id}/share`, { method: "DELETE" }));
+            }}
+          >
+            Stop sharing
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -484,6 +620,7 @@ function PasteList({ side, onClose, onSaved }: { side: Side; onClose: () => void
 // ---------- setup ----------
 
 function SetupStep({ game, mutate }: { game: Game; mutate: Mutate }) {
+  const isPlayer = game.access?.role === "player";
   const [name, setName] = useState(game.name);
   return (
     <div className="stack">
@@ -527,12 +664,12 @@ function SetupStep({ game, mutate }: { game: Game; mutate: Mutate }) {
         type="button"
         className="card danger delete-game"
         onClick={async () => {
-          if (!confirm("Delete this game and its coach conversation?")) return;
+          if (!confirm(isPlayer ? "Leave this game? It stays with the player who shared it." : "Delete this game and its coach conversation?")) return;
           await api(`/games/${game.id}`, { method: "DELETE" });
           window.location.hash = "#/games";
         }}
       >
-        Delete game
+        {isPlayer ? "Leave game" : "Delete game"}
       </button>
     </div>
   );

@@ -7,6 +7,7 @@ import { GamesPage } from "./pages/Games.tsx";
 import { LibraryPage } from "./pages/Library.tsx";
 import { ListsPage } from "./pages/Lists.tsx";
 import { Join, Login } from "./pages/Auth.tsx";
+import { JoinGame } from "./pages/JoinGame.tsx";
 import { HomePage } from "./pages/Home.tsx";
 import { ProfilePage } from "./pages/Profile.tsx";
 import { Icon, MetaContext, type IconName, type Meta } from "./ui.tsx";
@@ -51,6 +52,7 @@ export function App() {
   const tabs = TABS.filter(([key]) => key !== "library" || developer);
   if (tab === "join" && id) return <Join token={id} />;
   if (needLogin) return <Login />;
+  if (tab === "play" && id) return <JoinGame token={id} />;
 
   // A game has its own top and bottom bars, like a scoresheet.
   if (tab === "games" && id)

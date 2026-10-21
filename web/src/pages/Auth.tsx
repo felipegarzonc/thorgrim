@@ -14,11 +14,12 @@ type SignedIn = { session: Session };
 const done = (r: SignedIn) => {
   setSession(r.session);
   setAccessKey("");
-  window.location.hash = "#/home";
+  // A shared game's link opened before signing in still joins the game after.
+  if (!window.location.hash.startsWith("#/play/")) window.location.hash = "#/home";
   window.location.reload();
 };
 
-function Shell({ title, sub, children }: { title: string; sub?: ReactNode; children: ReactNode }) {
+export function Shell({ title, sub, children }: { title: string; sub?: ReactNode; children: ReactNode }) {
   return (
     <main className="login">
       <div className="card">
