@@ -3,6 +3,7 @@
 // Storage bucket, because serverless functions have no lasting disk.
 // Both use the same paths, e.g. "lists/<id>.json" or "library-files/<id>.pdf".
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { StorageClient } from "@supabase/storage-js";
@@ -95,7 +96,9 @@ export class SupabaseBlobStore implements BlobStore {
   }
   async read(p: string) {
     await this.ensureBucket();
-    const { data, error } = await this.files.download(safe(p));
+    // A fresh nonce skips Supabase's CDN, which would otherwise serve the
+    // previous version of a record for a while after it was overwritten.
+    const { data, error } = await this.files.download(safe(p), { cacheNonce: crypto.randomUUID() }, { cache: "no-store" });
     if (error) {
       if (/not.?found|does not exist|404/i.test(`${error.message} ${(error as { statusCode?: string }).statusCode ?? ""}`)) return undefined;
       throw new Error(`Supabase storage read ${p}: ${error.message}`);
@@ -105,7 +108,7 @@ export class SupabaseBlobStore implements BlobStore {
   async write(p: string, data: Buffer | string, contentType = "application/json") {
     await this.ensureBucket();
     const body = typeof data === "string" ? Buffer.from(data, "utf8") : data;
-    const { error } = await this.files.upload(safe(p), body, { upsert: true, contentType });
+    const { error } = await this.files.upload(safe(p), body, { upsert: true, contentType, cacheControl: "0" });
     if (error) throw new Error(`Supabase storage write ${p}: ${error.message}`);
   }
   async remove(p: string) {
