@@ -128,6 +128,11 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
 
   if (!game) return <p className="muted">Loading…</p>;
   const isPlayer = game.access?.role === "player";
+  // After making or stopping the join link: take the server's copy.
+  const shareChanged = async (g: Game) => {
+    await saving.current;
+    adopt(g, ref.current!);
+  };
 
   // Every change goes through here: derive totals, add a log line, save in order.
   const mutate: Mutate = (fn, log) => {
@@ -196,7 +201,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
       </header>
 
       <div className="step-body">
-        {current === "players" && <PlayersStep game={game} lists={lists} mutate={mutate} reloadLists={reloadLists} />}
+        {current === "players" && <PlayersStep game={game} lists={lists} mutate={mutate} reloadLists={reloadLists} shareChanged={meta?.accounts ? shareChanged : undefined} />}
         {current === "setup" && <SetupStep game={game} mutate={mutate} />}
         {current === "battleplan" && <BattleplanStep game={game} mutate={mutate} />}
         {current === "tactics-me" && <TacticsStep game={game} side="me" mutate={mutate} />}
@@ -346,13 +351,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
       )}
       {sheet === "share" && (
         <Sheet title="Play together" onClose={() => setSheet(null)}>
-          <ShareGame
-            game={game}
-            changed={async (g) => {
-              await saving.current;
-              adopt(g, ref.current!);
-            }}
-          />
+          <ShareGame game={game} changed={shareChanged} />
         </Sheet>
       )}
     </div>
@@ -490,12 +489,31 @@ function Explained({ text, glossary = [] }: { text: string; glossary?: GlossaryE
 
 // ---------- players ----------
 
-function PlayersStep({ game, lists, mutate, reloadLists }: { game: Game; lists?: ArmyList[]; mutate: Mutate; reloadLists: () => void }) {
+function PlayersStep({
+  game,
+  lists,
+  mutate,
+  reloadLists,
+  shareChanged,
+}: {
+  game: Game;
+  lists?: ArmyList[];
+  mutate: Mutate;
+  reloadLists: () => void;
+  /** Set when accounts are on: invite the opponent to play on their own phone. */
+  shareChanged?: (g: Game) => Promise<void>;
+}) {
   return (
     <div className="stack">
       {(["me", "opponent"] as const).map((side) => (
         <PlayerBlock key={side} side={side} game={game} lists={lists} mutate={mutate} reloadLists={reloadLists} />
       ))}
+      {shareChanged && (
+        <section>
+          <h1 className="step-heading">Play together</h1>
+          <ShareGame game={game} changed={shareChanged} />
+        </section>
+      )}
     </div>
   );
 }
@@ -507,6 +525,11 @@ function PlayerBlock({ side, game, lists, mutate, reloadLists }: { side: Side; g
   const factionKey = side === "me" ? "myFaction" : "opponentFaction";
   const tacticsKey = side === "me" ? "tactics" : "opponentTactics";
   const [name, setName] = useState(game[nameKey] ?? "");
+  const typing = useRef(false);
+  // Follow name changes from the other player (or their account name once they join).
+  useEffect(() => {
+    if (!typing.current) setName(game[nameKey] ?? "");
+  }, [game[nameKey]]);
   const [picking, setPicking] = useState(false);
   const [pasting, setPasting] = useState(false);
 
@@ -533,7 +556,11 @@ function PlayerBlock({ side, game, lists, mutate, reloadLists }: { side: Side; g
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            onBlur={() => name !== (game[nameKey] ?? "") && mutate((g) => ({ ...g, [nameKey]: name.trim() }))}
+            onFocus={() => (typing.current = true)}
+            onBlur={() => {
+              typing.current = false;
+              if (name !== (game[nameKey] ?? "")) void mutate((g) => ({ ...g, [nameKey]: name.trim() }));
+            }}
             placeholder={side === "me" ? "Your name" : "Opponent's name"}
           />
         </span>
