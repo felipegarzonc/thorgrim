@@ -14,13 +14,15 @@ import { HomePage } from "./pages/Home.tsx";
 import { ProfilePage } from "./pages/Profile.tsx";
 import { Icon, MetaContext, type IconName, type Meta } from "./ui.tsx";
 
+// The coach sits in the middle, easiest to reach; Rules (developers only) goes last
+// so players' five tabs keep their places.
 const TABS: [string, string, IconName][] = [
   ["home", "Home", "home"],
   ["games", "Games", "games"],
+  ["ask", "Coach", "coach"],
   ["club", "Club", "club"],
   ["lists", "Lists", "lists"],
   ["library", "Rules", "rules"],
-  ["ask", "Coach", "coach"],
 ];
 const TITLES: Record<string, string> = { lists: "Army lists", library: "Rules library", calc: "Calculator", ask: "Coach" };
 
