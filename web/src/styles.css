@@ -2690,3 +2690,138 @@ button.term:hover:not(:disabled) {
   border-radius: 14px;
   margin-top: 0.4rem;
 }
+
+/* battleplan card and schematic map */
+.bp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.bp-figure {
+  margin: 0;
+}
+.bp-map {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 10px;
+  background: #2a2d33;
+}
+.bp-map .map-ground {
+  fill: #3a3d43;
+}
+.bp-map .map-mine {
+  fill: rgba(168, 199, 250, 0.32);
+}
+.bp-map .map-theirs {
+  fill: rgba(227, 194, 126, 0.28);
+}
+.bp-map .map-grid {
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 0.15;
+  stroke-dasharray: 0.6 0.6;
+}
+.bp-map .map-label {
+  font-size: 1.6px;
+  font-weight: 700;
+  letter-spacing: 0.08px;
+}
+.bp-map .map-label.mine {
+  fill: #cfe0fc;
+}
+.bp-map .map-label.theirs {
+  fill: #f1dcae;
+}
+.bp-map .map-obscuring {
+  fill: #4f7a45;
+  stroke: #1d2a1a;
+  stroke-width: 0.2;
+}
+.bp-map .map-power {
+  fill: #6fd3e0;
+  stroke: #12363b;
+  stroke-width: 0.2;
+}
+.bp-map .map-zone {
+  fill: #b7aa94;
+  stroke: #3b352c;
+  stroke-width: 0.2;
+}
+.bp-map .map-obj {
+  stroke: #f5f0e6;
+  stroke-width: 0.35;
+}
+.bp-map .map-obj-range {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 0.15;
+  stroke-dasharray: 0.5 0.4;
+}
+.bp-map .map-north,
+.bp-map .map-scale-text {
+  fill: #e3e3e8;
+  font-size: 2px;
+  font-weight: 700;
+}
+.bp-map .map-scale {
+  stroke: #e3e3e8;
+  stroke-width: 0.3;
+}
+.bp-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+  font-size: 0.8rem;
+  margin-top: 0.45rem;
+  color: var(--muted);
+}
+.bp-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.bp-legend .dot {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+  border: 1.5px solid #f5f0e6;
+  display: inline-block;
+}
+.bp-legend .key {
+  width: 0.9rem;
+  height: 0.7rem;
+  display: inline-block;
+  border-radius: 3px;
+}
+.bp-legend .key.obscuring {
+  background: #4f7a45;
+  border-radius: 999px;
+}
+.bp-legend .key.power {
+  background: #6fd3e0;
+  transform: rotate(45deg) scale(0.8);
+}
+.bp-legend .key.zone {
+  background: #b7aa94;
+}
+.bp-twist {
+  margin: 0;
+}
+.bp-ability {
+  display: flex;
+  flex-direction: column;
+  background: #22262e;
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  gap: 0.15rem;
+}
+.bp-ability small {
+  color: var(--muted);
+}
+.bp-scoring ul {
+  margin: 0.3rem 0 0;
+  padding-left: 1.2rem;
+}
+.bp-scoring li {
+  margin: 0.2rem 0;
+}

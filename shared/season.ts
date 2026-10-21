@@ -101,8 +101,8 @@ export const BATTLEPLAN_SCORING: Record<string, ScoringLine[]> = {
   "What's Yours is Ours": [STANDARD[0], { label: "Control the coveted objective pair", vp: 3 }, STANDARD[2]],
   "Warped Ruins": [STANDARD[0], { label: "Control at least 1 pair of objectives", vp: 3 }, STANDARD[2]],
   "Curse of the Gnaw": [
-    { label: "Control the Golden Lions objective", vp: 3 },
-    { label: "Control the Sun Seekers objective", vp: 3 },
+    { label: "Control the Golden Lions (red) objective", vp: 3 },
+    { label: "Control the Soliphiles (gold) objective", vp: 3 },
     STANDARD[2],
   ],
   "Seize the Embers": [

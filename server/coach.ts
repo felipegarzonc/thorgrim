@@ -11,7 +11,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { castChance, chargeChance, damageBySave, expectedDamage, parseCrit, parseTarget, simulate, type AttackProfile } from "../engine/dice.ts";
 import type { ArmyList, Game, GamePlan, TurnTips } from "../shared/types.ts";
-import { isBattleplanDoc } from "../shared/season.ts";
+import { battleplanText } from "../shared/battleplans.ts";
+import { isBattleplanDoc, scoringFor } from "../shared/season.ts";
 import { factionRulesText, findUnit, gameData, listDossier, matchedPlayRule, norm, warscrollText } from "./data.ts";
 import { blobs } from "./blobs.ts";
 import { docPath, getPages, libraryDocs, listDocuments, parsePageRange, searchLibrary } from "./library.ts";
@@ -275,6 +276,12 @@ async function dossier(ctx: CoachContext): Promise<string> {
   if (ctx.game) {
     const g = ctx.game;
     parts.push(`## Game: ${g.name}`, `Battleplan: ${g.battleplan || "(not set)"}`, g.battleplanNotes ? `Battleplan / map notes: ${g.battleplanNotes}` : "");
+    const plan = battleplanText(g.battleplan);
+    if (plan) {
+      const scoring = (round: number) => (scoringFor(g.battleplan, round) ?? []).map((l) => `${l.label} (${l.vp} VP)`).join("; ");
+      parts.push(plan, `Scoring at the end of each player's turn: round 1: ${scoring(1)}. From round 2: ${scoring(2)}.`);
+    }
+    parts.push(`Attacker: ${g.state.attacker === "me" ? "me (the player)" : "the opponent"}.`);
     // The battleplan's rules from the books (e.g. the General's Handbook page), found by name.
     if (g.battleplan) {
       const hits = await searchLibrary(g.battleplan, 3);

@@ -12,6 +12,8 @@ import { shrinkPhoto, VoiceButton } from "../media.tsx";
 import { Avatar, Counter, FactionPicker, Group, Icon, RulesText, Seg, Sheet, useLoad, useMeta } from "../ui.tsx";
 import { CoachChat } from "./CoachChat.tsx";
 import { BoardInfo, LogCard, OddsCard, other, PhaseChecklist, UnitsCard, useUnits, type Army, type Side, type Update } from "./gameTools.tsx";
+import { battleplanInfo } from "../../../shared/battleplans.ts";
+import { BattleplanCard } from "../battleplanView.tsx";
 import { drawResult, shareImage, type ShareRow } from "../shareImage.ts";
 import { WarscrollCard } from "./Lists.tsx";
 
@@ -579,7 +581,14 @@ function BattleplanStep({ game, mutate }: { game: Game; mutate: Mutate }) {
         Starting fury: attacker 1, defender 2.
       </p>
 
-      <h3>Deployment map</h3>
+      {game.battleplan && (
+        <>
+          <h3>{game.battleplan}</h3>
+          <BattleplanCard name={game.battleplan} attacker={game.state.attacker} />
+        </>
+      )}
+
+      <h3>Card photo</h3>
       {images.length ? (
         <div className="map-grid">
           {images.map((d) => (
@@ -592,7 +601,7 @@ function BattleplanStep({ game, mutate }: { game: Game; mutate: Mutate }) {
           ))}
         </div>
       ) : (
-        <p className="map-empty muted small">{game.battleplan ? `No map for ${game.battleplan} in the rules library yet.` : "Pick a battleplan to see its map."}</p>
+        <p className="map-empty muted small">{game.battleplan ? `No photo of the ${game.battleplan} card in the rules library yet.` : "Pick a battleplan to see its map and rules."}</p>
       )}
       <label>
         Notes for the coach
@@ -1062,6 +1071,15 @@ function RoundStep(props: {
         <SideBlock key={side} side={side} game={game} n={n} mutate={mutate} isLive={isLive} name={names[side]} />
       ))}
 
+      {game.battleplan && battleplanInfo(game.battleplan)?.map && (
+        <details className="card collapsible">
+          <summary>
+            <h2>{game.battleplan}: map & twist</h2>
+            <Icon name="down" />
+          </summary>
+          <BattleplanCard name={game.battleplan} attacker={game.state.attacker} compact />
+        </details>
+      )}
       {isLive && (
         <details className="card collapsible">
           <summary>

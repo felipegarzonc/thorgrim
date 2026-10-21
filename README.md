@@ -65,6 +65,14 @@ npm run library -- delete <id>
 
 Categories: `core`, `season`, `battletome`, `battleplan`, `map`, `other`. Battleplan cards and maps are matched to games by the battleplan's name in the title. Signing in to the app with the app password (instead of an account) also shows the upload form on the Rules page.
 
+The battleplan and battle tactic cards of the season (the photographed cards PDF) go in with one command; each card is matched to its battleplan and read by Claude:
+
+```bash
+npm run library:battleplans -- ./GHB_26-27_ENG.pdf      # add --no-read to skip reading the cards now
+```
+
+The app also has each battleplan built in (`shared/battleplans.ts`): the twist and its abilities, the scoring, and a schematic map with territories, objectives and terrain, shown in the Battleplan step and the round screens and given to the coach. *Hidden Under Ash-clouds* is still missing (not on the cards).
+
 Alternative: the repository also has a Dockerfile and a Render blueprint (`render.yaml`) for a server with a persistent disk (Render Starter, about $7/month plus disk). Set `APP_ACCESS_KEY` there too.
 
 ## Manual setup (for development)

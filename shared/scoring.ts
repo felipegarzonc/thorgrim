@@ -6,13 +6,19 @@
 import { newBattleRound, scoringFor, TACTIC_STEPS, TACTIC_VP, type Side } from "./season.ts";
 import type { Game, GameState, RoundRecord, SideRound, TacticProgress, TacticStep } from "./types.ts";
 
+// Scoring lines renamed after games were recorded with the old wording.
+const RENAMED: Record<string, string> = {
+  "Control the Golden Lions objective": "Control the Golden Lions (red) objective",
+  "Control the Sun Seekers objective": "Control the Soliphiles (gold) objective",
+};
+
 export const emptySideRound = (): SideRound => ({ scored: [], extraVp: 0, tactics: [], cpGained: 0, cpSpent: 0 });
 export const emptyRound = (): RoundRecord => ({ me: emptySideRound(), opponent: emptySideRound() });
 
 /** VP one player scored in one round. */
 export function sideRoundVp(sr: SideRound, battleplan: string, round: number): number {
   const lines = scoringFor(battleplan, round) ?? [];
-  const fromLines = lines.filter((l) => sr.scored.includes(l.label)).reduce((sum, l) => sum + l.vp, 0);
+  const fromLines = lines.filter((l) => sr.scored.some((x) => x === l.label || RENAMED[x] === l.label)).reduce((sum, l) => sum + l.vp, 0);
   return fromLines + sr.extraVp + sr.tactics.length * TACTIC_VP;
 }
 
