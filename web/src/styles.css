@@ -2573,3 +2573,120 @@ button.mic.on {
 .login form button[type="submit"] {
   margin-top: 0.6rem;
 }
+
+/* abilities named by the coach: tap to see what they do */
+button.term {
+  display: inline;
+  min-height: 0;
+  padding: 0 0.1rem;
+  margin: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--me-text);
+  font: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+button.term.on,
+button.term:hover:not(:disabled) {
+  background: var(--me-soft);
+}
+.turn-card.opponent button.term {
+  color: var(--opp);
+}
+.term-card {
+  display: block;
+  margin: 0.4rem 0 0.2rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  background: #2c313a;
+  border-left: 3px solid var(--me);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+.term-effect {
+  display: block;
+  margin-top: 0.15rem;
+}
+.term-card details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-top: 0.3rem;
+}
+.term-card .markdown {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* selecting games to delete */
+.select-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--bg);
+  padding: 0.4rem 0;
+}
+.select-bar .danger {
+  background: #4a1f1c;
+  color: #ffb4ab;
+}
+.pick-game {
+  display: block;
+  position: relative;
+  width: 100%;
+  padding: 0;
+  letter-spacing: inherit;
+  font-weight: inherit;
+  text-align: left;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: calc(var(--radius) + 2px);
+}
+.pick-game:hover:not(:disabled) {
+  background: transparent;
+}
+.pick-game.on {
+  border-color: #ff7b6e;
+}
+.pick-check {
+  position: absolute;
+  top: 0.6rem;
+  left: calc(50% - 0.85rem);
+  z-index: 1;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 999px;
+  border: 2px solid var(--muted);
+  display: grid;
+  place-items: center;
+  background: var(--panel);
+}
+.pick-game.on .pick-check {
+  background: #ff7b6e;
+  border-color: #ff7b6e;
+  color: #2b0d0a;
+}
+.pick-check .ico {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.pick-list button.danger {
+  color: #ff7b6e;
+}
+.share-preview summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 0.3rem 0;
+}
+.share-preview img {
+  width: 100%;
+  border-radius: 14px;
+  margin-top: 0.4rem;
+}

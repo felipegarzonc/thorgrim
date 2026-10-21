@@ -54,7 +54,8 @@ How you work:
 - Scoring wins games. Tie advice back to victory points this round and next: objectives and battle tactics. Season facts (General's Handbook 2026-27): battles last 5 rounds; each player picks up to 2 battle tactic cards, each with Affray, Strike and Domination tactics that must be completed in that order, at most 1 per card at the end of each of your turns, 5 VP each. Seizing the initiative (going first after going second in the previous round, i.e. a double turn) means you cannot complete battle tactics in that turn, unless your opponent leads by 11+ VP; your opponent then counts as the underdog. Each player gains 4 CP at the start of each battle round (+1 for the underdog); unspent CP are lost. Verify details in the player's General's Handbook when it matters.
 
 Answer style:
-- During a game, be fast and scannable on a phone: lead with the recommendation in one line, then at most 3 options with odds and risks, then "Don't forget:" for abilities with timing in the current phase. Keep it under about 180 words unless asked for more.
+- During a game, be fast and scannable on a phone: lead with the recommendation in one line, then at most 2 options with odds and risks. Keep it under about 100 words unless asked for more.
+- The first time you name an ability, spell or command, add what it does in a few words in brackets, e.g. "Counter-charge (2 CP: charge in their charge phase)". The player doesn't know every rule by name.
 - For pre-game briefs and post-game reviews, be thorough but structured with short headings.
 - Explain the why in one sentence so the player learns the principle.
 - Use English.
@@ -468,12 +469,13 @@ const TIP_PHASES = ["Start of Turn", "Hero", "Movement", "Shooting", "Charge", "
 
 const TIPS_SYSTEM = `${SYSTEM}
 
-You are now writing the in-game turn plan shown on the player's phone at the table, one card per phase. Rules for it:
-- Each phase gets 0-3 tips of at most 25 words each. Leave a phase empty when nothing matters there.
-- In the player's own turn: concrete actions with unit names (moves, targets, spells, commands with CP cost) that score VP or protect the lead, and what to hold back.
-- In the opponent's turn: what they will most likely do in that phase, and how the player should respond (reactive commands, CP to keep, units to screen or protect).
-- Name abilities and commands exactly as in the army data. No odds you have not calculated: qualitative is fine.
-- headline: the one-sentence aim of this turn.
+You are now writing the in-game turn plan, read on a phone at the table in a few seconds. Rules for it:
+- Each phase gets 0-2 tips of at most 15 words each: an instruction, not an explanation. Leave a phase empty when nothing matters there; most turns need tips in 3-4 phases only.
+- In the player's own turn: what to do with which unit (move, target, spell, command and its CP cost).
+- In the opponent's turn: what they will likely do and the one response that matters (a reactive command, CP to keep, a unit to screen).
+- Name abilities, spells and commands exactly as in the army data, and put every one you name in the glossary with what it does in at most 15 plain words (e.g. "Counter-charge: 2 CP, charge in the enemy's charge phase").
+- No odds you have not calculated.
+- headline: the aim of this turn in at most 12 words.
 - If the state includes our game plan, follow it, and say so when the board calls for changing it.`;
 
 const tipsSchema = {
@@ -486,8 +488,15 @@ const tipsSchema = {
       required: [...TIP_PHASES],
       additionalProperties: false,
     },
+    glossary: { $ref: "#/$defs/glossary" },
   },
-  required: ["headline", "phases"],
+  required: ["headline", "phases", "glossary"],
+  $defs: {
+    glossary: {
+      type: "array",
+      items: { type: "object", properties: { name: { type: "string" }, effect: { type: "string" } }, required: ["name", "effect"], additionalProperties: false },
+    },
+  },
   additionalProperties: false,
 };
 
@@ -533,8 +542,8 @@ export async function turnTips(ctx: CoachContext, round: number, side: "me" | "o
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)
     .join("");
-  const parsed = JSON.parse(text) as { headline: string; phases: Record<string, string[]> };
-  return { headline: parsed.headline, phases: parsed.phases, generatedAt: new Date().toISOString() };
+  const parsed = JSON.parse(text) as { headline: string; phases: Record<string, string[]>; glossary?: { name: string; effect: string }[] };
+  return { headline: parsed.headline, phases: parsed.phases, glossary: parsed.glossary ?? [], generatedAt: new Date().toISOString() };
 }
 
 // ---------- the game plan ----------
@@ -544,14 +553,15 @@ export async function turnTips(ctx: CoachContext, round: number, side: "me" | "o
 const PLAN_SYSTEM = `${SYSTEM}
 
 You are now writing the player's game plan, read on a phone right before deployment. Study both army lists (warscrolls, points, abilities, faction rules), the battleplan and its scoring, the map if provided, and both players' battle tactic cards. Rules for it:
-- summary: 2-3 sentences: how this matchup is won and lost, and the overall approach.
-- ourStrengths / theirThreats: 3-5 items each, naming units and the abilities or combos that matter, with ranges where relevant.
-- deployment: 2-4 concrete points (what goes where, what to hold in reserve or screen, who to keep out of reach of what).
-- rounds: one entry per battle round 1-5: what to achieve (objectives, battle tactic steps, trades), in at most 35 words each.
-- tactics: when and how to complete each of the player's battle tactic cards (Affray, Strike, Domination), and which of the opponent's to deny.
-- priority: when to take or give the first turn, and when a double turn is worth it.
+- summary: at most 2 short sentences: how this matchup is won and the overall approach.
+- ourStrengths / theirThreats: 2-3 items each, naming the units and abilities that matter.
+- deployment: 2-3 concrete points (what goes where, what to screen or hold back).
+- rounds: one entry per battle round 1-5, at most 15 words each.
+- tactics: when to complete each of the player's battle tactic cards, and which of the opponent's to deny (2-3 items).
+- priority: 1-2 items: when to go first, when a double turn is worth it.
 - avoid: the 3 mistakes most likely to lose this game.
-Each list item at most 30 words. Name units, abilities and commands exactly as in the army data. No odds you have not calculated.`;
+- glossary: every ability, spell or command you name, with what it does in at most 15 plain words.
+Each list item at most 18 words: an instruction a player can act on, not an explanation. Name units, abilities and commands exactly as in the army data. No odds you have not calculated.`;
 
 const list = { type: "array", items: { type: "string" } };
 const planSchema = {
@@ -568,8 +578,12 @@ const planSchema = {
     tactics: list,
     priority: list,
     avoid: list,
+    glossary: {
+      type: "array",
+      items: { type: "object", properties: { name: { type: "string" }, effect: { type: "string" } }, required: ["name", "effect"], additionalProperties: false },
+    },
   },
-  required: ["summary", "ourStrengths", "theirThreats", "deployment", "rounds", "tactics", "priority", "avoid"],
+  required: ["summary", "ourStrengths", "theirThreats", "deployment", "rounds", "tactics", "priority", "avoid", "glossary"],
   additionalProperties: false,
 };
 

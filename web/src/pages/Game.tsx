@@ -2,16 +2,17 @@
 // battle tactics, one screen per battle round, then the results. Each round
 // screen also runs the live turn (phases) with the coach's plan for it.
 
-import { useEffect, useRef, useState } from "react";
-import { BATTLE_ROUNDS, isBattleplanDoc, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { BATTLE_ROUNDS, CORE_COMMANDS, isBattleplanDoc, SEASON_ABILITIES, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
 import { derive, emptyRound, nextTacticStep, planBasis, result, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
-import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TurnTips } from "../../../shared/types.ts";
+import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type GlossaryEntry, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TurnTips, type Unit } from "../../../shared/types.ts";
 import { api, pendingJob, runJob, waitForJob, withKey } from "../api.ts";
 import { gameDate, sideInfo } from "../gameView.tsx";
 import { shrinkPhoto, VoiceButton } from "../media.tsx";
 import { Avatar, Counter, FactionPicker, Group, Icon, RulesText, Seg, Sheet, useLoad, useMeta } from "../ui.tsx";
 import { CoachChat } from "./CoachChat.tsx";
 import { BoardInfo, LogCard, OddsCard, other, PhaseChecklist, UnitsCard, useUnits, type Army, type Side, type Update } from "./gameTools.tsx";
+import { drawResult, shareImage, type ShareRow } from "../shareImage.ts";
 import { WarscrollCard } from "./Lists.tsx";
 
 type Step = string;
@@ -100,6 +101,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
   };
   const me = sideInfo(game, lists, "me");
   const opp = sideInfo(game, lists, "opponent");
+  const lookup = rulesLookup(armies, units);
 
   // Closing a new game that was never filled in deletes it, so + then X leaves nothing behind.
   const close = async () => {
@@ -116,6 +118,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
   };
 
   return (
+    <RulesContext.Provider value={lookup}>
     <div className="game-screen">
       <header className="game-head">
         <button type="button" className="icon" aria-label="Close game" onClick={close}>
@@ -194,6 +197,20 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
                 </button>
               </li>
             ))}
+            <li>
+              <button
+                type="button"
+                className="ghost danger"
+                onClick={async () => {
+                  if (!confirm("Delete this game and its coach conversation? This can't be undone.")) return;
+                  await api(`/games/${game.id}`, { method: "DELETE" });
+                  window.location.hash = "#/games";
+                }}
+              >
+                <Icon name="trash" />
+                <span className="grow">Delete game</span>
+              </button>
+            </li>
             {STEPS.map((s) => (
               <li key={s} className="step-link">
                 <button
@@ -263,6 +280,73 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
         </Sheet>
       )}
     </div>
+    </RulesContext.Provider>
+  );
+}
+
+// ---------- explaining abilities the coach names ----------
+
+interface RuleText {
+  name: string;
+  from: string;
+  text: string;
+}
+const RulesContext = createContext<(name: string) => RuleText | undefined>(() => undefined);
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+/** Find an ability, spell, prayer or command by name in both armies and the core rules. */
+function rulesLookup(armies: Record<Side, Army>, units: Record<string, Unit>) {
+  const index = new Map<string, RuleText>();
+  const add = (name: string, from: string, text: string) => {
+    if (!index.has(norm(name))) index.set(norm(name), { name, from, text });
+  };
+  for (const side of ["me", "opponent"] as const) {
+    for (const lu of armies[side].list?.units ?? []) {
+      for (const a of units[lu.unitId]?.abilities ?? []) add(a.name, lu.name, [a.timing && `*${a.timing}*`, a.declare && `**Declare:** ${a.declare}`, a.effect].filter(Boolean).join("\n\n"));
+    }
+    for (const r of armies[side].rules) add(r.ability.name, r.group || r.entry, [r.ability.timing && `*${r.ability.timing}*`, r.ability.declare && `**Declare:** ${r.ability.declare}`, r.ability.effect].filter(Boolean).join("\n\n"));
+  }
+  for (const c of [...CORE_COMMANDS, ...SEASON_ABILITIES]) add(c.name, c.cost ? `Command · ${c.cost} CP` : "Season rule", c.summary);
+  return (name: string) => index.get(norm(name));
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Coach text with the abilities it names made tappable: what it does, and the full rule. */
+function Explained({ text, glossary = [] }: { text: string; glossary?: GlossaryEntry[] }) {
+  const lookup = useContext(RulesContext);
+  const [open, setOpen] = useState<string | null>(null);
+  const terms = glossary.filter((g) => g.name.trim().length > 2).sort((a, b) => b.name.length - a.name.length);
+  if (!terms.length) return <>{text}</>;
+  const re = new RegExp(`(${terms.map((t) => escapeRe(t.name)).join("|")})`, "gi");
+  const parts = text.split(re);
+  const entry = open ? terms.find((t) => t.name.toLowerCase() === open.toLowerCase()) : undefined;
+  const full = entry ? lookup(entry.name) : undefined;
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <button key={i} type="button" className={`term ${open?.toLowerCase() === part.toLowerCase() ? "on" : ""}`} onClick={() => setOpen(open?.toLowerCase() === part.toLowerCase() ? null : part)}>
+            {part}
+          </button>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+      {entry && (
+        <span className="term-card" role="note">
+          <b>{entry.name}</b>
+          {full?.from && <small className="muted"> · {full.from}</small>}
+          <span className="term-effect">{entry.effect}</span>
+          {full && (
+            <details>
+              <summary>Full rule</summary>
+              <RulesText text={full.text} />
+            </details>
+          )}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -765,7 +849,9 @@ function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; sav
         <h3>{title}</h3>
         <ul>
           {items.map((t, i) => (
-            <li key={i}>{t}</li>
+            <li key={i}>
+              <Explained text={t} glossary={plan?.glossary} />
+            </li>
           ))}
         </ul>
       </section>
@@ -819,7 +905,9 @@ function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; sav
           )}
           <section className="card plan-summary">
             <Icon name="spark" />
-            <p>{plan.summary}</p>
+            <p>
+              <Explained text={plan.summary} glossary={plan.glossary} />
+            </p>
           </section>
           <div className="plan-two">
             {section("Our strengths", plan.ourStrengths, "me")}
@@ -832,7 +920,9 @@ function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; sav
               {plan.rounds.map((r) => (
                 <li key={r.round}>
                   <span className="plan-round-no">{r.round}</span>
-                  <span>{r.plan}</span>
+                  <span>
+                    <Explained text={r.plan} glossary={plan.glossary} />
+                  </span>
                 </li>
               ))}
             </ol>
@@ -1090,7 +1180,9 @@ function TurnCard(props: Parameters<typeof RoundStep>[0]) {
             {phaseTips.length ? (
               <ul className="tips-list">
                 {phaseTips.map((t, i) => (
-                  <li key={i}>{t}</li>
+                  <li key={i}>
+                    <Explained text={t} glossary={tips.glossary} />
+                  </li>
                 ))}
               </ul>
             ) : (
@@ -1287,7 +1379,6 @@ function ResultsStep({ game, lists, mutate, openCoach }: { game: Game; lists?: A
   const me = sideInfo(game, lists, "me");
   const opp = sideInfo(game, lists, "opponent");
   const status = r === "win" ? "VICTORY" : r === "loss" ? "DEFEAT" : "DRAW";
-  const [copied, setCopied] = useState(false);
 
   const change = (c: typeof conclusion) => {
     setConclusion(c);
@@ -1323,14 +1414,49 @@ function ResultsStep({ game, lists, mutate, openCoach }: { game: Game; lists?: A
       </div>
     );
   };
-  const summary = `${me.name} (${me.base}) ${s.vp.me} - ${s.vp.opponent} ${opp.name} (${opp.base}) · ${status}\nAge of Sigmar 4e · Pitched Battles 2026-27 · ${game.battleplan || "?"} · ${game.points ?? 2000}pts · ${gameDate(game)}`;
+  const summary = `${me.name} ${s.vp.me} - ${s.vp.opponent} ${opp.name} · ${status} · ${game.battleplan || "Age of Sigmar"}`;
+
+  // The image is drawn ahead of time, so tapping Share opens the share sheet straight away (iPhone needs that).
+  const shareRows = (side: Side): ShareRow[] => {
+    const tactics = (side === "me" ? s.tactics : s.opponentTactics) ?? [];
+    const pad = <T,>(xs: T[]) => Array.from({ length: BATTLE_ROUNDS }, (_, i) => xs[i] ?? null);
+    const obj = rounds.map((rec, i) => (rec.first ? sideRoundVp({ ...rec[side], tactics: [] }, game.battleplan, i + 1) : null));
+    return [
+      { label: "Objectives", cells: pad(obj), total: String(obj.reduce<number>((x, v) => x + (v ?? 0), 0)) },
+      ...tactics.map((t) => ({
+        label: t.card,
+        cells: pad(rounds.map((rec) => (rec[side].tactics.some((x) => x.card === t.card) ? TACTIC_VP : rec.first ? 0 : null))),
+        total: `${tacticSteps(rounds, side, t.card).size * TACTIC_VP}/15`,
+      })),
+    ];
+  };
+  const shareKey = JSON.stringify([s.vp, s.rounds, conclusion, me.name, opp.name, me.faction, opp.faction, game.battleplan]);
+  const [image, setImage] = useState<{ file: File; url: string }>();
+  const [shareMsg, setShareMsg] = useState<string>();
+  useEffect(() => {
+    let cancelled = false;
+    let url = "";
+    void drawResult({
+      date: gameDate(game),
+      status,
+      me: { name: me.name, faction: me.faction, sub: me.sub, vp: s.vp.me, rows: shareRows("me") },
+      opponent: { name: opp.name, faction: opp.faction, sub: opp.sub, vp: s.vp.opponent, rows: shareRows("opponent") },
+      footer: `Age of Sigmar 4e · Pitched Battles 2026-27 · ${game.battleplan || "battleplan not set"} · ${game.points ?? 2000}pts`,
+    }).then((blob) => {
+      if (cancelled) return;
+      url = URL.createObjectURL(blob);
+      setImage({ file: new File([blob], `${me.name}-vs-${opp.name}.png`.replace(/[^\w.-]+/g, "-"), { type: "image/png" }), url });
+    });
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [shareKey]);
   const share = async () => {
+    if (!image) return;
     try {
-      if (navigator.share) await navigator.share({ title: "Game result", text: summary });
-      else {
-        await navigator.clipboard.writeText(summary);
-        setCopied(true);
-      }
+      const how = await shareImage(image.file, summary);
+      setShareMsg(how === "downloaded" ? "Image saved: send it from your photos or downloads." : undefined);
     } catch {
       /* cancelled */
     }
@@ -1381,13 +1507,20 @@ function ResultsStep({ game, lists, mutate, openCoach }: { game: Game; lists?: A
         </p>
       </article>
       <div className="two-buttons">
-        <button type="button" className="outline" onClick={share}>
-          <Icon name="share" /> {copied ? "Copied" : "Share"}
+        <button type="button" className="primary" disabled={!image} onClick={share}>
+          <Icon name="share" /> {image ? "Share image" : "Preparing…"}
         </button>
         <button type="button" className="outline" onClick={openCoach}>
           <Icon name="coach" /> Coach review
         </button>
       </div>
+      {shareMsg && <p className="small muted">{shareMsg}</p>}
+      {image && (
+        <details className="share-preview">
+          <summary>Preview the image</summary>
+          <img src={image.url} alt={`Result image: ${summary}`} />
+        </details>
+      )}
     </div>
   );
 }

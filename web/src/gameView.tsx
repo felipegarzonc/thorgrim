@@ -32,7 +32,7 @@ export function gameHref(game: Game) {
   return `#/games/${game.id}`;
 }
 
-export function GameCard({ game, lists, actions }: { game: Game; lists?: ArmyList[]; actions?: React.ReactNode }) {
+export function GameCard({ game, lists, actions, link = true }: { game: Game; lists?: ArmyList[]; actions?: React.ReactNode; link?: boolean }) {
   const me = sideInfo(game, lists, "me");
   const opp = sideInfo(game, lists, "opponent");
   const status = statusOf(game);
@@ -60,7 +60,7 @@ export function GameCard({ game, lists, actions }: { game: Game; lists?: ArmyLis
   );
   return (
     <article className="game-card">
-      {actions ? body : <a href={gameHref(game)}>{body}</a>}
+      {actions || !link ? body : <a href={gameHref(game)}>{body}</a>}
       {actions && <div className="gc-actions">{actions}</div>}
     </article>
   );

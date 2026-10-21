@@ -144,10 +144,17 @@ export interface RoundRecord {
   opponent: SideRound;
 }
 
+/** What an ability, spell or command named by the coach does, in a few words. */
+export interface GlossaryEntry {
+  name: string;
+  effect: string;
+}
+
 /** The coach's plan for one turn, split by phase. */
 export interface TurnTips {
   headline: string;
   phases: Partial<Record<Phase, string[]>>;
+  glossary?: GlossaryEntry[];
   generatedAt: string;
 }
 
@@ -161,6 +168,7 @@ export interface GamePlan {
   tactics: string[];
   priority: string[];
   avoid: string[];
+  glossary?: GlossaryEntry[];
   generatedAt: string;
   /** What the plan was based on (lists, battleplan, tactics), to spot changes. */
   basis: string;
