@@ -35,6 +35,14 @@ export interface OpenGame {
   role: "owner" | "player";
 }
 
+/**
+ * A photo of this game, where the photo upload puts it. Anything else is
+ * refused: the report and the coach read these paths, so a game edited to
+ * point at other files (settings, someone's data) would leak them.
+ */
+export const isGamePhoto = (prefix: string, gameId: string, path: unknown): path is string =>
+  typeof path === "string" && path.startsWith(`${prefix}game-photos/${gameId}/`) && /^\d+\.jpg$/.test(path.slice(`${prefix}game-photos/${gameId}/`.length));
+
 /** Fields the page can't change: identity and sharing are handled here. */
 const FIXED = new Set(["id", "createdAt", "version", "share", "viewers", "listSpaces", "access"]);
 
@@ -87,6 +95,8 @@ export async function changeGame(o: OpenGame, ops: Op[]): Promise<OpenGame> {
   const game: Game = { ...changed, id: o.game.id, createdAt: o.game.createdAt, share: o.game.share, listSpaces: await listSpaces(o, changed) };
   if (!game.share) delete game.share;
   if (!game.listSpaces) delete game.listSpaces;
+  if (game.report) game.report = { ...game.report, photos: (game.report.photos ?? []).filter((p) => isGamePhoto(o.prefix, game.id, p)) };
+  if (game.state.tablePhoto && !isGamePhoto(o.prefix, game.id, game.state.tablePhoto.path)) delete game.state.tablePhoto;
   game.state = derive(game);
   return { ...o, game: await save(o, game) };
 }

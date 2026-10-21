@@ -23,6 +23,9 @@ import { currentUser } from "./context.ts";
 import { Collection } from "./store.ts";
 
 type Msg = Anthropic.Beta.BetaMessageParam;
+
+/** Only a game's own photos are read (see sharedGames.ts, isGamePhoto); the path comes from game data players edit. */
+const gamePhotoPath = (gameId: string, path: string) => new RegExp(`^(users/[a-zA-Z0-9-]+/)?game-photos/${gameId}/\\d+\\.jpg$`).test(path);
 type Block = Anthropic.Beta.BetaContentBlockParam;
 
 export interface TranscriptEntry {
@@ -340,7 +343,7 @@ async function referenceImages(game?: Game): Promise<Block[]> {
 /** The latest photo of the table, so the coach sees real positions. */
 async function tablePhoto(game?: Game): Promise<Block[]> {
   const photo = game?.state.tablePhoto;
-  if (!photo) return [];
+  if (!photo || !gamePhotoPath(game!.id, photo.path)) return [];
   const data = await blobs().read(photo.path);
   if (!data) return [];
   return [
@@ -682,7 +685,7 @@ export async function battleReport(ctx: CoachContext, photoPaths: string[]): Pro
   const started = Date.now();
   const game = ctx.game!;
   const content: Block[] = [{ type: "text", text: `<facts>\n${reportFacts(game, reportSides(game, ctx.myList, ctx.opponentList))}\n</facts>` }];
-  const paths = [...photoPaths, ...(game.state.tablePhoto ? [game.state.tablePhoto.path] : [])].slice(0, 8);
+  const paths = [...photoPaths, ...(game.state.tablePhoto ? [game.state.tablePhoto.path] : [])].filter((p) => gamePhotoPath(game.id, p)).slice(0, 8);
   for (const p of paths) {
     const data = await blobs().read(p);
     if (data) content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: data.toString("base64") } });

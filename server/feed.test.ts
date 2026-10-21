@@ -213,6 +213,22 @@ describe("club feed", () => {
     expect(await feed.publicPost(token)).toBeUndefined();
   });
 
+  it("never copies files other than the game's own photos (no reading secrets through a report)", async () => {
+    await blobs.blobs().write("settings/secrets.json", Buffer.from('{"ANTHROPIC_API_KEY":"sk-secret"}'), "application/json");
+    // Ben edits the shared game's report and table photo to point at other files, then posts.
+    const o = await runAs(ben, async () => (await sg.openGame("g2"))!);
+    const changed = await runAs(ben, () =>
+      sg.changeGame(o, [
+        { path: ["report", "photos"], set: ["settings/secrets.json", "game-photos/g2/1.jpg", "game-photos/g2/../../settings/users.json"] },
+        { path: ["state", "tablePhoto"], set: { path: "settings/secrets.json", at: "x", round: 1, phase: "Hero" } },
+      ]),
+    );
+    expect(changed.game.report?.photos).toEqual(["game-photos/g2/1.jpg"]);
+    expect(changed.game.state.tablePhoto).toBeUndefined();
+    const post = await runAs(ben, () => feed.syncPost(changed));
+    for (let n = 0; n < (post?.photos ?? 0); n++) expect((await feed.readPostPhoto(post!.id, n))?.toString()).not.toContain("sk-secret");
+  });
+
   it("is removed only by its players or the admin, photos and all", async () => {
     const [post] = await runAs(ana, () => feed.feed());
     await expect(runAs(cid, () => feed.deletePost(post.id))).rejects.toThrow(/players/);

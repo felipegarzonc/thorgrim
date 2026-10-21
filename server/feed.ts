@@ -15,7 +15,7 @@ import { blobs } from "./blobs.ts";
 import { currentUser } from "./context.ts";
 import { noticesIn, notify, seenIn } from "./notices.ts";
 import { gameBadges, playerBadges, reportSides, type ReportSides } from "../shared/report.ts";
-import { changeGame, gameLists, myGames, viewGame, type OpenGame } from "./sharedGames.ts";
+import { changeGame, gameLists, isGamePhoto, myGames, viewGame, type OpenGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
 
 const CLUB = "club/";
@@ -79,10 +79,10 @@ function playersOf(o: OpenGame): string[] {
 }
 
 /** The post keeps its own copies of the photos; copied again only when they changed. */
-async function copyPhotos(id: string, sources: string[], existing?: FeedPost): Promise<number> {
+async function copyPhotos(o: OpenGame, id: string, sources: string[], existing?: FeedPost): Promise<number> {
   if (existing && JSON.stringify(existing.photoSources ?? []) === JSON.stringify(sources)) return existing.photos;
   let count = 0;
-  for (const p of sources) {
+  for (const p of sources.filter((x) => isGamePhoto(o.prefix, o.game.id, x))) {
     const data = await blobs().read(p);
     if (data) await blobs().write(photoPath(id, count++), data, "image/jpeg");
   }
@@ -124,7 +124,7 @@ export async function publishReport(o: OpenGame): Promise<FeedPost> {
   const sides = reportSides(game, myList, opponentList);
   const id = newId();
   const photoSources = report.photos.slice(0, MAX_PHOTOS);
-  const photos = await copyPhotos(id, photoSources);
+  const photos = await copyPhotos(o, id, photoSources);
   // Highlights about the poster ("First game with…", win streaks) are worked out once, from their own games.
   const history = await myGames();
   const ownLists = await new Collection<ArmyList>("lists", me.prefix).list();
@@ -170,7 +170,7 @@ export async function syncPost(o: OpenGame): Promise<FeedPost | undefined> {
   let [mine, theirs] = await gameLists(o);
   if ((o.role === "owner") !== authorIsOwner) [mine, theirs] = [theirs, mine];
   const photoSources = report.photos.slice(0, MAX_PHOTOS);
-  const photos = await copyPhotos(existing.id, photoSources, existing);
+  const photos = await copyPhotos(o, existing.id, photoSources, existing);
   const next: FeedPost = {
     ...existing,
     ...fromGame(game, reportSides(game, mine, theirs), existing.playerBadges ?? []),
