@@ -840,7 +840,7 @@ export const ES_PHRASES: Record<string, string> = {
   "After the battle": "Tras la batalla",
   "Your club": "Tu club",
   "Warhammer Age of Sigmar · tracker & coach": "Warhammer Age of Sigmar · marcador y coach",
-  "Every battle remembered. Every turn coached.": "Cada batalla, recordada. Cada turno, con coach.",
+  "Every battle remembered. Every turn coached.": "Cada batalla, recordada. Cada turno, con Thorgrim.",
   "Score your games round by round on your phone, get a plan from Thorgrim every turn, and turn each battle into a legend your club can read, react to and rank on the ladder.":
     "Puntúa tus partidas ronda a ronda en el móvil, recibe un plan de Thorgrim en cada turno y convierte cada batalla en una leyenda que tu club puede leer, comentar y clasificar en la liga.",
   "Start a game": "Empezar una partida",
@@ -910,6 +910,23 @@ export const ES_PHRASES: Record<string, string> = {
   "A battle report in the club feed: the score, the score sheet and the start of the story": "Una crónica en el club: el marcador, la hoja de puntuación y el comienzo de la historia",
   "Under a sky of smoke and ash, two armies met upon a field of two thousand points to fight for the sigils of Into the Fire. On one side marched the Lumineth of Diego, cold and radiant…":
     "Bajo un cielo de humo y ceniza, dos ejércitos se encontraron en un campo de dos mil puntos para luchar por los sigilos de Into the Fire. De un lado marchaban los Lumineth de Diego, fríos y radiantes…",
+  "Mournfangs into objective B, now. Hold it and the round is yours. Keep the Stonehorn back: they'll counter-charge, mark my words.":
+    "Mournfangs al objetivo B, ya. Tenlo y la ronda es tuya. Guarda el Stonehorn: van a contracargar, te lo digo yo.",
+  "Measure your charges twice, commander. I've seen more armies lost to a failed charge than to any daemon.":
+    "Mide tus cargas dos veces, comandante. He visto caer más ejércitos por una carga fallida que por cualquier demonio.",
+  "A general who forgets his command points deserves to lose them.": "Un general que olvida sus puntos de mando merece perderlos.",
+  "Every battle deserves its saga. Even the ones you lose. Especially those.": "Toda batalla merece su saga. También las que pierdes. Sobre todo esas.",
+  "A grudge settled at the table is worth ten in the book.": "Un agravio saldado en la mesa vale por diez en el libro.",
+  "Your coach": "Tu coach",
+  "Meet Thorgrim.": "Conoce a Thorgrim.",
+  "Four centuries old, a thousand battles behind him and one very long Book of Grudges. He knows every faction's warscrolls and points, searches the core rules, the General's Handbook and battletomes and cites the page, runs the dice maths, and checks what is winning tournaments right now.":
+    "Cuatro siglos de edad, mil batallas a sus espaldas y un Libro de Agravios muy largo. Conoce las hojas de unidad y los puntos de todas las facciones, busca en las reglas básicas, el General's Handbook y los battletomes y cita la página, hace las cuentas de dados y mira qué está ganando torneos ahora mismo.",
+  "Gruff, blunt, never wrong about a rule without saying so. Powered by Claude.": "Gruñón, directo, y si no está seguro de una regla, te lo dice. Funciona con Claude.",
+  "Hrm. In your foe's charge phase, one of your units that isn't already in combat can charge them back. Costs 2 command points, so keep two in your purse.":
+    "Hmm. En la fase de carga de tu enemigo, una de tus unidades que no esté ya en combate puede cargarle de vuelta. Cuesta 2 puntos de mando, así que guarda dos en la bolsa.",
+  'I failed a 3" charge with my Stonehorn.': 'He fallado una carga de 3" con mi Stonehorn.',
+  "By my beard. That one goes in the Book of Grudges. Now: next turn, it charges first.": "¡Por mis barbas! Esa va al Libro de Agravios. Y ahora: el próximo turno, carga el primero.",
+  "The dice are waiting, commander. So am I.": "Los dados esperan, comandante. Y yo también.",
   // ---------- badges ----------
   "Nail-biter": "Final de infarto",
   "Dead even": "Igualadísimo",

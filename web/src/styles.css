@@ -5187,3 +5187,55 @@ label.button {
   margin-top: 1rem;
   text-align: center;
 }
+.lp-seal {
+  color: var(--brass);
+  flex: none;
+}
+.lp-quote {
+  margin: 4px 0;
+  padding: 14px 18px;
+  border-left: 0;
+  border-radius: 14px;
+  background: var(--me-soft);
+  border: 1px solid var(--me-line);
+  max-width: 560px;
+}
+.lp-quote blockquote {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 18px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.lp-quote blockquote::before {
+  content: "“";
+  color: var(--brass);
+}
+.lp-quote blockquote::after {
+  content: "”";
+  color: var(--brass);
+}
+.lp-quote figcaption {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brass);
+}
+.lp-quote figcaption::before {
+  content: "— ";
+}
+.lp-final .lp-quote {
+  text-align: center;
+}
+.lp-meet {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.lp-meet > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

@@ -15,6 +15,30 @@ const jump = (e: MouseEvent<HTMLAnchorElement>) => {
   target.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
+/** Thorgrim's emblem: a horned dwarf helm over a braided beard. */
+export function ThorgrimSeal({ size = 64 }: { size?: number }) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="lp-seal">
+      <path d="M6 12.5a6 6 0 0 1 12 0v1.5H6z" />
+      <path d="M6.2 11.5C4 10.8 2.8 8.3 3.4 5.3c.9 1.8 2.3 2.8 3.9 3.2" />
+      <path d="M17.8 11.5c2.2-.7 3.4-3.2 2.8-6.2-.9 1.8-2.3 2.8-3.9 3.2" />
+      <path d="M12 6.5v7.5" />
+      <path d="M8 14c0 3 1.6 5.6 4 7 2.4-1.4 4-4 4-7" />
+      <path d="M10 15.5l2 1.5 2-1.5M10.3 18l1.7 1.3 1.7-1.3" />
+    </svg>
+  );
+}
+
+/** Something Thorgrim says. */
+function Quote({ children }: { children: ReactNode }) {
+  return (
+    <figure className="lp-quote">
+      <blockquote>{children}</blockquote>
+      <figcaption>Thorgrim</figcaption>
+    </figure>
+  );
+}
+
 function Eyebrow({ children }: { children: ReactNode }) {
   return <p className="lp-eyebrow">{children}</p>;
 }
@@ -80,7 +104,7 @@ function PhoneRound() {
         </div>
         <div className="lp-ph-tip">
           <b>Thorgrim · Charge</b>
-          <p>Charge the Mournfangs into the unit on objective B: holding it wins the round. Keep the Stonehorn back for their counter-charge.</p>
+          <p>Mournfangs into objective B, now. Hold it and the round is yours. Keep the Stonehorn back: they'll counter-charge, mark my words.</p>
         </div>
         <div className="lp-ph-next">Next: Combat</div>
       </div>
@@ -157,7 +181,9 @@ export function Landing() {
       <header className="lp-nav">
         <div className="lp-wrap lp-nav-row">
           <a href="#/welcome" className="lp-brand">
-            <span className="lp-brand-mark">T</span>
+            <span className="lp-brand-mark">
+              <ThorgrimSeal size={24} />
+            </span>
             <span className="lp-brand-name">THORGRIM</span>
           </a>
           <nav aria-label="Sections" className="lp-links">
@@ -180,6 +206,7 @@ export function Landing() {
             Score your games round by round on your phone, get a plan from Thorgrim every turn, and turn each battle into a legend your club can read, react to and
             rank on the ladder.
           </p>
+          <Quote>Measure your charges twice, commander. I've seen more armies lost to a failed charge than to any daemon.</Quote>
           <div className="lp-actions">
             <a href={SIGN_IN} className="lp-btn primary">
               Start a game
@@ -209,6 +236,7 @@ export function Landing() {
           <Eyebrow>At the table</Eyebrow>
           <h2>Less bookkeeping. More rolling dice.</h2>
           <p className="lp-lead">Thorgrim keeps the score sheet so you can keep your eyes on the board.</p>
+          <Quote>A general who forgets his command points deserves to lose them.</Quote>
         </div>
         <div className="lp-grid">
           <Feature title="Score every round" icon={<path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z M8 8h8 M8 12h8 M8 16h5" />}>
@@ -251,6 +279,7 @@ export function Landing() {
             Snap the battlefield and your best models. Thorgrim turns what you recorded into an epic battle report: true to the score, grim and glorious in the
             telling. Post it to your club with the score sheet as the cover.
           </p>
+          <Quote>Every battle deserves its saga. Even the ones you lose. Especially those.</Quote>
           <ul className="lp-list">
             <li>
               <b>Thorgrim's review:</b> how it was won or lost, where the points went, and one thing to try next game.
@@ -275,6 +304,7 @@ export function Landing() {
           <p className="lp-lead">
             Battle reports with reactions and comments, a ladder of confirmed results, club nights and tournaments, and everyone's painted armies, all in one place.
           </p>
+          <Quote>A grudge settled at the table is worth ten in the book.</Quote>
         </div>
         <div className="lp-club">
           <article className="lp-card lp-event">
@@ -333,25 +363,36 @@ export function Landing() {
       <section id="lp-coach" className="lp-wrap lp-section">
         <div className="lp-coach">
           <div className="lp-split-copy">
-            <Eyebrow>Thorgrim</Eyebrow>
-            <h2>Rules questions, answered from the books.</h2>
+            <div className="lp-meet">
+              <ThorgrimSeal size={72} />
+              <div>
+                <Eyebrow>Your coach</Eyebrow>
+                <h2>Meet Thorgrim.</h2>
+              </div>
+            </div>
             <p className="lp-lead">
-              Powered by Claude. It knows every faction's warscrolls and points, searches the core rules, the General's Handbook and battletomes and cites the page,
-              runs the dice maths, and checks what is winning tournaments right now.
+              Four centuries old, a thousand battles behind him and one very long Book of Grudges. He knows every faction's warscrolls and points, searches the core
+              rules, the General's Handbook and battletomes and cites the page, runs the dice maths, and checks what is winning tournaments right now.
             </p>
+            <p className="lp-small">Gruff, blunt, never wrong about a rule without saying so. Powered by Claude.</p>
           </div>
           <div className="lp-chat">
             <p className="lp-bubble me">When can I use Counter-charge and what does it cost?</p>
             <p className="lp-bubble coach">
-              In your opponent's charge phase: one of your units that isn't in combat can charge them back. It costs 2 command points. <span className="brass">Core rules · Commands</span>
+              Hrm. In your foe's charge phase, one of your units that isn't already in combat can charge them back. Costs 2 command points, so keep two in your purse.{" "}
+              <span className="brass">Core rules · Commands</span>
             </p>
+            <p className="lp-bubble me">I failed a 3" charge with my Stonehorn.</p>
+            <p className="lp-bubble coach">By my beard. That one goes in the Book of Grudges. Now: next turn, it charges first.</p>
           </div>
         </div>
       </section>
 
       <section className="lp-wrap lp-final">
+        <ThorgrimSeal size={56} />
         <h2>Gather your warband.</h2>
         <p className="lp-lead">Thorgrim runs one club at a time. Ask your club's admin for an invite link, then sign in and start your first game.</p>
+        <Quote>The dice are waiting, commander. So am I.</Quote>
         <div className="lp-actions center">
           <a href={SIGN_IN} className="lp-btn primary">
             Sign in
