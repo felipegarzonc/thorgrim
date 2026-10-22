@@ -4176,98 +4176,97 @@ button.sync-badge.error {
 .post-result.win {
   color: var(--brass);
 }
-/* The strip: a small score sheet first (like an activity's map), then the photos. */
-.post-media {
+/* The carousel: full-width slides, the score sheet first, then the photos. */
+.carousel {
+  margin: 0 -1.1rem;
+}
+.carousel-strip {
   display: flex;
-  gap: 6px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
-  margin: 0 -1.1rem;
-  padding: 0 1.1rem;
 }
-.post-media > * {
-  flex: 0 0 auto;
-  height: 272px;
+.carousel-strip::-webkit-scrollbar {
+  display: none;
+}
+.carousel-slide {
+  flex: 0 0 100%;
+  height: min(78vw, 360px);
   scroll-snap-align: start;
-  border-radius: 12px;
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
 }
-.post-media img {
-  height: 272px;
-  width: auto;
-  max-width: 78vw;
-  object-fit: cover;
+.carousel-slide > a,
+.carousel-slide img {
   display: block;
+  width: 100%;
+  height: 100%;
+}
+.carousel-slide img {
+  object-fit: cover;
+}
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.15rem;
+  padding-top: 0.3rem;
+}
+.carousel-dots button {
+  width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+}
+.carousel-dots button::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-2);
+}
+.carousel-dots button.on::after {
+  width: 18px;
+  border-radius: 4px;
+  background: var(--brass);
 }
 .media-sheet {
-  width: min(300px, 78vw);
-  background: var(--panel-2);
-}
-.post-media.solo .media-sheet {
   width: 100%;
 }
 .media-sheet .result-card {
   background: transparent;
   border: 0;
   border-radius: 0;
-  padding: 0;
-  height: 100%;
+  padding: 0.4rem 0;
 }
-.media-sheet .game-card-body {
-  padding: 0.55rem 0.75rem 0.2rem;
-  gap: 0.3rem;
-}
-.media-sheet .gc-date,
-.media-sheet .res-foot,
-.media-sheet .gc-side small {
+/* The stat row above already says who, the score and the result. */
+.media-sheet .game-card-body,
+.media-sheet .res-foot {
   display: none;
 }
-.media-sheet .gc-name {
-  font-size: 0.85rem;
-}
-.media-sheet .gc-faction {
-  font-size: 0.68rem;
-  margin: 0;
-}
-.media-sheet .gc-score {
-  padding-top: 0;
-}
-.media-sheet .big-score {
-  font-size: 1.7rem;
-}
-.media-sheet .gc-status {
-  margin-top: 0.15rem;
-  font-size: 0.6rem;
-}
 .media-sheet .res-side {
-  padding: 0.1rem 0.75rem;
+  padding: 0.3rem 1.1rem;
 }
 .media-sheet .res-side h2 {
-  font-size: 0.8rem;
-  margin: 0.15rem 0;
+  font-size: 1rem;
+  margin: 0.2rem 0;
 }
 .media-sheet .res-row {
-  min-height: 1.45rem;
-  gap: 0.35rem;
+  min-height: 2rem;
 }
 .media-sheet .res-row .grow {
-  font-size: 0.68rem;
+  font-size: 0.85rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.media-sheet .cells {
-  grid-template-columns: repeat(5, 1.2rem);
-  flex: none;
-}
-.media-sheet .cell {
-  font-size: 0.62rem;
-  padding: 0.1rem 0;
-}
+.media-sheet .cells,
 .media-sheet .res-total {
-  width: 2.1rem;
-  font-size: 0.72rem;
   flex: none;
 }
 .res-row .grow {

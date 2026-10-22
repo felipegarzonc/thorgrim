@@ -2,7 +2,7 @@
 // links) and your activity (comments on your posts, reports of your games,
 // opponents joining). Members only.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BattleDetail, FeedPost, FeedPostView, Notice } from "../../../shared/types.ts";
 import { api, withKey } from "../api.ts";
 import { baseFaction } from "../../../shared/season.ts";
@@ -34,6 +34,36 @@ const when = (iso: string) => {
   if (mins < 24 * 60) return `${Math.round(mins / 60)} h ago`;
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: mins > 300 * 24 * 60 ? "numeric" : undefined });
 };
+
+/** Full-width slides, one at a time: swipe, or tap the dots. */
+function Carousel({ slides }: { slides: React.ReactNode[] }) {
+  const [at, setAt] = useState(0);
+  const strip = useRef<HTMLDivElement>(null);
+  const go = (i: number) => strip.current?.scrollTo({ left: i * strip.current.clientWidth, behavior: "smooth" });
+  return (
+    <div className="carousel">
+      <div
+        ref={strip}
+        className="carousel-strip"
+        aria-label="Score sheet and battle photos"
+        onScroll={(e) => setAt(Math.round(e.currentTarget.scrollLeft / Math.max(1, e.currentTarget.clientWidth)))}
+      >
+        {slides.map((slide, i) => (
+          <div key={i} className="carousel-slide" aria-label={`${i + 1} of ${slides.length}`}>
+            {slide}
+          </div>
+        ))}
+      </div>
+      {slides.length > 1 && (
+        <div className="carousel-dots">
+          {slides.map((_, i) => (
+            <button key={i} type="button" className={i === at ? "on" : ""} aria-label={`Show ${i + 1} of ${slides.length}`} aria-current={i === at} onClick={() => go(i)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * The report itself, like an activity card: the score sheet, the battle
@@ -98,24 +128,22 @@ export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; ph
         </div>
       )}
       {(post.detail || post.photos > 0) && (
-        <div className={`post-media ${post.photos ? "" : "solo"}`} aria-label="Score sheet and battle photos">
-          {a && b && post.detail && (
-            <div className="media-sheet">
-              <ScoreSheet
-                date=""
-                status={status}
-                tone={post.result ?? ""}
-                sides={[side(a, rowsFromDetail(post.detail, "me")), side(b, rowsFromDetail(post.detail, "opponent"))]}
-                footer=""
-              />
-            </div>
-          )}
-          {Array.from({ length: post.photos }, (_, n) => (
-            <a key={n} href={photoUrl(n)} target="_blank" rel="noreferrer">
-              <img src={photoUrl(n)} alt={`Battle photo ${n + 1}`} loading="lazy" />
-            </a>
-          ))}
-        </div>
+        <Carousel
+          slides={[
+            ...(a && b && post.detail
+              ? [
+                  <div key="sheet" className="media-sheet">
+                    <ScoreSheet date="" status="" tone="" sides={[side(a, rowsFromDetail(post.detail, "me")), side(b, rowsFromDetail(post.detail, "opponent"))]} footer="" />
+                  </div>,
+                ]
+              : []),
+            ...Array.from({ length: post.photos }, (_, n) => (
+              <a key={n} href={photoUrl(n)} target="_blank" rel="noreferrer">
+                <img src={photoUrl(n)} alt={`Battle photo ${n + 1}`} loading="lazy" />
+              </a>
+            )),
+          ]}
+        />
       )}
       <Story text={post.story} short={short} />
       {short && paras > 2 && (
