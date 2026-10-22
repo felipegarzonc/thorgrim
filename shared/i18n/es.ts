@@ -1059,6 +1059,8 @@ export const ES_PHRASES: Record<string, string> = {
   "Not found": "No encontrado",
   "Reference & tools": "Referencia y herramientas",
   "Score the turn below, then end it": "Puntúa el turno abajo y luego termínalo",
+  "Something went wrong": "Algo salió mal",
+  "Your games are saved. Reload to carry on.": "Tus partidas están guardadas. Recarga para seguir.",
   // Clubs
   "You're not in a club yet.": "Aún no estás en un club.",
   "Ask a club leader to add you. Your games, lists and Thorgrim work as always.": "Pídele a un líder de club que te añada. Tus partidas, listas y Thorgrim funcionan como siempre.",

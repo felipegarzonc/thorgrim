@@ -4,12 +4,16 @@ import { App } from "./App.tsx";
 import "./styles.css";
 import { startTranslating } from "./i18n.ts";
 import { PageAnalytics } from "./analytics.tsx";
+import { ErrorBoundary, tolerateExtensions } from "./guard.tsx";
 
+tolerateExtensions();
 startTranslating();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
     <PageAnalytics />
   </StrictMode>,
 );

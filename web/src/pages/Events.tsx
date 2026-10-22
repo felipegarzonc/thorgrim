@@ -173,7 +173,7 @@ function EventForm({ event, onClose, onSaved }: { event?: EventView; onClose: ()
         <label className="field">
           <span className="field-label">Notes</span>
           <span className="field-box">
-            <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Missions, list deadline, entry fee…" />
+            <textarea data-gramm="false" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Missions, list deadline, entry fee…" />
           </span>
         </label>
         {error && <p className="error small">{error}</p>}

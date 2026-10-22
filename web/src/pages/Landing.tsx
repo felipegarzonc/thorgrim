@@ -224,7 +224,7 @@ export function RequestAccess() {
       </label>
       <label>
         <span>Anything you'd like to tell us (optional)</span>
-        <textarea rows={3} value={form.message} onChange={set("message")} maxLength={500} placeholder="e.g. We play every Thursday, about 10 of us." />
+        <textarea data-gramm="false" rows={3} value={form.message} onChange={set("message")} maxLength={500} placeholder="e.g. We play every Thursday, about 10 of us." />
       </label>
       {/* Only bots fill this in. */}
       <input className="lp-honey" tabIndex={-1} autoComplete="off" aria-hidden="true" value={form.website} onChange={set("website")} name="website" />

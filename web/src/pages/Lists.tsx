@@ -84,7 +84,7 @@ function ListForm({ onSaved }: { onSaved: () => void }) {
       </div>
       <label>
         List text
-        <textarea rows={10} value={text} onChange={(e) => setText(e.target.value)} placeholder={"Frostlord on Stonehorn (340)\n• General\nMournfang Pack (200)\n• Reinforced\n…"} />
+        <textarea data-gramm="false" rows={10} value={text} onChange={(e) => setText(e.target.value)} placeholder={"Frostlord on Stonehorn (340)\n• General\nMournfang Pack (200)\n• Reinforced\n…"} />
       </label>
       <div className="row">
         <button type="button" onClick={parse} disabled={!text.trim()}>

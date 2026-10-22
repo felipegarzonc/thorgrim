@@ -256,7 +256,7 @@ export function BattleReportCard({ game, mutate, saved }: { game: Game; mutate: 
           </label>
           <label className="field">
             <span className="field-label">Story (edit anything)</span>
-            <textarea
+            <textarea data-gramm="false"
               rows={12}
               value={story}
               onFocus={() => (editing.current = true)}

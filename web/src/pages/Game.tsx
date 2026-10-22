@@ -756,7 +756,7 @@ function PasteList({ side, onClose, onSaved }: { side: Side; onClose: () => void
       </label>
       <label>
         List text
-        <textarea rows={12} value={text} onChange={(e) => setText(e.target.value)} />
+        <textarea data-gramm="false" rows={12} value={text} onChange={(e) => setText(e.target.value)} />
       </label>
       {error && <p className="error">{error}</p>}
       <button type="button" className="primary wide" disabled={!text.trim() || busy} onClick={save}>
@@ -1028,7 +1028,7 @@ function BattleplanStep({ game, mutate }: { game: Game; mutate: Mutate }) {
       )}
       <label>
         Notes for Thorgrim
-        <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== game.battleplanNotes && mutate((g) => ({ ...g, battleplanNotes: notes }))} placeholder="Objective positions, terrain, deployment zones…" />
+        <textarea data-gramm="false" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== game.battleplanNotes && mutate((g) => ({ ...g, battleplanNotes: notes }))} placeholder="Objective positions, terrain, deployment zones…" />
       </label>
     </div>
   );
@@ -1201,7 +1201,7 @@ function WhatHappened(props: {
         ))}
       </div>
       <div className="happened-input">
-        <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder='e.g. "Failed the 7" charge with the Stonehorn, they killed my Gnoblars and hold the centre"' />
+        <textarea data-gramm="false" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder='e.g. "Failed the 7" charge with the Stonehorn, they killed my Gnoblars and hold the centre"' />
         <VoiceButton label="Dictate what happened" onText={add} />
       </div>
       <div className="happened-actions">

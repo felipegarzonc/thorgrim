@@ -101,7 +101,7 @@ export function CoachChat(props: {
         </div>
       )}
       <div className="row">
-        <textarea
+        <textarea data-gramm="false"
           rows={2}
           value={question}
           onChange={(e) => setQuestion(e.target.value)}

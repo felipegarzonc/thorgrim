@@ -512,7 +512,7 @@ export function BoardInfo({ state, update }: { state: GameState; update: Update 
       </label>
       <label>
         Positions & threats
-        <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Hell Pit 8&quot; from my Stonehorn, Jezzails on the left ruin" />
+        <textarea data-gramm="false" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Hell Pit 8&quot; from my Stonehorn, Jezzails on the left ruin" />
       </label>
       {dirty && (
         <button type="button" className="small primary" onClick={() => update({ objectives, notes })}>
