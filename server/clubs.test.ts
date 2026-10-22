@@ -56,5 +56,7 @@ describe("clubs", async () => {
     await runAs(ana, () => clubs.removeMember(med.id, "cid"));
     expect(await clubs.clubFor(cid)).toBeUndefined();
     expect(() => runAs({ ...cid, club: null }, () => clubs.clubSpace())).toThrow(/not in a club/);
+    const { unread } = await import("./feed.ts");
+    expect(await runAs({ ...cid, club: null }, () => unread())).toEqual({ notices: 0, posts: 0 });
   });
 });

@@ -1092,6 +1092,10 @@ export const ES_PATTERNS: [RegExp, string][] = [
   [/^(\d+) members$/, "$1 miembros"],
   [/^Add (\d+)$/, "Añadir $1"],
   [/^·? ?(\d+) members · leader (.+)$/, "· $1 miembros · líder $2"],
+  [/^Remove (.+) from the club\?$/, "¿Quitar a $1 del club?"],
+  [/^Remove (.+)\?$/, "¿Quitar $1?"],
+  [/^Delete (.+)\?$/, "¿Borrar $1?"],
+  [/^Give (.+) a new password\? Their current one stops working\.$/, "¿Darle a $1 una contraseña nueva? La actual deja de funcionar."],
   [/^Remove (.+)$/, "Quitar a $1"],
   // Steps, rounds, turns, phases
   [/^Round (\d+)$/, "Ronda $1"],

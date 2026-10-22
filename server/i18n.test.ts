@@ -6,6 +6,11 @@ describe("Spanish", () => {
     expect(translate("Your season", "es")).toBe("Tu temporada");
     expect(translate(" won ", "es")).toBe(" ganadas ");
     expect(translate("Your season", "en")).toBe("Your season");
+    expect(translate("Remove Ana from the club?", "es")).toBe("¿Quitar a Ana del club?");
+    expect(translate("Remove Ana", "es")).toBe("Quitar a Ana");
+    expect(translate("Delete Ogors 2000?", "es")).toBe("¿Borrar Ogors 2000?");
+    expect(translate("Remove this photo?", "es")).toBe("¿Quitar esta foto?");
+    expect(translate("Delete 3 games? This can't be undone.", "es")).toBe("¿Borrar 3 partida(s)? No se puede deshacer.");
     expect(translate("End turn → Opponent", "es")).toBe("Fin del turno → Rival");
     expect(translate("End turn → Sebastián", "es")).toBe("Fin del turno → Sebastián");
     expect(translate("Opponent's turn.", "es")).toBe("Turno de Rival.");

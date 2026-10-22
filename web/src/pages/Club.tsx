@@ -582,6 +582,7 @@ function ClubHome({ tab, postId, unreadNotices }: { tab: ClubTab; postId?: strin
   const setTab = (t: ClubTab) => window.location.replace(`#/club/${t}`);
 
   useEffect(() => {
+    if (meta?.club === null) return;
     api<FeedPostView[]>("/feed")
       .then(setPosts)
       .catch((e: Error) => setError(e.message));

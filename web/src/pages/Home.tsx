@@ -22,7 +22,8 @@ export function HomePage({ unread = 0 }: { unread?: number }) {
   const meta = useMeta();
   const [games] = useLoad<Game[]>("/games");
   const [lists] = useLoad<ArmyList[]>("/lists");
-  const [posts] = useLoad<FeedPostView[]>("/feed");
+  // Someone in no club yet has no club feed to show.
+  const [posts] = useLoad<FeedPostView[]>(meta && meta.club !== null ? "/feed" : null);
   if (!games) return <Skeleton />;
 
   const live = games.filter((g) => !g.finished).sort(byDate).reverse()[0];

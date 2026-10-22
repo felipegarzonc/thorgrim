@@ -50,9 +50,10 @@ export class FeedError extends Error {
 }
 
 /** What's new for the signed-in member: unread notices and posts by others since they last looked. */
+/** New notices and club posts (no club yet: just the notices). */
 export async function unread(): Promise<{ notices: number; posts: number }> {
   const me = currentUser();
-  const [notices, seen, all] = await Promise.all([noticesIn(me.prefix).list(), seenIn(me.prefix).get("feed"), posts().list()]);
+  const [notices, seen, all] = await Promise.all([noticesIn(me.prefix).list(), seenIn(me.prefix).get("feed"), me.club === null ? [] : posts().list()]);
   const since = seen?.at ?? "";
   return { notices: notices.filter((n) => !n.read).length, posts: all.filter((p) => p.authorId !== me.id && p.createdAt > since).length };
 }
