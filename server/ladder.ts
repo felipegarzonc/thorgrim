@@ -41,6 +41,11 @@ export async function syncResult(o: OpenGame): Promise<void> {
   });
 }
 
+/** A result the organiser of a club event entered (no shared game behind it). */
+export async function saveEventResult(r: ClubResult) {
+  await results.save(r);
+}
+
 /** A deleted game leaves the ladder. */
 export async function forgetResult(gameId: string) {
   if (await results.get(gameId)) await results.delete(gameId);

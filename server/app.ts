@@ -50,6 +50,9 @@ import { parseList } from "./listParser.ts";
 import { bothConfirmed, changeGame, confirmResult, forgetShares, gameLists, joinGame, ladderSides, leaveGame, myGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
 import { forgetResult, ladder, listResults, syncResult } from "./ladder.ts";
 import { Collection, newId } from "./store.ts";
+import { blankGame } from "./newGame.ts";
+import { clubMembers } from "./members.ts";
+import { createEvent, deleteEvent, editEvent, finishEvent, getEvent, joinEvent, leaveEvent, listEvents, pairRound, setTableResult, tableGame, unpairRound } from "./events.ts";
 import { backgroundJobs, resumePendingTranscriptions, transcribeDocument, transcribeStep } from "./transcribe.ts";
 
 const lists = new Collection<ArmyList>("lists");
@@ -499,30 +502,6 @@ app.delete("/api/library/:id", requireDeveloper, async (req, res) => {
 
 // ---------- games ----------
 
-const tacticsFrom = (list?: ArmyList) =>
-  (list?.tacticCards ?? []).slice(0, 2).map((card) => ({ card, affray: false, strike: false, domination: false }));
-
-function newState(attacker: GameState["attacker"]): GameState {
-  return {
-    round: 1,
-    attacker,
-    firstThisRound: attacker,
-    activePlayer: attacker,
-    phase: "Deployment",
-    cp: { me: 0, opponent: 0 },
-    vp: { me: 0, opponent: 0 },
-    fury: { me: attacker === "me" ? 1 : 2, opponent: attacker === "opponent" ? 1 : 2 },
-    rage: { me: 0, opponent: 0 },
-    tactics: [],
-    opponentTactics: [],
-    underdog: null,
-    seizedInitiative: null,
-    units: {},
-    objectives: "",
-    notes: "",
-  };
-}
-
 // A game is the signed-in player's own or one they joined (server/sharedGames.ts).
 const openOr404 = async (req: Request, res: Response) => {
   const o = await openGame(param(req, "id"));
@@ -558,22 +537,7 @@ app.post("/api/games", async (req, res) => {
   const b = req.body as Partial<Game> & { attacker?: GameState["attacker"] };
   const [mine, theirs] = await Promise.all([lists.get(b.myListId ?? ""), lists.get(b.opponentListId ?? "")]);
   const last = newestFirst(await games.list())[0];
-  const game: Game = {
-    id: newId(),
-    name: b.name || "",
-    myName: b.myName ?? (last?.myName || currentUser().name),
-    opponentName: b.opponentName ?? "",
-    date: b.date ?? new Date().toISOString().slice(0, 10),
-    points: b.points ?? 2000,
-    myListId: b.myListId ?? "",
-    opponentListId: b.opponentListId ?? "",
-    battleplan: b.battleplan ?? "",
-    battleplanNotes: b.battleplanNotes ?? "",
-    references: b.references ?? [],
-    state: { ...newState(b.attacker ?? "me"), tactics: tacticsFrom(mine), opponentTactics: tacticsFrom(theirs), rounds: [] },
-    log: [],
-    createdAt: new Date().toISOString(),
-  };
+  const game = blankGame({ ...b, myName: b.myName ?? (last?.myName || currentUser().name) }, mine, theirs);
   res.json(await games.save(game));
 });
 // Changes as small edits on the player's own view, applied to the latest game.
@@ -611,6 +575,31 @@ app.post("/api/games/:id/confirm", async (req, res) => {
   res.json(viewGame(next));
 });
 app.get("/api/club/ladder", async (_req, res) => res.json(await ladder()));
+// The club's members (names only), for events, challenges and profiles.
+app.get("/api/club/members", async (_req, res) => res.json((await clubMembers()).map(({ id, name }) => ({ id, name }))));
+
+// Club nights and tournaments (server/events.ts).
+app.get("/api/events", async (_req, res) => res.json(await listEvents()));
+app.post("/api/events", async (req, res) => res.json(await createEvent(req.body ?? {})));
+app.get("/api/events/:id", async (req, res) => res.json(await getEvent(param(req, "id"))));
+app.patch("/api/events/:id", async (req, res) => res.json(await editEvent(param(req, "id"), req.body ?? {})));
+app.delete("/api/events/:id", async (req, res) => {
+  await deleteEvent(param(req, "id"));
+  res.json({ ok: true });
+});
+app.post("/api/events/:id/join", async (req, res) => res.json(await joinEvent(param(req, "id"), req.body?.faction)));
+app.delete("/api/events/:id/join", async (req, res) => res.json(await leaveEvent(param(req, "id"))));
+app.post("/api/events/:id/pair", async (req, res) => res.json(await pairRound(param(req, "id"))));
+app.delete("/api/events/:id/pair", async (req, res) => res.json(await unpairRound(param(req, "id"))));
+app.post("/api/events/:id/finish", async (req, res) => res.json(await finishEvent(param(req, "id"))));
+app.post("/api/events/:id/tables/:round/:table/game", async (req, res) =>
+  res.json({ id: await tableGame(param(req, "id"), Number(param(req, "round")), Number(param(req, "table"))) }),
+);
+app.put("/api/events/:id/tables/:round/:table/result", async (req, res) => {
+  const b = req.body ?? {};
+  const score = b.a === null || b.a === undefined ? null : { a: Number(b.a), b: Number(b.b) };
+  res.json(await setTableResult(param(req, "id"), Number(param(req, "round")), Number(param(req, "table")), score));
+});
 app.post("/api/games/join", async (req, res) => {
   try {
     res.json({ id: await joinGame(String(req.body?.token ?? "")) });

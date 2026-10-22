@@ -264,6 +264,8 @@ export interface Game {
   report?: BattleReport;
   /** The coach's short review of the game for this player (each player of a shared game has their own). */
   review?: GameReview;
+  /** The club event this game is a table of (set by the server). */
+  event?: { id: string; name: string; round: number; table: number };
 }
 
 export interface GameReview {

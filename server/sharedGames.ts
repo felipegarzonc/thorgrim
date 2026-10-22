@@ -44,7 +44,7 @@ export const isGamePhoto = (prefix: string, gameId: string, path: unknown): path
   typeof path === "string" && path.startsWith(`${prefix}game-photos/${gameId}/`) && /^\d+\.jpg$/.test(path.slice(`${prefix}game-photos/${gameId}/`.length));
 
 /** Fields the page can't change: identity and sharing are handled here. */
-const FIXED = new Set(["id", "createdAt", "version", "share", "viewers", "listSpaces", "access", "confirmations"]);
+const FIXED = new Set(["id", "createdAt", "version", "share", "viewers", "listSpaces", "access", "confirmations", "event"]);
 
 /** The final result in the creator's terms; a confirmation counts only while the result is unchanged. */
 export const resultKey = (g: Game) => `${g.state.vp.me}:${g.state.vp.opponent}:${g.finished?.conclusion ?? ""}`;
@@ -203,6 +203,17 @@ export async function joinGame(token: string): Promise<string> {
   }
   await linksIn(me.prefix).save({ id: game.id, ownerPrefix: invite.ownerPrefix });
   return game.id;
+}
+
+/**
+ * A game the two players share from the start (an event's table, an accepted
+ * challenge): it lives in `owner`'s space and `opponent` gets a pointer to it.
+ */
+export async function createSharedGame(owner: { id: string; name: string; prefix: string }, opponent: { id: string; name: string; prefix: string }, game: Game): Promise<Game> {
+  const share = { ownerId: owner.id, ownerName: owner.name, players: [{ id: opponent.id, name: opponent.name, prefix: opponent.prefix }] };
+  const saved = await gamesIn(owner.prefix).save({ ...game, myName: owner.name, opponentName: opponent.name, share, version: 1 });
+  await linksIn(opponent.prefix).save({ id: game.id, ownerPrefix: owner.prefix });
+  return saved;
 }
 
 /** A joined player leaves: the game stays with its creator. */

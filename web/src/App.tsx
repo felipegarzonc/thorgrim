@@ -137,7 +137,7 @@ export function App() {
         )}
         {tab === "home" && <HomePage unread={unread.notices + unread.posts} />}
         {tab === "games" && <GamesPage />}
-        {tab === "club" && <ClubPage postId={id} unreadNotices={unread.notices} />}
+        {tab === "club" && <ClubPage postId={id} sub={step} unreadNotices={unread.notices} />}
         {tab === "lists" && <ListsPage selectedId={id} />}
         {tab === "library" && developer && <LibraryPage />}
         {tab === "library" && meta && !developer && <Redirect to="#/home" />}

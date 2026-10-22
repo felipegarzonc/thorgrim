@@ -10,6 +10,8 @@ import { armyStats, headToHead, standings, type ClubResult } from "../../../shar
 import { Avatar, Icon, Seg, useLoad, useMeta, type IconName } from "../ui.tsx";
 import { rowsFromDetail, ScoreSheet, type SheetSide } from "../scoreSheet.tsx";
 import { Story } from "./report.tsx";
+import { EventPage, EventsList } from "./Events.tsx";
+import { MemberPage, MembersList } from "./Members.tsx";
 
 /** Reactions keep their emoji keys on the server; the page shows them as themed icons. */
 const REACTION_LOOK: Record<string, { icon: IconName; label: string }> = {
@@ -431,12 +433,26 @@ function Activity() {
   );
 }
 
-export function ClubPage({ postId, unreadNotices }: { postId?: string; unreadNotices: number }) {
+type ClubTab = "reports" | "events" | "ladder" | "members";
+const CLUB_TABS: ClubTab[] = ["reports", "events", "ladder", "members"];
+
+/**
+ * #/club, #/club/<tab>, #/club/<post id>, #/club/event/<id>, #/club/member/<id>.
+ */
+export function ClubPage({ postId: section, sub, unreadNotices }: { postId?: string; sub?: string; unreadNotices: number }) {
+  if (section === "event" && sub) return <EventPage id={sub} />;
+  if (section === "member" && sub) return <MemberPage id={sub} />;
+  const tab = CLUB_TABS.includes(section as ClubTab) ? (section as ClubTab) : "reports";
+  const postId = section && !CLUB_TABS.includes(section as ClubTab) ? section : undefined;
+  return <ClubHome tab={tab} postId={postId} unreadNotices={unreadNotices} />;
+}
+
+function ClubHome({ tab, postId, unreadNotices }: { tab: ClubTab; postId?: string; unreadNotices: number }) {
   const [posts, setPosts] = useState<FeedPostView[]>();
   const [error, setError] = useState<string>();
   const [view, setView] = useState<"feed" | "activity">("feed");
   const [filter, setFilter] = useState("all");
-  const [tab, setTab] = useState<"reports" | "ladder">("reports");
+  const setTab = (t: ClubTab) => window.location.replace(`#/club/${t}`);
 
   useEffect(() => {
     api<FeedPostView[]>("/feed")
@@ -470,8 +486,10 @@ export function ClubPage({ postId, unreadNotices }: { postId?: string; unreadNot
           label="Club"
           value={tab}
           options={[
-            ["reports", "Battle reports"],
+            ["reports", "Reports"],
+            ["events", "Events"],
             ["ladder", "Ladder"],
+            ["members", "Members"],
           ]}
           onChange={setTab}
         />
@@ -480,6 +498,10 @@ export function ClubPage({ postId, unreadNotices }: { postId?: string; unreadNot
         <Activity />
       ) : tab === "ladder" && !postId ? (
         <Ladder />
+      ) : tab === "events" && !postId ? (
+        <EventsList />
+      ) : tab === "members" && !postId ? (
+        <MembersList />
       ) : (
         <>
           {!postId && posts && posts.length > 0 && (

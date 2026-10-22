@@ -269,6 +269,11 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
       </header>
 
       <div className="step-body">
+        {game.event && (current === "players" || current === "results") && (
+          <a className="event-banner" href={`#/club/event/${game.event.id}`}>
+            <Icon name="trophy" /> {game.event.name} · Round {game.event.round} · Table {game.event.table}
+          </a>
+        )}
         {current === "players" && <PlayersStep game={game} lists={lists} mutate={mutate} reloadLists={reloadLists} shareChanged={meta?.accounts ? shareChanged : undefined} />}
         {current === "setup" && <SetupStep game={game} mutate={mutate} />}
         {current === "battleplan" && <BattleplanStep game={game} mutate={mutate} />}
