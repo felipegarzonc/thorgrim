@@ -29,6 +29,9 @@ export function Shell({ title, sub, children }: { title: string; sub?: ReactNode
         {sub && <p className="muted small">{sub}</p>}
         {children}
       </div>
+      <a className="small login-about" href="#/welcome">
+        What is Thorgrim?
+      </a>
     </main>
   );
 }

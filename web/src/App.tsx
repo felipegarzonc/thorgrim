@@ -10,6 +10,7 @@ import { LibraryPage } from "./pages/Library.tsx";
 import { ListsPage } from "./pages/Lists.tsx";
 import { Join, Login } from "./pages/Auth.tsx";
 import { JoinGame } from "./pages/JoinGame.tsx";
+import { Landing } from "./pages/Landing.tsx";
 import { HomePage } from "./pages/Home.tsx";
 import { ProfilePage } from "./pages/Profile.tsx";
 import { StatsPage } from "./pages/Stats.tsx";
@@ -95,7 +96,10 @@ export function App() {
   const tabs = TABS.filter(([key]) => key !== "library" || developer);
   if (tab === "join" && id) return <Join token={id} />;
   if (tab === "r" && id) return <PublicReport token={id} />;
-  if (needLogin) return <Login />;
+  if (tab === "welcome") return <Landing />;
+  // Not signed in: the landing page first; its buttons (and game links) lead to sign-in.
+  if (needLogin) return tab === "signin" || tab === "play" ? <Login /> : <Landing />;
+  if (tab === "signin") return <Redirect to="#/home" />;
   if (tab === "play" && id) return <JoinGame token={id} />;
   // Pages wait for /meta: it brings the photo pass their images need.
   if (!meta && !error) return <main><p className="muted page-loading">Loading…</p></main>;

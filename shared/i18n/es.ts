@@ -833,6 +833,78 @@ export const ES_PHRASES: Record<string, string> = {
   'e.g. Hell Pit 8" from my Stonehorn, Jezzails on the left ruin': 'p. ej. Hell Pit a 8" de mi Stonehorn, Jezzails en la ruina de la izquierda',
   'e.g. Failed a 6" charge with the Stonehorn': 'p. ej. Fallé una carga de 6" con el Stonehorn',
   Notification: "Notificación",
+  // ---------- landing page ----------
+  "What is Thorgrim?": "¿Qué es Thorgrim?",
+  "At the table": "En la mesa",
+  "After the battle": "Tras la batalla",
+  "Your club": "Tu club",
+  "The coach": "El coach",
+  "Warhammer Age of Sigmar · tracker & coach": "Warhammer Age of Sigmar · marcador y coach",
+  "Every battle remembered. Every turn coached.": "Cada batalla, recordada. Cada turno, con coach.",
+  "Score your games round by round on your phone, get a plan from the coach every turn, and turn each battle into a legend your club can read, react to and rank on the ladder.":
+    "Puntúa tus partidas ronda a ronda en el móvil, recibe un plan del coach en cada turno y convierte cada batalla en una leyenda que tu club puede leer, comentar y clasificar en la liga.",
+  "Start a game": "Empezar una partida",
+  "See how it works": "Ver cómo funciona",
+  "In English and Español · keeps working without signal at the table · invite-only for your club": "En inglés y español · funciona sin cobertura en la mesa · solo con invitación para tu club",
+  "Age of Sigmar 4th edition": "Age of Sigmar 4.ª edición",
+  "General's Handbook 2026-27 battleplans and battle tactics": "Planes de batalla y tácticas del General's Handbook 2026-27",
+  "Every faction's warscrolls and points": "Hojas de unidad y puntos de todas las facciones",
+  "Shared games on two phones": "Partidas compartidas en dos móviles",
+  "Less bookkeeping. More rolling dice.": "Menos papeleo. Más tiradas de dados.",
+  "Thorgrim keeps the score sheet so you can keep your eyes on the board.": "Thorgrim lleva la hoja de puntuación para que tú no apartes la vista del tablero.",
+  "Score every round": "Puntúa cada ronda",
+  "Objectives, battle tactic steps, command points, fury and rage dice, with the battleplan's scoring built in. Priority, double turns and the underdog are worked out for you.":
+    "Objetivos, pasos de tácticas de batalla, puntos de mando, furia y dados de rabia, con la puntuación del plan de batalla incluida. La prioridad, los dobles turnos y el underdog se calculan solos.",
+  "“I held both objectives and did Strike of Siege of Ashes, Diego spent two command points.” Check the changes, tap Apply, done.":
+    "«He controlado los dos objetivos y he hecho el Strike de Siege of Ashes, Diego ha gastado dos puntos de mando.» Revisa los cambios, toca Aplicar y listo.",
+  "Each player's time, switching when the turn passes. Great for tournament practice, and for that one friend who measures everything twice.":
+    "El tiempo de cada jugador, que cambia al pasar el turno. Ideal para entrenar torneos, y para ese amigo que lo mide todo dos veces.",
+  "The abilities and commands both armies can use right now, from their warscrolls. Mark once-per-battle abilities as used and they drop out.":
+    "Las habilidades y órdenes que los dos ejércitos pueden usar ahora mismo, sacadas de sus hojas de unidad. Marca las de una vez por batalla como usadas y desaparecen.",
+  "Play together, on two phones": "Jugad juntos, en dos móviles",
+  "Share a game with your opponent: you both see and edit the same score, command points and rounds, each from your own side. No signal in the club basement? It saves on the phone and syncs later.":
+    "Comparte una partida con tu rival: los dos veis y editáis el mismo marcador, puntos de mando y rondas, cada uno desde su lado. ¿Sin cobertura en el sótano del club? Se guarda en el móvil y se sincroniza después.",
+  "A plan for every turn": "Un plan para cada turno",
+  "Before the game, the coach studies both lists, the battleplan and your tactic cards. During it, each turn gets a short plan phase by phase, and you can tell it what just happened to re-plan.":
+    "Antes de la partida, el coach estudia las dos listas, el plan de batalla y tus cartas de táctica. Durante ella, cada turno tiene un plan breve fase a fase, y puedes contarle lo que acaba de pasar para replanificar.",
+  "Your game, told as a legend.": "Tu partida, contada como una leyenda.",
+  "Snap the battlefield and your best models. The coach turns what you recorded into an epic battle report: true to the score, grim and glorious in the telling. Post it to your club with the score sheet as the cover.":
+    "Fotografía el campo de batalla y tus mejores miniaturas. El coach convierte lo que registraste en una crónica épica: fiel al marcador, cruda y gloriosa en el relato. Publícala en tu club con la hoja de puntuación como portada.",
+  "Coach's review:": "Análisis del coach:",
+  "how it was won or lost, where the points went, and one thing to try next game.": "cómo se ganó o se perdió, dónde se fueron los puntos y una cosa que probar en la próxima partida.",
+  "Your stats:": "Tus estadísticas:",
+  "win rate by army and battleplan, your best and weakest battle tactics, points per round, double turns.": "victorias por ejército y plan de batalla, tus mejores y peores tácticas, puntos por ronda, dobles turnos.",
+  "Rivalries:": "Rivalidades:",
+  "your all-time record against every opponent, on the results and on club posts.": "tu historial contra cada rival, en el resultado y en las publicaciones del club.",
+  "A home for your gaming group.": "Un hogar para tu grupo de juego.",
+  "Battle reports with reactions and comments, a ladder of confirmed results, club nights and tournaments, and everyone's painted armies, all in one place.":
+    "Crónicas con reacciones y comentarios, una liga de resultados confirmados, noches de club y torneos, y los ejércitos pintados de todos, en un solo sitio.",
+  "October Cup": "Copa de octubre",
+  "Tournament · 3 rounds · 2000 pts": "Torneo · 3 rondas · 2000 pts",
+  "ROUND 2": "RONDA 2",
+  playing: "jugando",
+  "Members sign up with their army. The organiser pairs each round: at random first, then by standing with no rematches. Each table starts a game both players share, and its result goes straight to the standings.":
+    "Los miembros se apuntan con su ejército. El organizador empareja cada ronda: primero al azar, luego por clasificación y sin repetir rival. Cada mesa empieza una partida que comparten los dos jugadores, y su resultado va directo a la clasificación.",
+  "Ladder & seasons": "Liga y temporadas",
+  "Results count when both players confirm them. Start a new season whenever you like; the old one gets its recap and its champion.":
+    "Los resultados cuentan cuando los dos jugadores los confirman. Empieza una temporada nueva cuando quieras; la anterior tiene su resumen y su campeón.",
+  "“Rematch? My Gutbusters want revenge.” Accept, and the game is waiting on both your phones.": "«¿Revancha? Mis Gutbusters quieren venganza.» Acepta y la partida os espera en los dos móviles.",
+  "Army showcase": "Vitrina de ejércitos",
+  "Every member's page shows their painted armies, their ladder record and how you've done against them.": "La página de cada miembro muestra sus ejércitos pintados, su historial en la liga y cómo te ha ido contra él.",
+  "Rules questions, answered from the books.": "Dudas de reglas, respondidas con los libros.",
+  "Powered by Claude. It knows every faction's warscrolls and points, searches the core rules, the General's Handbook and battletomes and cites the page, runs the dice maths, and checks what is winning tournaments right now.":
+    "Funciona con Claude. Conoce las hojas de unidad y los puntos de todas las facciones, busca en las reglas básicas, el General's Handbook y los battletomes y cita la página, hace las cuentas de dados y mira qué está ganando torneos ahora mismo.",
+  "In your opponent's charge phase: one of your units that isn't in combat can charge them back. It costs 2 command points.":
+    "En la fase de carga de tu rival: una de tus unidades que no esté en combate puede cargarle de vuelta. Cuesta 2 puntos de mando.",
+  "Core rules · Commands": "Reglas básicas · Órdenes",
+  "Gather your warband.": "Reúne a tu banda de guerra.",
+  "Thorgrim runs one club at a time. Ask your club's admin for an invite link, then sign in and start your first game.":
+    "Thorgrim funciona por clubes. Pide a quien administre tu club un enlace de invitación, entra y empieza tu primera partida.",
+  "An unofficial fan-made tool, not affiliated with Games Workshop. Warhammer Age of Sigmar and its rules text belong to Games Workshop; army data from BSData, for personal use.":
+    "Una herramienta no oficial hecha por fans, sin relación con Games Workshop. Warhammer Age of Sigmar y el texto de sus reglas pertenecen a Games Workshop; datos de ejércitos de BSData, para uso personal.",
+  "38-20 Goy vs Diego": "38-20 Goy vs Diego",
+  "Charge the Mournfangs into the unit on objective B: holding it wins the round. Keep the Stonehorn back for their counter-charge.":
+    "Carga con los Mournfangs a la unidad del objetivo B: tenerlo te da la ronda. Guarda el Stonehorn para su contracarga.",
   // ---------- badges ----------
   "Nail-biter": "Final de infarto",
   "Dead even": "Igualadísimo",
