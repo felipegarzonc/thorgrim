@@ -192,6 +192,11 @@ export function ProfilePage() {
         <h2>{me.user.name || "You"}</h2>
         {me.user.email && <p className="muted small">{me.user.email}</p>}
         <span className="badge">{me.user.role === "admin" ? "Admin" : "Player"}</span>
+        {meta?.user?.id && (
+          <a className="small" href={`#/club/member/${meta.user.id}`}>
+            Your club page and army showcase →
+          </a>
+        )}
       </section>
 
       <PhoneNotifications />

@@ -4,8 +4,10 @@
 import { useState } from "react";
 import { headToHead, standings, type ClubResult } from "../../../shared/ladder.ts";
 import type { FeedPostView } from "../../../shared/types.ts";
-import { api } from "../api.ts";
-import { Avatar, Icon, Sheet, useLoad, useMeta } from "../ui.tsx";
+import { api, withKey } from "../api.ts";
+import { shrinkPhoto } from "../media.tsx";
+import { Avatar, FactionPicker, Icon, Sheet, useLoad, useMeta } from "../ui.tsx";
+import { Carousel } from "./Club.tsx";
 
 export interface ClubMember {
   id: string;
@@ -189,6 +191,7 @@ export function MemberPage({ id }: { id: string }) {
   const [ladder] = useLoad<{ me: string; results: ClubResult[] }>("/club/ladder");
   const [posts] = useLoad<FeedPostView[]>("/feed");
   const [challenging, setChallenging] = useState(false);
+  const [showcase] = useLoad<ShowcaseArmy[]>(`/club/members/${id}/showcase`);
   if (!members || !ladder) return <p className="muted">Loading…</p>;
   const member = members.find((m) => m.id === id);
   if (!member) return <p className="muted">That member isn't in the club any more.</p>;
@@ -205,7 +208,7 @@ export function MemberPage({ id }: { id: string }) {
         ← Members
       </a>
       <section className="card member-head">
-        <Avatar faction={s?.faction} size={3.2} />
+        <Avatar faction={s?.faction || showcase?.[0]?.faction} size={3.2} />
         <div className="grow">
           <h1>{member.name}</h1>
           <p className="muted small">{s ? `${s.faction || "No army yet"} · #${rank + 1} on the ladder` : "No ladder games yet"}</p>
@@ -253,6 +256,8 @@ export function MemberPage({ id }: { id: string }) {
         </div>
       )}
 
+      <Showcase memberId={id} name={member.name} isMe={isMe} />
+
       {theirPosts.length > 0 && (
         <section>
           <h2 className="section-title">Battle reports</h2>
@@ -273,5 +278,137 @@ export function MemberPage({ id }: { id: string }) {
         </section>
       )}
     </div>
+  );
+}
+
+interface ShowcaseArmy {
+  id: string;
+  faction: string;
+  name: string;
+  note?: string;
+  photos: string[];
+}
+
+/** A member's armies with photos of their painted models. On your own page you add, edit and remove them. */
+function Showcase({ memberId, name, isMe }: { memberId: string; name: string; isMe: boolean }) {
+  const [loaded] = useLoad<ShowcaseArmy[]>(`/club/members/${memberId}/showcase`);
+  const [armies, setArmies] = useState<ShowcaseArmy[]>();
+  const [picking, setPicking] = useState(false);
+  const [busy, setBusy] = useState<string>();
+  const [error, setError] = useState<string>();
+  const list = armies ?? loaded;
+  if (!list) return null;
+  if (!list.length && !isMe) return null;
+
+  const act = async (key: string, fn: () => Promise<ShowcaseArmy[]>) => {
+    setBusy(key);
+    setError(undefined);
+    try {
+      setArmies(await fn());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+  const addArmy = (faction: string) => {
+    const armyName = prompt("A name for this army (optional):", "") ?? "";
+    void act("new", () => api<ShowcaseArmy[]>("/showcase/armies", { method: "POST", json: { faction, name: armyName } }));
+  };
+  const addPhotos = (a: ShowcaseArmy, files: FileList | null) =>
+    act(a.id, async () => {
+      let out = list;
+      for (const f of [...(files ?? [])].slice(0, 12 - a.photos.length)) {
+        const body = await shrinkPhoto(f);
+        out = await api<ShowcaseArmy[]>(`/showcase/armies/${a.id}/photos`, { method: "POST", body, headers: { "content-type": "image/jpeg" } });
+        setArmies(out);
+      }
+      return out;
+    });
+  const photoUrl = (a: ShowcaseArmy, p: string) => withKey(`/api/showcase/${memberId}/${a.id}/${p}`);
+
+  return (
+    <section className="showcase">
+      <h2 className="section-title">{isMe ? "Your armies" : `${name}'s armies`}</h2>
+      {!list.length && <p className="muted small">Show the club your painted armies: add an army, then photos of your models.</p>}
+      {list.map((a) => (
+        <article key={a.id} className="card showcase-army">
+          <header className="showcase-head">
+            <Avatar faction={a.faction} size={2} />
+            <span className="grow">
+              <b>{a.name}</b>
+              {a.name !== a.faction && <small className="muted">{a.faction}</small>}
+            </span>
+            {isMe && (
+              <button
+                type="button"
+                className="icon small-icon"
+                aria-label={`Remove ${a.name}`}
+                disabled={!!busy}
+                onClick={() => confirm(`Remove ${a.name} and its photos?`) && act(a.id, () => api<ShowcaseArmy[]>(`/showcase/armies/${a.id}`, { method: "DELETE" }))}
+              >
+                <Icon name="trash" />
+              </button>
+            )}
+          </header>
+          {a.photos.length > 0 && (
+            <Carousel
+              slides={a.photos.map((p) => (
+                <a key={p} href={photoUrl(a, p)} target="_blank" rel="noreferrer" className="showcase-photo">
+                  <img src={photoUrl(a, p)} alt={`${a.name}, photo`} loading="lazy" />
+                  {isMe && (
+                    <button
+                      type="button"
+                      className="photo-remove"
+                      aria-label="Remove this photo"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (confirm("Remove this photo?")) void act(a.id, () => api<ShowcaseArmy[]>(`/showcase/armies/${a.id}/photos/${p}`, { method: "DELETE" }));
+                      }}
+                    >
+                      <Icon name="close" />
+                    </button>
+                  )}
+                </a>
+              ))}
+            />
+          )}
+          {a.note && <p className="small">{a.note}</p>}
+          {isMe && (
+            <div className="row">
+              <label className={`button small ${busy === a.id ? "disabled" : ""}`}>
+                <Icon name="camera" /> {busy === a.id ? "Uploading…" : "Add photos"}
+                <input type="file" accept="image/*" multiple hidden disabled={busy === a.id || a.photos.length >= 12} onChange={(e) => void addPhotos(a, e.target.files)} />
+              </label>
+              <button
+                type="button"
+                className="ghost small"
+                onClick={() => {
+                  const note = prompt("A few words about this army (paint scheme, lore, favourite unit):", a.note ?? "");
+                  if (note !== null) void act(a.id, () => api<ShowcaseArmy[]>(`/showcase/armies/${a.id}`, { method: "PATCH", json: { faction: a.faction, name: a.name, note } }));
+                }}
+              >
+                <Icon name="pencil" /> {a.note ? "Edit note" : "Add a note"}
+              </button>
+            </div>
+          )}
+        </article>
+      ))}
+      {isMe && list.length < 8 && (
+        <button type="button" className="outline wide" disabled={busy === "new"} onClick={() => setPicking(true)}>
+          <Icon name="plus" /> Add an army
+        </button>
+      )}
+      {error && <p className="error small">{error}</p>}
+      {picking && (
+        <FactionPicker
+          onPick={(f) => {
+            setPicking(false);
+            addArmy(f);
+          }}
+          onClose={() => setPicking(false)}
+        />
+      )}
+    </section>
   );
 }

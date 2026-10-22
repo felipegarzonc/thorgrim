@@ -52,6 +52,7 @@ import { forgetResult, ladder, listResults, startSeason, syncResult } from "./la
 import { Collection, newId } from "./store.ts";
 import { blankGame } from "./newGame.ts";
 import { clubMembers } from "./members.ts";
+import { addPhoto as addShowcasePhoto, deleteArmy, deletePhoto as deleteShowcasePhoto, readPhoto as readShowcasePhoto, saveArmy, showcaseOf } from "./showcase.ts";
 import { accept as acceptChallenge, challenge, decline as declineChallenge, myChallenges, withdraw as withdrawChallenge } from "./challenges.ts";
 import { createEvent, deleteEvent, editEvent, finishEvent, getEvent, joinEvent, leaveEvent, listEvents, pairRound, setTableResult, tableGame, unpairRound } from "./events.ts";
 import { backgroundJobs, resumePendingTranscriptions, transcribeDocument, transcribeStep } from "./transcribe.ts";
@@ -128,7 +129,7 @@ async function accountCtx(userId: string): Promise<UserCtx> {
 // photos and files, never the sign-in itself (no session token or app
 // password in a link).
 const MEDIA_TTL_MS = 24 * 3600_000;
-const MEDIA_ROUTE = /^\/(games\/[a-z0-9-]+\/photo|feed\/[a-z0-9-]+\/photo\/\d+|library\/[a-z0-9-]+\/file)$/i;
+const MEDIA_ROUTE = /^\/(games\/[a-z0-9-]+\/photo|feed\/[a-z0-9-]+\/photo\/\d+|library\/[a-z0-9-]+\/file|showcase\/[a-z0-9-]+\/[a-z0-9-]+\/[a-z0-9-]+)$/i;
 const mediaSig = (body: string) => crypto.createHmac("sha256", `thorgrim-media:${accessKey || "local"}`).update(body).digest("base64url");
 export function mediaToken(userId: string): string {
   const body = `${userId}.${Date.now() + MEDIA_TTL_MS}`;
@@ -579,6 +580,22 @@ app.get("/api/club/ladder", async (_req, res) => res.json(await ladder()));
 app.post("/api/club/seasons", requireAdmin, async (req, res) => res.json(await startSeason(String(req.body?.name ?? ""))));
 // The club's members (names only), for events, challenges and profiles.
 app.get("/api/club/members", async (_req, res) => res.json((await clubMembers()).map(({ id, name }) => ({ id, name }))));
+
+// The army showcase (server/showcase.ts): anyone in the club sees it, each member edits their own.
+app.get("/api/club/members/:id/showcase", async (req, res) => res.json(await showcaseOf(param(req, "id"))));
+app.post("/api/showcase/armies", async (req, res) => res.json(await saveArmy(req.body ?? {})));
+app.patch("/api/showcase/armies/:army", async (req, res) => res.json(await saveArmy(req.body ?? {}, param(req, "army"))));
+app.delete("/api/showcase/armies/:army", async (req, res) => res.json(await deleteArmy(param(req, "army"))));
+app.post("/api/showcase/armies/:army/photos", express.raw({ type: "image/*", limit: "8mb" }), async (req, res) => {
+  const body = req.body as Buffer;
+  if (!Buffer.isBuffer(body) || !body.length) return res.status(400).json({ error: "No photo received" });
+  res.json(await addShowcasePhoto(param(req, "army"), body));
+});
+app.delete("/api/showcase/armies/:army/photos/:photo", async (req, res) => res.json(await deleteShowcasePhoto(param(req, "army"), param(req, "photo"))));
+app.get("/api/showcase/:member/:army/:photo", async (req, res) => {
+  const data = await readShowcasePhoto(param(req, "member"), param(req, "army"), param(req, "photo"));
+  return data ? res.type("image/jpeg").set("cache-control", "private, max-age=86400").send(data) : res.status(404).end();
+});
 
 // Challenges between members (server/challenges.ts).
 app.get("/api/challenges", async (_req, res) => res.json(await myChallenges()));

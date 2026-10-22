@@ -39,7 +39,7 @@ const when = (iso: string) => {
 };
 
 /** Full-width slides, one at a time: swipe, or tap the dots. */
-function Carousel({ slides }: { slides: React.ReactNode[] }) {
+export function Carousel({ slides }: { slides: React.ReactNode[] }) {
   const [at, setAt] = useState(0);
   const strip = useRef<HTMLDivElement>(null);
   const go = (i: number) => strip.current?.scrollTo({ left: i * strip.current.clientWidth, behavior: "smooth" });

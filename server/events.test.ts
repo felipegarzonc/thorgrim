@@ -131,3 +131,19 @@ describe("challenges", () => {
     expect(await runAs(cid, () => ch.accept(c.id))).toBe(gameId);
   });
 });
+
+describe("army showcase", () => {
+  it("each member edits their own; photos only as listed", async () => {
+    const sc = await import("./showcase.ts");
+    const [army] = await runAs(ben, () => sc.saveArmy({ faction: "Skaven", name: "Clan Moulder" }));
+    const withPhoto = await runAs(ben, () => sc.addPhoto(army.id, Buffer.from("jpeg")));
+    const photo = withPhoto[0].photos[0];
+    expect(await runAs(cid, () => sc.showcaseOf("ben"))).toHaveLength(1);
+    expect((await runAs(cid, () => sc.readPhoto("ben", army.id, photo)))?.toString()).toBe("jpeg");
+    expect(await runAs(cid, () => sc.readPhoto("ben", army.id, "nope"))).toBeUndefined();
+    expect(await runAs(cid, () => sc.readPhoto("../settings", army.id, photo))).toBeUndefined();
+    // Cid can't touch Ben's army: it isn't in Cid's showcase.
+    await expect(runAs(cid, () => sc.deleteArmy(army.id))).rejects.toThrow(/removed/);
+    expect(await runAs(ben, () => sc.deleteArmy(army.id))).toEqual([]);
+  });
+});
