@@ -778,3 +778,44 @@ export async function voiceScore(game: Game, round: number, said: string): Promi
   const out = JSON.parse(text) as { changes: VoiceChange[]; unclear?: string };
   return { changes: cleanChanges(game, round, out.changes ?? []), unclear: out.unclear?.trim() || undefined };
 }
+
+// ---------- post-game review ----------
+
+const REVIEW_SYSTEM = `You are a sharp, friendly Warhammer Age of Sigmar coach. After a game, you give the player ("me" in the facts) a short review they read on their phone in a minute.
+- verdict: one sentence on how the game was won or lost (the decisive round, a double turn, tactics, objectives).
+- lost: 2-3 short points (max 20 words each) on where "me" dropped points or gave them away: rounds where the opponent outscored them, battle tactic steps missed, objectives lost, units lost. Name rounds and numbers. In a win, where the margin slipped.
+- tryNext: one concrete thing to try next game, specific to this matchup and these armies (max 30 words).
+Only use the facts given; don't invent events. Write in the language of the game's log and notes when they are not in English; otherwise in English. Plain text, no markdown.`;
+
+const reviewSchema = {
+  type: "object",
+  properties: { verdict: { type: "string" }, lost: { type: "array", items: { type: "string" } }, tryNext: { type: "string" } },
+  required: ["verdict", "lost", "tryNext"],
+  additionalProperties: false,
+};
+
+/** The coach's short review of a finished game, for the signed-in player. */
+export async function gameReview(ctx: CoachContext): Promise<{ verdict: string; lost: string[]; tryNext: string }> {
+  await checkBudget();
+  const game = ctx.game!;
+  const sides = reportSides(game, ctx.myList, ctx.opponentList);
+  const tactics = (game.state.tactics ?? []).map((t) => `${t.card}: ${[t.affray && "affray", t.strike && "strike", t.domination && "domination"].filter(Boolean).join(", ") || "no steps"}`);
+  const content = `<facts>\n${reportFacts(game, sides)}\nMy battle tactic cards: ${tactics.join("; ") || "none recorded"}.\n</facts>\nReview this game for me.`;
+  const response = await anthropic()
+    .beta.messages.stream({
+      model: REPORT_MODEL,
+      max_tokens: 3000,
+      system: REVIEW_SYSTEM,
+      messages: [{ role: "user", content }],
+      output_config: { effort: "medium", format: { type: "json_schema", schema: reviewSchema } },
+    })
+    .finalMessage();
+  await recordUsage(response.usage, HAIKU_PRICE);
+  if (response.stop_reason !== "end_turn") throw new Error("The coach couldn't review this game. Try again.");
+  const text = response.content
+    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+  const out = JSON.parse(text) as { verdict: string; lost: string[]; tryNext: string };
+  return { verdict: out.verdict.trim(), lost: out.lost.map((l) => l.trim()).filter(Boolean).slice(0, 3), tryNext: out.tryNext.trim() };
+}

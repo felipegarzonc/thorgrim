@@ -5,10 +5,10 @@
 // per game, shared by its players.
 
 import { useEffect, useRef, useState } from "react";
-import type { BattleReport, FeedPostView, Game } from "../../../shared/types.ts";
+import { reviewBasis, type BattleReport, type FeedPostView, type Game, type GameReview } from "../../../shared/types.ts";
 import { api, pendingJob, runJob, waitForJob, withKey } from "../api.ts";
 import { shrinkPhoto } from "../media.tsx";
-import { Icon } from "../ui.tsx";
+import { Icon, useMeta } from "../ui.tsx";
 
 type Mutate = (fn: (g: Game) => Game, log?: string) => Promise<void>;
 
@@ -26,6 +26,88 @@ export function Story({ text, short }: { text: string; short?: boolean }) {
         <p key={i}>{p}</p>
       ))}
     </div>
+  );
+}
+
+/** The coach's short review: how the game went, where the points went, one thing to try next. Written by itself once the game is finished. */
+export function ReviewCard({ game, mutate, saved }: { game: Game; mutate: Mutate; saved: () => Promise<unknown> }) {
+  const meta = useMeta();
+  const review = game.review;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const jobKey = `review:${game.id}`;
+  const stale = !!review && review.basis !== reviewBasis(game);
+  const keep = (r: Omit<GameReview, "writtenAt" | "basis">, basis: string) => mutate((g) => ({ ...g, review: { ...r, writtenAt: new Date().toISOString(), basis } }));
+  const write = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await saved();
+      const basis = reviewBasis(game);
+      await keep(await runJob<Omit<GameReview, "writtenAt" | "basis">>(`/games/${game.id}/review`, {}, jobKey), basis);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const asked = useRef(false);
+  useEffect(() => {
+    const id = pendingJob(jobKey);
+    if (id) {
+      setBusy(true);
+      waitForJob<Omit<GameReview, "writtenAt" | "basis">>(id, jobKey)
+        .then((r) => keep(r, reviewBasis(game)))
+        .catch((e: Error) => setError(e.message))
+        .finally(() => setBusy(false));
+    } else if (game.finished && !review && meta?.coachReady && !asked.current) {
+      asked.current = true;
+      void write();
+    }
+  }, [game.id, !!game.finished, meta?.coachReady]);
+  if (!meta?.coachReady) return null;
+
+  return (
+    <section className="card review-card">
+      <header className="card-header">
+        <h2>
+          <Icon name="spark" /> Coach's review
+        </h2>
+        {review && !busy && (
+          <button type="button" className="icon small-icon" aria-label="Write the review again" onClick={write}>
+            <Icon name="refresh" />
+          </button>
+        )}
+      </header>
+      {busy ? (
+        <p className="muted small thinking">Reviewing the game…</p>
+      ) : review ? (
+        <>
+          {stale && (
+            <p className="small warning">
+              The score changed since this review.{" "}
+              <button type="button" className="ghost small" onClick={write}>
+                Update it
+              </button>
+            </p>
+          )}
+          <p className="review-verdict">{review.verdict}</p>
+          <ul className="review-lost">
+            {review.lost.map((l, i) => (
+              <li key={i}>{l}</li>
+            ))}
+          </ul>
+          <p className="review-next">
+            <b>Next time:</b> {review.tryNext}
+          </p>
+        </>
+      ) : (
+        <button type="button" className="small primary" onClick={write}>
+          <Icon name="spark" /> Review this game
+        </button>
+      )}
+      {error && <p className="error small">{error}</p>}
+    </section>
   );
 }
 

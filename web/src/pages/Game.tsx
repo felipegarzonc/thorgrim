@@ -20,7 +20,7 @@ import { battleplanInfo } from "../../../shared/battleplans.ts";
 import { BattleplanCard } from "../battleplanView.tsx";
 import { drawResult, shareImage, type ShareRow } from "../shareImage.ts";
 import { WarscrollCard } from "./Lists.tsx";
-import { BattleReportCard } from "./report.tsx";
+import { BattleReportCard, ReviewCard } from "./report.tsx";
 import { VpLines } from "../vpChart.tsx";
 import { ScoreSheet } from "../scoreSheet.tsx";
 import { doubleTurns, gameBadges, reportSides, runningScore } from "../../../shared/report.ts";
@@ -2146,6 +2146,7 @@ function ResultsStep({
           <img src={image.url} alt={`Result image: ${summary}`} />
         </details>
       )}
+      <ReviewCard game={game} mutate={mutate} saved={saved} />
       <BattleReportCard game={game} mutate={mutate} saved={saved} />
     </div>
   );

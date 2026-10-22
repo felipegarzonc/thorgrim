@@ -2,7 +2,7 @@
 // makes a join link, and each player with an account who opens it gets a
 // pointer to the game in their own space. Both then see and edit the same
 // game (scores, CP, fury, rounds), each from their own side, while the
-// coach's plan and turn tips stay each player's own.
+// coach's plan, turn tips and post-game review stay each player's own.
 
 import crypto from "node:crypto";
 import { applyOps, type Op } from "../shared/patch.ts";
@@ -84,23 +84,27 @@ export function viewGame({ game, role }: OpenGame): Game {
   const flipped = flipGame(g);
   const view: Game = { ...flipped, state: { ...flipped.state }, access };
   delete view.plan;
+  delete view.review;
   delete view.state.tips;
   if (mine?.plan) view.plan = mine.plan;
+  if (mine?.review) view.review = mine.review;
   if (mine?.tips) view.state.tips = mine.tips;
   return view;
 }
 
 /** Back from a joined player's view to the stored game (their plan and tips kept apart). */
 function unviewGame(view: Game, stored: Game): Game {
-  const { access: _a, plan, ...rest } = view;
+  const { access: _a, plan, review, ...rest } = view;
   const { tips, ...state } = rest.state;
   const back = flipGame({ ...rest, state } as Game);
   const out: Game = { ...back, state: { ...back.state } };
   delete out.plan;
+  delete out.review;
   delete out.state.tips;
   if (stored.plan) out.plan = stored.plan;
+  if (stored.review) out.review = stored.review;
   if (stored.state.tips) out.state.tips = stored.state.tips;
-  out.viewers = { ...stored.viewers, [currentUser().id]: { plan, tips } };
+  out.viewers = { ...stored.viewers, [currentUser().id]: { plan, tips, review } };
   return out;
 }
 

@@ -14,7 +14,7 @@ import type { Op } from "../shared/patch.ts";
 import type { ArmyList, FeedPost, Game, GameState, LibraryDoc } from "../shared/types.ts";
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
-import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips, voiceScore } from "./coach.ts";
+import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips, voiceScore, gameReview } from "./coach.ts";
 import { addComment, deleteComment, deletePost, feed, FeedError, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
 import { markNoticesRead, myNotices, notify } from "./notices.ts";
 import { publicKey, pushTo, subscribe, unsubscribe } from "./push.ts";
@@ -681,6 +681,16 @@ app.post("/api/games/:id/voice", async (req, res) => {
   const said = String(req.body?.text ?? "").trim();
   if (!Number.isInteger(round) || round < 1 || round > 5 || !said) return res.status(400).json({ error: "Say what was scored." });
   res.json(await voiceScore(viewGame(o), round, said));
+});
+// The coach's short review of a finished game. The page stores it with the game (each player their own).
+app.post("/api/games/:id/review", async (req, res) => {
+  const o = await openOr404(req, res);
+  if (!o) return;
+  const game = viewGame(o);
+  if (!game.state.rounds?.some((r) => r.first)) return res.status(400).json({ error: "Play a battle round first." });
+  const [myList, opponentList] = await gameLists(o);
+  await checkBudget();
+  res.json({ job: await startJob("review", () => gameReview({ game, myList, opponentList })) });
 });
 // Poll a background coach request (see server/jobs.ts).
 app.get("/api/jobs/:id", async (req, res) => {

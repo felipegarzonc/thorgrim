@@ -253,7 +253,7 @@ export interface Game {
   /** Who plays this game together (stored, never sent to the page). */
   share?: GameShare;
   /** Each joined player's own coach plan and tips (stored, never sent to the page). */
-  viewers?: Record<string, { plan?: GamePlan; tips?: GameState["tips"] }>;
+  viewers?: Record<string, { plan?: GamePlan; tips?: GameState["tips"]; review?: GameReview }>;
   /** Where lists picked by a joined player live (list id -> their storage space). */
   listSpaces?: Record<string, string>;
   /** How the signed-in player sees this game (sent to the page only). */
@@ -262,7 +262,24 @@ export interface Game {
   confirmations?: Record<string, { result: string; at: string }>;
   /** The story of the game, written by the coach at the end (one per game, shared by its players). */
   report?: BattleReport;
+  /** The coach's short review of the game for this player (each player of a shared game has their own). */
+  review?: GameReview;
 }
+
+export interface GameReview {
+  /** One sentence on how the game was won or lost. */
+  verdict: string;
+  /** Where the points went: 2-3 short points. */
+  lost: string[];
+  /** One thing to try next time. */
+  tryNext: string;
+  writtenAt: string;
+  /** The score it was written for: when it changes, the review is out of date. */
+  basis: string;
+}
+
+/** What a review depends on (the final score and the round records). */
+export const reviewBasis = (g: Pick<Game, "state" | "finished">) => JSON.stringify([g.state.vp, g.state.rounds ?? [], g.finished?.conclusion]);
 
 export type ReportTone = "saga" | "report" | "banter";
 

@@ -115,7 +115,7 @@ describe("shared games", () => {
     const anaBase = await runAs(ana, async () => sg.viewGame((await sg.openGame("g1"))!));
     await runAs(ben, async () => {
       const o = (await sg.openGame("g1"))!;
-      const edited = { ...benView, myListId: "ben-list", plan: { summary: "Ben's plan" } as Game["plan"], state: { ...benView.state, cp: { me: 3, opponent: 4 }, fury: { me: 3, opponent: 1 } } };
+      const edited = { ...benView, myListId: "ben-list", plan: { summary: "Ben's plan" } as Game["plan"], review: { verdict: "Ben's review" } as Game["review"], state: { ...benView.state, cp: { me: 3, opponent: 4 }, fury: { me: 3, opponent: 1 } } };
       await sg.changeGame(o, diff(benView, edited));
     });
     await runAs(ana, async () => {
@@ -128,6 +128,7 @@ describe("shared games", () => {
     expect(anaNow.state.fury).toEqual({ me: 1, opponent: 3 });
     expect(anaNow.opponentListId).toBe("ben-list");
     expect(anaNow.plan).toBeUndefined(); // Ben's plan is his own
+    expect(anaNow.review).toBeUndefined(); // and so is his review
     expect(anaNow.access?.players).toEqual(["Ben"]);
     expect(anaNow.version).toBeGreaterThan(anaBase.version ?? 0);
 
@@ -137,6 +138,7 @@ describe("shared games", () => {
     expect(anaLists).toEqual(["ana-list", "ben-list"]);
     expect(benLists).toEqual(["ben-list", "ana-list"]);
     expect((await runAs(ben, async () => sg.viewGame((await sg.openGame("g1"))!))).plan?.summary).toBe("Ben's plan");
+    expect((await runAs(ben, async () => sg.viewGame((await sg.openGame("g1"))!))).review?.verdict).toBe("Ben's review");
 
     // The game shows in both players' lists of games.
     expect((await runAs(ben, () => sg.myGames())).map((g) => g.id)).toEqual(["g1"]);
