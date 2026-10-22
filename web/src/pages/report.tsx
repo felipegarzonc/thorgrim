@@ -21,7 +21,7 @@ export const gamePhotoUrl = (gameId: string, path: string) => withKey(`/api/game
 export function Story({ text, short }: { text: string; short?: boolean }) {
   const paras = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
   return (
-    <div className="story">
+    <div className="story" translate="no">
       {(short ? paras.slice(0, 2) : paras).map((p, i) => (
         <p key={i}>{p}</p>
       ))}

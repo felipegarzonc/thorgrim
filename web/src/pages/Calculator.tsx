@@ -207,7 +207,7 @@ export function CalculatorPage() {
         <UnitPicker label="Target" onPick={pickTarget} />
         <div className="grid3">
           <label>
-            Save
+            Armour save
             <select value={target.save ?? ""} onChange={(e) => setTarget({ ...target, save: e.target.value ? Number(e.target.value) : null })}>
               {[2, 3, 4, 5, 6].map((s) => (
                 <option key={s} value={s}>

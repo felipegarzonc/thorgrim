@@ -51,6 +51,7 @@ import { bothConfirmed, changeGame, confirmResult, forgetShares, gameLists, join
 import { forgetResult, ladder, listResults, startSeason, syncResult } from "./ladder.ts";
 import { Collection, newId } from "./store.ts";
 import { blankGame } from "./newGame.ts";
+import { rememberLang } from "./lang.ts";
 import { clubMembers } from "./members.ts";
 import { addPhoto as addShowcasePhoto, deleteArmy, deletePhoto as deleteShowcasePhoto, readPhoto as readShowcasePhoto, saveArmy, showcaseOf } from "./showcase.ts";
 import { accept as acceptChallenge, challenge, decline as declineChallenge, myChallenges, withdraw as withdrawChallenge } from "./challenges.ts";
@@ -165,7 +166,9 @@ app.use("/api", async (req, res, next) => {
       if (master) failed(req);
       return res.status(401).json({ error: "Sign in required", needsLogin: true });
     }
-    runAs(user, () => next());
+    const lang = req.get("x-lang") === "es" ? "es" : "en";
+    if (!media && req.get("x-lang")) await rememberLang(user.prefix, lang).catch(() => undefined);
+    runAs({ ...user, lang }, () => next());
   } catch (e) {
     if (e instanceof AuthError) return res.status(e.status).json({ error: e.message, needsLogin: e.status === 401 });
     next(e);

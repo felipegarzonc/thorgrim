@@ -541,7 +541,7 @@ export function LogCard({ game, update }: { game: Game; update: Update }) {
           Add
         </button>
       </div>
-      <ul className="log">
+      <ul className="log" translate="no">
         {[...game.log].reverse().map((l, i) => (
           <li key={i}>{l.text}</li>
         ))}

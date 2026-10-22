@@ -13,6 +13,8 @@ export interface UserCtx {
   prefix: string;
   /** Can manage the rules library: signed in with the app password (developers), or the app on your own computer. */
   developer?: boolean;
+  /** The language the page is in (server/lang.ts). */
+  lang?: "en" | "es";
 }
 
 /** On your own computer without accounts: one user who owns everything. */

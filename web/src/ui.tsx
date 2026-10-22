@@ -111,7 +111,8 @@ export function Markdown({ text }: { text: string }) {
   }
   closeList();
   closeTable();
-  return <div className="markdown" dangerouslySetInnerHTML={{ __html: out.join("") }} />;
+  // Rules text and the coach's own words: never run through the page translation.
+  return <div className="markdown" translate="no" dangerouslySetInnerHTML={{ __html: out.join("") }} />;
 }
 
 /** Rules text from BSData uses **bold** and ***italic*** markup. */

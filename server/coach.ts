@@ -21,6 +21,7 @@ import { anthropic } from "./anthropic.ts";
 import { reportFacts, reportSides } from "../shared/report.ts";
 import { cleanChanges, voiceOptions, type VoiceChange } from "../shared/voice.ts";
 import { currentUser } from "./context.ts";
+import { langNote } from "./lang.ts";
 import { Collection } from "./store.ts";
 
 type Msg = Anthropic.Beta.BetaMessageParam;
@@ -431,7 +432,7 @@ export async function askCoach(
     const response = await anthropic().beta.messages.create({
       model: coach.model,
       max_tokens: 16000,
-      system: SYSTEM,
+      system: SYSTEM + langNote(),
       tools: coach.haiku ? HAIKU_TOOLS : TOOLS,
       messages,
       cache_control: { type: "ephemeral" },
@@ -562,7 +563,7 @@ export async function turnTips(ctx: CoachContext, round: number, side: "me" | "o
   const response = await anthropic().beta.messages.create({
     model: coach.model,
     max_tokens: 16000,
-    system: TIPS_SYSTEM,
+    system: TIPS_SYSTEM + langNote(),
     messages: [{ role: "user", content }],
     cache_control: { type: "ephemeral" },
     output_config: { effort: "low", format: { type: "json_schema", schema: tipsSchema } },
@@ -639,7 +640,7 @@ export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {
     .beta.messages.stream({
       model: coach.model,
       max_tokens: 32000,
-      system: PLAN_SYSTEM,
+      system: PLAN_SYSTEM + langNote(),
       messages: [{ role: "user", content }],
       cache_control: { type: "ephemeral" },
       output_config: { effort: "medium", format: { type: "json_schema", schema: planSchema } },
@@ -698,7 +699,7 @@ export async function battleReport(ctx: CoachContext, photoPaths: string[]): Pro
     .beta.messages.stream({
       model: REPORT_MODEL,
       max_tokens: 8000,
-      system: REPORT_SYSTEM,
+      system: REPORT_SYSTEM + langNote(),
       messages: [{ role: "user", content }],
       output_config: { effort: "medium", format: { type: "json_schema", schema: reportSchema } },
     })
@@ -764,7 +765,7 @@ export async function voiceScore(game: Game, round: number, said: string): Promi
     .beta.messages.stream({
       model: REPORT_MODEL,
       max_tokens: 2000,
-      system: VOICE_SYSTEM,
+      system: VOICE_SYSTEM + langNote(),
       messages: [{ role: "user", content: facts }],
       output_config: { effort: "low", format: { type: "json_schema", schema: voiceSchema } },
     })
@@ -805,7 +806,7 @@ export async function gameReview(ctx: CoachContext): Promise<{ verdict: string; 
     .beta.messages.stream({
       model: REPORT_MODEL,
       max_tokens: 3000,
-      system: REVIEW_SYSTEM,
+      system: REVIEW_SYSTEM + langNote(),
       messages: [{ role: "user", content }],
       output_config: { effort: "medium", format: { type: "json_schema", schema: reviewSchema } },
     })

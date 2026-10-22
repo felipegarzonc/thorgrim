@@ -3,6 +3,8 @@
 // refreshed when it is about to expire. The old app password still works as
 // the owner's master key.
 
+import { currentLang } from "./i18n.ts";
+
 const KEY = "aos-coach-access-key";
 const SESSION = "thorgrim-session";
 
@@ -97,6 +99,7 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
   const current = session();
   if (current) headers.authorization = `Bearer ${current.access_token}`;
   else if (accessKey()) headers["x-access-key"] = accessKey();
+  headers["x-lang"] = currentLang();
   let body = init.body;
   if (init.json !== undefined) {
     headers["content-type"] = "application/json";

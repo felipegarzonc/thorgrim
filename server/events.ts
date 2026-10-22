@@ -121,7 +121,8 @@ export async function createEvent(b: Partial<ClubEvent>): Promise<EventView> {
   await events.save(e);
   // Tell the club, without making the organiser wait for everyone's phones.
   const members = (await clubMembers()).map((m) => m.id);
-  const when = new Date(`${e.date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const [, m, d] = e.date.split("-");
+  const when = `${Number(d)}/${Number(m)}${e.time ? ` ${e.time}` : ""}`;
   waitUntil(notify(members, `${u.name || "A member"} organised ${e.kind === "tournament" ? "a tournament" : "a club night"}: ${e.name}, ${when}. Sign up in the club.`, `#/club/event/${e.id}`).catch(() => undefined));
   return view(e);
 }

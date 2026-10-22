@@ -230,7 +230,7 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
       </div>
       {!open && reactors.length === 0 && post.comments.length === 0 && <p className="small muted">Be the first to react.</p>}
       {!open && post.comments.length > 0 && (
-        <button type="button" className="comment-peek" onClick={() => setOpen(true)}>
+        <button type="button" className="comment-peek" translate="no" onClick={() => setOpen(true)}>
           <b>{post.comments[post.comments.length - 1].authorName}</b> {post.comments[post.comments.length - 1].text}
         </button>
       )}
@@ -238,7 +238,7 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
       {open && (
         <div className="comments">
           {post.comments.map((c) => (
-            <div key={c.id} className="comment">
+            <div key={c.id} className="comment" translate="no">
               <span className="avatar post-avatar small-avatar">{(c.authorName || "?").slice(0, 1).toUpperCase()}</span>
               <div className="grow">
                 <b>{c.authorName}</b> <small className="muted">{when(c.at)}</small>
@@ -377,7 +377,7 @@ function Ladder() {
       <div className="stack">
         {picker}
         <section className="card empty">
-          <h2>No confirmed results{season ? ` in ${season.name}` : ""} yet</h2>
+          <h2>{season ? `No confirmed results in ${season.name} yet` : "No confirmed results yet"}</h2>
           <p className="muted">Play a game together (share it with your opponent), and when it ends both of you confirm the result on the Results screen. Confirmed games count here.</p>
         </section>
       </div>

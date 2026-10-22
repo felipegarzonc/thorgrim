@@ -3,7 +3,8 @@
 
 import { useEffect, useState } from "react";
 import { accessKey, api, signOut } from "../api.ts";
-import { Card, Icon, useLoad, useMeta } from "../ui.tsx";
+import { Card, Icon, Seg, useLoad, useMeta } from "../ui.tsx";
+import { langSetting, setLangSetting } from "../i18n.ts";
 import { Setup } from "./Auth.tsx";
 
 interface Usage {
@@ -199,6 +200,18 @@ export function ProfilePage() {
         )}
       </section>
 
+      <Card title="Language">
+        <Seg
+          label="Language"
+          value={langSetting()}
+          options={[
+            ["auto", "Automatic"],
+            ["en", "English"],
+            ["es", "Español"],
+          ]}
+          onChange={setLangSetting}
+        />
+      </Card>
       <PhoneNotifications />
       <Card title="Coach usage">
         <UsageBar spent={me.usage.costUsd} limit={me.usage.limitUsd} />

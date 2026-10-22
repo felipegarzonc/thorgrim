@@ -75,7 +75,7 @@ export function CoachChat(props: {
       {entries.length === 0 && props.intro}
       <div className="chat">
         {entries.map((e, i) => (
-          <div key={i} className={`bubble ${e.role}`}>
+          <div key={i} className={`bubble ${e.role}`} translate="no">
             {e.role === "coach" ? <Markdown text={e.text} /> : <p>{e.text.length > 400 ? `${e.text.slice(0, 400)}…` : e.text}</p>}
             {e.tools && e.tools.length > 0 && <p className="tools">used: {e.tools.join(", ")}</p>}
           </div>

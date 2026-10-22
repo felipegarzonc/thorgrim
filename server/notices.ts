@@ -7,6 +7,8 @@ import type { Notice } from "../shared/types.ts";
 import { accountsEnabled, listAccounts } from "./accounts.ts";
 import { currentUser, userPrefix } from "./context.ts";
 import { pushTo } from "./push.ts";
+import { translate } from "../shared/i18n/index.ts";
+import { langOf } from "./lang.ts";
 import { Collection, newId } from "./store.ts";
 
 export const noticesIn = (prefix: string) => new Collection<Notice>("notices", prefix);
@@ -26,9 +28,11 @@ export async function notify(userIds: string[], text: string, href: string) {
   for (const id of new Set(userIds)) {
     const prefix = where.get(id);
     if (id === me || prefix === undefined) continue;
-    await noticesIn(prefix).save({ id: `${Date.now().toString(36)}-${newId()}`, at, text: text.slice(0, 300), href });
+    // In the member's own language.
+    const said = translate(text, await langOf(prefix).catch(() => "en" as const));
+    await noticesIn(prefix).save({ id: `${Date.now().toString(36)}-${newId()}`, at, text: said.slice(0, 300), href });
     // And to their phones, if they turned notifications on (never holding up the request for long).
-    await Promise.race([pushTo(prefix, { title: "Thorgrim", body: text.slice(0, 200), href }).catch(() => undefined), new Promise((r) => setTimeout(r, 4000))]);
+    await Promise.race([pushTo(prefix, { title: "Thorgrim", body: said.slice(0, 200), href }).catch(() => undefined), new Promise((r) => setTimeout(r, 4000))]);
   }
 }
 
