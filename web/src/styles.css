@@ -3835,3 +3835,41 @@ button.icon-button.on {
   font-weight: 700;
   font-size: 0.75rem;
 }
+
+/* ---------- save status ---------- */
+.sync-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 32px;
+  padding: 0 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  border: 0;
+  background: transparent;
+  white-space: nowrap;
+}
+.sync-badge.saved {
+  color: var(--good);
+  padding: 0 0.3rem;
+}
+.sync-badge.saved .ico {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+button.sync-badge.offline {
+  background: #2b2014;
+  color: var(--warn);
+  min-height: 32px;
+}
+button.sync-badge.error {
+  background: #2b1412;
+  color: var(--bad);
+  min-height: 32px;
+}
+.game-loading {
+  padding: 2rem 1rem;
+}

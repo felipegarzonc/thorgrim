@@ -68,13 +68,28 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
   const [gameLists, reloadGameLists] = useLoad<{ list: ArmyList; rules: FactionRule[] }[]>(game ? `/games/${id}/lists?ids=${game.myListId},${game.opponentListId}` : null);
   const [sheet, setSheet] = useState<SheetName | null>(null);
   const meta = useMeta();
+  const [sync, setSync] = useState<{ state: SyncState; error?: string }>({ state: "saved" });
 
+  // Open the game; changes this phone made but couldn't send (no signal) go back on top.
   useEffect(() => {
-    api<Game>(`/games/${id}`).then((g) => {
-      base.current = g;
-      ref.current = g;
-      setGame(g);
-    });
+    const pending = readPending(id);
+    api<Game>(`/games/${id}`)
+      .then((g) => {
+        base.current = g;
+        const later = pending ? diff(pending.base, pending.local) : [];
+        const merged = later.length ? applyOps(g, later) : g;
+        ref.current = later.length ? { ...merged, state: derive(merged) } : g;
+        setGame(ref.current);
+        if (later.length) queueSend();
+      })
+      .catch((e: Error) => {
+        if (!pending) return setSync({ state: "error", error: e.message });
+        // No signal: carry on from what this phone has, and send it later.
+        base.current = pending.base;
+        ref.current = pending.local;
+        setGame(pending.local);
+        setSync({ state: "offline" });
+      });
   }, [id]);
 
   // Take the server's copy, keeping the changes made here since `seen` on top.
@@ -85,14 +100,40 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
     ref.current = later.length ? { ...next, state: derive(next) } : next;
     setGame(ref.current);
   };
+  // Send what changed. Without signal the changes stay (on screen and on this phone) and go later.
   const send = async () => {
     const from = base.current;
     const sent = ref.current;
     if (!from || !sent) return;
     const ops = diff(from, sent);
-    if (!ops.length) return;
-    adopt(await api<Game>(`/games/${sent.id}`, { method: "PATCH", json: { ops } }), sent);
+    if (!ops.length) {
+      writePending(id, undefined);
+      return setSync({ state: "saved" });
+    }
+    writePending(id, { base: from, local: sent });
+    setSync({ state: "saving" });
+    try {
+      adopt(await api<Game>(`/games/${sent.id}`, { method: "PATCH", json: { ops } }), sent);
+      const left = base.current && ref.current ? diff(base.current, ref.current).length : 0;
+      writePending(id, left ? { base: base.current!, local: ref.current! } : undefined);
+      setSync({ state: left ? "saving" : "saved" });
+    } catch (e) {
+      setSync(isNetworkError(e) ? { state: "offline" } : { state: "error", error: (e as Error).message });
+    }
   };
+  const queueSend = () => {
+    saving.current = saving.current.then(send);
+  };
+  // Not saved yet: try again every few seconds, and as soon as the phone is back online.
+  useEffect(() => {
+    if (sync.state !== "offline" && sync.state !== "error") return;
+    const t = setInterval(() => navigator.onLine && queueSend(), 8000);
+    window.addEventListener("online", queueSend);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("online", queueSend);
+    };
+  }, [sync.state]);
 
   // A shared game checks for the other player's changes while it is on screen.
   const shared = !!game && (game.access?.role === "player" || !!game.access?.token || !!game.access?.players.length);
@@ -128,7 +169,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
   const myRules = rulesOf(myList?.id);
   const oppRules = rulesOf(oppList?.id);
 
-  if (!game) return <p className="muted">Loading…</p>;
+  if (!game) return <p className="muted game-loading">{sync.state === "error" ? `Could not open the game: ${sync.error}` : "Loading…"}</p>;
   const isPlayer = game.access?.role === "player";
   // After making or stopping the join link: take the server's copy.
   const shareChanged = async (g: Game) => {
@@ -150,7 +191,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
     }
     ref.current = next;
     setGame(next);
-    saving.current = saving.current.then(() => send().catch((e: Error) => alert(`Could not save: ${e.message}`)));
+    queueSend();
     return saving.current.then(() => undefined);
   };
   const update: Update = (patch, log) => void mutate((g) => ({ ...g, state: { ...g.state, ...patch } }), log);
@@ -194,6 +235,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
         <span className="game-head-title">
           {game.state.vp.me}-{game.state.vp.opponent} {me.name} vs {opp.name}
         </span>
+        <SyncBadge sync={sync} retry={queueSend} />
         <button type="button" className="icon" aria-label="Ask the coach" onClick={() => setSheet("coach")}>
           <Icon name="coach" />
         </button>
@@ -363,9 +405,43 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
   );
 }
 
+type SyncState = "saved" | "saving" | "offline" | "error";
+const PENDING = (id: string) => `thorgrim-pending:${id}`;
+
+/** Changes not sent yet, kept on this phone so a reload without signal doesn't lose them. */
+function readPending(id: string): { base: Game; local: Game } | undefined {
+  try {
+    return JSON.parse(localStorage.getItem(PENDING(id)) ?? "null") ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+function writePending(id: string, value: { base: Game; local: Game } | undefined) {
+  try {
+    if (value) localStorage.setItem(PENDING(id), JSON.stringify(value));
+    else localStorage.removeItem(PENDING(id));
+  } catch {
+    /* private mode or full: the changes still live on screen */
+  }
+}
+/** fetch fails with a TypeError when there is no connection at all. */
+const isNetworkError = (e: unknown) => !navigator.onLine || e instanceof TypeError || /took too long|HTTP 50[234]/.test((e as Error)?.message ?? "");
+
+/** Is the game saved? Quiet when it is; says so when it isn't, with a retry. */
+function SyncBadge({ sync, retry }: { sync: { state: SyncState; error?: string }; retry: () => void }) {
+  if (sync.state === "saved") return <span className="sync-badge saved" role="status" aria-label="Saved"><Icon name="check" /></span>;
+  if (sync.state === "saving") return <span className="sync-badge" role="status">Saving…</span>;
+  return (
+    <button type="button" className={`sync-badge ${sync.state}`} onClick={retry} title={sync.error}>
+      {sync.state === "offline" ? "Offline · will sync" : "Not saved · retry"}
+    </button>
+  );
+}
+
 /** The join link for a shared game, and who joined. */
 function ShareGame({ game, changed }: { game: Game; changed: (g: Game) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
   const [copied, setCopied] = useState(false);
   const access = game.access;
   const players = access?.players ?? [];
@@ -374,7 +450,7 @@ function ShareGame({ game, changed }: { game: Game; changed: (g: Game) => Promis
     try {
       await changed(await fn());
     } catch (e) {
-      alert((e as Error).message);
+      setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -421,6 +497,7 @@ function ShareGame({ game, changed }: { game: Game; changed: (g: Game) => Promis
           </button>
         </>
       )}
+      {error && <p className="error small">{error}</p>}
     </div>
   );
 }
