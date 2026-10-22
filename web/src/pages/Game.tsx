@@ -233,6 +233,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
         </button>
         <span className="step-title">{stepTitle(current)}</span>
       </footer>
+      {!(current === `round-${game.state.round}` && game.state.phase !== "Deployment" && game.state.rounds?.[game.state.round - 1]?.first) && (
       <button
         type="button"
         className="fab step-fab"
@@ -241,6 +242,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
       >
         <Icon name={current === "results" ? "check" : "right"} />
       </button>
+      )}
 
       {sheet === "menu" && (
         <Sheet title="Game" onClose={() => setSheet(null)}>
@@ -1199,6 +1201,8 @@ function RoundStep(props: {
     return vp[other(side)] - vp[side] >= SEIZE_EXCEPTION_LEAD ? "double turn (11+ VP behind: tactics allowed)" : "double turn: seizes the initiative";
   };
   const future = n > liveRound + 1;
+  const [editOrder, setEditOrder] = useState(false);
+  const orderKnown = !!rec?.first && (n === 1 || !!rec?.priority);
   const factions: Record<Side, string> = {
     me: armies.me.list?.faction || game.myFaction || "",
     opponent: armies.opponent.list?.faction || game.opponentFaction || "",
@@ -1207,6 +1211,15 @@ function RoundStep(props: {
   return (
     <div className="stack">
       <Scoreboard game={game} names={names} factions={factions} isLive={isLive} />
+      {orderKnown && !editOrder ? (
+        <button type="button" className="order-summary" onClick={() => setEditOrder(true)}>
+          <span className="grow">
+            {n > 1 && rec?.priority ? `${names[rec.priority]} won priority · ` : ""}
+            {names[rec!.first!]} went first
+          </span>
+          <span className="order-change">Change</span>
+        </button>
+      ) : (
       <Group className="priority">
         {n > 1 && (
           <div className="question">
@@ -1225,6 +1238,7 @@ function RoundStep(props: {
         )}
         {future && !rec?.first && <p className="small muted" style={{ margin: "0.3rem 0 0" }}>Finish round {liveRound || 1} first; you can still fill this in.</p>}
       </Group>
+      )}
 
       {game.plan?.rounds.find((r) => r.round === n) && (
         <div className="round-plan">
@@ -1239,7 +1253,17 @@ function RoundStep(props: {
       {isLive && <TurnCard {...props} color={armyColor(factions[s.activePlayer])} />}
 
       {(["me", "opponent"] as const).map((side) => (
-        <SideBlock key={side} side={side} game={game} n={n} mutate={mutate} isLive={isLive} name={names[side]} faction={factions[side]} />
+        <SideBlock
+          key={`${side}-${isLive && side !== s.activePlayer}`}
+          side={side}
+          game={game}
+          n={n}
+          mutate={mutate}
+          isLive={isLive}
+          name={names[side]}
+          faction={factions[side]}
+          folded={isLive && side !== s.activePlayer}
+        />
       ))}
 
       {game.battleplan && battleplanInfo(game.battleplan)?.map && (
@@ -1278,8 +1302,27 @@ function RoundStep(props: {
 /** Both armies at a glance: VP, command points as coins, fury as flames, and whose turn it is. */
 function Scoreboard({ game, names, factions, isLive }: { game: Game; names: Record<Side, string>; factions: Record<Side, string>; isLive: boolean }) {
   const s = game.state;
+  const ref = useRef<HTMLElement>(null);
+  const [away, setAway] = useState(false);
+  useEffect(() => {
+    if (!ref.current || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setAway(!e.isIntersecting), { rootMargin: "-60px 0px 0px 0px" });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, []);
   return (
-    <section className="scoreboard" aria-label="Scoreboard">
+    <>
+    {away && (
+      <div className="mini-score" aria-hidden="true">
+        {(["me", "opponent"] as const).map((side) => (
+          <span key={side} className={`mini-side ${isLive && s.activePlayer === side ? "on" : ""}`} style={{ ["--army" as string]: armyColor(factions[side]) }}>
+            <b>{names[side]}</b> <span className="mini-vp">{s.vp[side]}</span> <small>{s.cp[side]} CP</small>
+          </span>
+        ))}
+        {isLive && <span className="mini-phase">{s.phase}</span>}
+      </div>
+    )}
+    <section ref={ref} className="scoreboard" aria-label="Scoreboard">
       {(["me", "opponent"] as const).map((side) => {
         const active = isLive && s.activePlayer === side;
         const cp = s.cp[side];
@@ -1316,6 +1359,7 @@ function Scoreboard({ game, names, factions, isLive }: { game: Game; names: Reco
         );
       })}
     </section>
+    </>
   );
 }
 
@@ -1481,7 +1525,26 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
   );
 }
 
-function SideBlock({ side, game, n, mutate, isLive, name, faction }: { side: Side; game: Game; n: number; mutate: Mutate; isLive: boolean; name: string; faction: string }) {
+function SideBlock({
+  side,
+  game,
+  n,
+  mutate,
+  isLive,
+  name,
+  faction,
+  folded,
+}: {
+  side: Side;
+  game: Game;
+  n: number;
+  mutate: Mutate;
+  isLive: boolean;
+  name: string;
+  faction: string;
+  /** The player waiting for their turn: one line until opened. */
+  folded?: boolean;
+}) {
   const meta = useMeta();
   const s = game.state;
   const rounds = s.rounds ?? [];
@@ -1503,8 +1566,8 @@ function SideBlock({ side, game, n, mutate, isLive, name, faction }: { side: Sid
   const roundVp = sideRoundVp(sr, game.battleplan, n);
   const blocked = isLive && s.seizedInitiative === side;
 
-  return (
-    <section className="side-block">
+  const body = (
+    <>
       <div className="side-name">
         <Avatar faction={faction} size={2} />
         <h1>{name}</h1>
@@ -1609,8 +1672,23 @@ function SideBlock({ side, game, n, mutate, isLive, name, faction }: { side: Sid
           );
         })}
       </Group>
-    </section>
+    </>
   );
+  if (folded)
+    return (
+      <details className="side-block side-fold">
+        <summary>
+          <Avatar faction={faction} size={1.8} />
+          <b className="grow">{name}</b>
+          <span className="muted small">
+            +{roundVp} VP · {Math.max(0, sr.cpGained - sr.cpSpent)} CP
+          </span>
+          <Icon name="down" />
+        </summary>
+        {body}
+      </details>
+    );
+  return <section className="side-block">{body}</section>;
 }
 
 // ---------- results ----------
