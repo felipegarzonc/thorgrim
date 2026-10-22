@@ -52,6 +52,7 @@ import { forgetResult, ladder, listResults, startSeason, syncResult } from "./la
 import { Collection, newId } from "./store.ts";
 import { blankGame } from "./newGame.ts";
 import { rememberLang } from "./lang.ts";
+import { omnissiahStatus } from "./omnissiah.ts";
 import { allAccounts, clubMembers } from "./members.ts";
 import { addMembers, clubFor, createClub, getClub, isLeader, isOwner, joinClub, myClubs, removeMember, renameClub, setLeader, type Club } from "./clubs.ts";
 import { approve as approveRequest, decline as declineRequest, listRequests, requestAccess } from "./access.ts";
@@ -337,6 +338,7 @@ app.post("/api/admin/access-requests/:id/approve", requireAdmin, async (req, res
   res.json(await approveRequest(param(req, "id"), process.env.APP_URL?.trim().replace(/\/$/, "") || `${req.protocol}://${req.get("host")}`)),
 );
 app.post("/api/admin/access-requests/:id/decline", requireAdmin, async (req, res) => res.json(await declineRequest(param(req, "id"))));
+app.get("/api/admin/omnissiah", requireAdmin, async (_req, res) => res.json(await omnissiahStatus()));
 app.get("/api/admin/settings", requireAdmin, async (_req, res) => res.json(await accountSettings()));
 app.put("/api/admin/settings", requireAdmin, async (req, res) => {
   const defaultLimitUsd = Math.max(0, Number(req.body.defaultLimitUsd) || 0);

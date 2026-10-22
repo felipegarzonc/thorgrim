@@ -42,6 +42,16 @@ async function get(path: string, params: Record<string, string | number | undefi
   return body;
 }
 
+/** The last daily read (for the admin): whether it's set up, and how the read went. */
+export async function omnissiahStatus(): Promise<{ configured: boolean; status?: unknown; error?: string }> {
+  if (!omnissiahReady()) return { configured: false };
+  try {
+    return { configured: true, status: await get("/status") };
+  } catch (e) {
+    return { configured: true, error: (e as Error).message };
+  }
+}
+
 /** A tool's answer, as compact JSON for the model. */
 export async function runMetaTool(name: MetaTool, input: unknown): Promise<string> {
   const args = metaSchemas[name].parse(input) as Record<string, string | number | undefined>;
