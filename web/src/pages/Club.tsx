@@ -16,6 +16,7 @@ import { moment } from "../analytics.tsx";
 import { buzz, Skeleton } from "../motion.tsx";
 import { EventPage, EventsList } from "./Events.tsx";
 import { MemberPage, MembersList } from "./Members.tsx";
+import { BattleVote, Bounties, GloryBoard, isThisWeek, LastWinners, LiveGames, Predictions, WrappedPage, type Votes } from "./Glory.tsx";
 
 /** Reactions keep their emoji keys on the server; the page shows them as themed icons. */
 const REACTION_LOOK: Record<string, { icon: IconName; label: string }> = {
@@ -168,7 +169,7 @@ export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; ph
   );
 }
 
-function PostCard({ post, single, changed }: { post: FeedPostView; single?: boolean; changed: (p: FeedPostView | null) => void }) {
+function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostView; single?: boolean; changed: (p: FeedPostView | null) => void; votes?: Votes; onVotes?: (v: Votes) => void }) {
   const meta = useMeta();
   const [open, setOpen] = useState(!!single);
   const [comment, setComment] = useState("");
@@ -229,6 +230,12 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
       </header>
       <PostBody post={post} photoUrl={(n) => withKey(`/api/feed/${post.id}/photo/${n}?v=${encodeURIComponent(post.updatedAt ?? post.createdAt)}`)} short={!open} onMore={() => setOpen(true)} />
 
+      {votes && onVotes && post.kind !== "chronicle" && !post.mine && isThisWeek(post.createdAt, votes) && <BattleVote postId={post.id} votes={votes} onVotes={onVotes} />}
+      {votes?.lastBattle?.postId === post.id && (
+        <p className="small accent-text">
+          <Icon name="flag" /> Battle of the week
+        </p>
+      )}
       <div className="post-actions">
         {post.reactions.map((r) => {
           const look = REACTION_LOOK[r.emoji] ?? { icon: "spark" as const, label: r.emoji };
@@ -435,6 +442,7 @@ function Ladder() {
           <h2>{season ? `No confirmed results in ${season.name} yet` : "No confirmed results yet"}</h2>
           <p className="muted">Play a game together (share it with your opponent), and when it ends both of you confirm the result on the Results screen. Confirmed games count here.</p>
         </section>
+        <GloryBoard />
       </div>
     );
   const table = standings(results);
@@ -443,6 +451,7 @@ function Ladder() {
   return (
     <div className="stack">
       {picker}
+      <Bounties />
       {season?.end && <Recap recap={seasonRecap(results)} name={season.name} />}
       <section className="card ladder" aria-label="Standings">
         <div className="ladder-row ladder-head" aria-hidden="true">
@@ -503,6 +512,7 @@ function Ladder() {
           ))}
         </div>
       </section>
+      <GloryBoard />
     </div>
   );
 }
@@ -592,6 +602,7 @@ const CLUB_TABS: ClubTab[] = ["reports", "events", "ladder", "members"];
 export function ClubPage({ postId: section, sub, unreadNotices }: { postId?: string; sub?: string; unreadNotices: number }) {
   if (section === "event" && sub) return <EventPage id={sub} />;
   if (section === "member" && sub) return <MemberPage id={sub} />;
+  if (section === "wrapped" && sub) return <WrappedPage id={sub} />;
   const tab = CLUB_TABS.includes(section as ClubTab) ? (section as ClubTab) : "reports";
   const postId = section && !CLUB_TABS.includes(section as ClubTab) ? section : undefined;
   return <ClubHome tab={tab} postId={postId} unreadNotices={unreadNotices} />;
@@ -603,6 +614,9 @@ function ClubHome({ tab, postId, unreadNotices }: { tab: ClubTab; postId?: strin
   const [view, setView] = useState<"feed" | "activity">("feed");
   const [filter, setFilter] = useState("all");
   const meta = useMeta();
+  const [votesLoaded] = useLoad<Votes>(meta?.club === null ? null : "/glory/votes");
+  const [votesNow, setVotes] = useState<Votes>();
+  const votes = votesNow ?? votesLoaded;
   const setTab = (t: ClubTab) => window.location.replace(`#/club/${t}`);
 
   useEffect(() => {
@@ -689,6 +703,13 @@ function ClubHome({ tab, postId, unreadNotices }: { tab: ClubTab; postId?: strin
         <MembersList />
       ) : (
         <>
+          {!postId && (
+            <>
+              <LiveGames />
+              <LastWinners votes={votes} />
+              <Predictions />
+            </>
+          )}
           {!postId && posts && posts.length > 0 && (
             <div className="filter-chips" role="group" aria-label="Show">
               {[["all", "All reports"], ["mine", "My games"], ...armies.map((a) => [a, a])].map(([key, label]) => (
@@ -714,7 +735,7 @@ function ClubHome({ tab, postId, unreadNotices }: { tab: ClubTab; postId?: strin
           )}
           <div className="stack rise">
             {shown?.map((p) => (
-              <PostCard key={p.id} post={p} single={!!postId} changed={changed(p.id)} />
+              <PostCard key={p.id} post={p} single={!!postId} changed={changed(p.id)} votes={votes} onVotes={setVotes} />
             ))}
           </div>
         </>

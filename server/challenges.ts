@@ -30,6 +30,9 @@ export interface Challenge {
 const challenges = () => new Collection<Challenge>("challenges", clubSpace());
 
 /** The signed-in member's challenges, sent and received; finished ones only for a month. */
+/** Every challenge in the current club (for Glory). */
+export const allChallenges = () => challenges().list();
+
 export async function myChallenges(): Promise<Challenge[]> {
   const u = currentUser().id;
   const month = new Date(Date.now() - 30 * 86400_000).toISOString();

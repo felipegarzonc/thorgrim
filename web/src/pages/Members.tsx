@@ -10,6 +10,7 @@ import { shrinkPhoto } from "../media.tsx";
 import { Avatar, FactionPicker, Icon, Sheet, useLoad, useMeta, useRefreshOnReturn } from "../ui.tsx";
 import { Carousel } from "./Club.tsx";
 import { Skeleton } from "../motion.tsx";
+import { ArmyVote, GloryCard, type Votes } from "./Glory.tsx";
 
 export interface ClubMember {
   id: string;
@@ -378,6 +379,8 @@ export function MemberPage({ id }: { id: string }) {
         </div>
       )}
 
+      <GloryCard memberId={id} own={isMe} />
+
       <Showcase memberId={id} name={member.name} isMe={isMe} />
 
       {theirPosts.length > 0 && (
@@ -414,6 +417,9 @@ interface ShowcaseArmy {
 /** A member's armies with photos of their painted models. On your own page you add, edit and remove them. */
 function Showcase({ memberId, name, isMe }: { memberId: string; name: string; isMe: boolean }) {
   const [loaded] = useLoad<ShowcaseArmy[]>(`/club/members/${memberId}/showcase`);
+  const [votesLoaded] = useLoad<Votes>("/glory/votes");
+  const [votesNow, setVotes] = useState<Votes>();
+  const votes = votesNow ?? votesLoaded;
   const [armies, setArmies] = useState<ShowcaseArmy[]>();
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState<string>();
@@ -496,6 +502,12 @@ function Showcase({ memberId, name, isMe }: { memberId: string; name: string; is
             />
           )}
           {a.note && <p className="small">{a.note}</p>}
+          {votes?.lastArmy?.memberId === memberId && votes.lastArmy.armyId === a.id && (
+            <p className="small accent-text">
+              <Icon name="camera" /> Army of the month
+            </p>
+          )}
+          {!isMe && votes && a.photos.length > 0 && <ArmyVote memberId={memberId} armyId={a.id} votes={votes} onVotes={setVotes} />}
           {isMe && (
             <div className="row">
               <label className={`button small ${busy === a.id ? "disabled" : ""}`}>

@@ -30,6 +30,11 @@ const MAX_ARMIES = 8;
 const MAX_PHOTOS = 12;
 const ID = /^[a-z0-9-]{1,64}$/i;
 
+/** Every member's armies in the current club (for Glory). */
+export async function allArmies(): Promise<(ShowcaseArmy & { memberId: string })[]> {
+  return (await showcases().list()).flatMap((s) => s.armies.map((a) => ({ ...a, memberId: s.id })));
+}
+
 export async function showcaseOf(memberId: string): Promise<ShowcaseArmy[]> {
   if (!ID.test(memberId)) return [];
   return (await showcases().get(memberId))?.armies ?? [];

@@ -80,6 +80,9 @@ export function postView(p: FeedPost, results?: ClubResult[]): FeedPostView {
   };
 }
 
+/** Every post in the current club, as stored (for Glory: server/glory.ts). */
+export const allPosts = () => posts().list();
+
 export async function feed(): Promise<FeedPostView[]> {
   const [all, results] = await Promise.all([posts().list(), listResults()]);
   return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((p) => postView(p, results));

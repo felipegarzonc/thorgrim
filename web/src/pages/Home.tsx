@@ -7,6 +7,7 @@ import { gameDate, gameHref, sideInfo } from "../gameView.tsx";
 import { Avatar, Icon, useLoad, useMeta } from "../ui.tsx";
 import { gamePhotoUrl } from "./report.tsx";
 import { Challenges } from "./Members.tsx";
+import { GloryStrip } from "./Glory.tsx";
 import { moment } from "../analytics.tsx";
 import { Skeleton } from "../motion.tsx";
 
@@ -73,6 +74,8 @@ export function HomePage({ unread = 0 }: { unread?: number }) {
           Ask Thorgrim
         </a>
       </div>
+
+      {meta?.accounts && <GloryStrip />}
 
       {finished.length > 0 && <Season games={finished} lists={lists} />}
 

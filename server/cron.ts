@@ -20,6 +20,7 @@ import { eachClub } from "./clubs.ts";
 import { notify } from "./notices.ts";
 import { remindConfirmations } from "./sharedGames.ts";
 import { factionAlerts, watchOmnissiah, weeklyChronicle } from "./metaWatch.ts";
+import { announceWinners, settleAll } from "./glory.ts";
 
 /** Who scheduled work runs as: nobody's space, so every member hears it. */
 export const CRON_USER: UserCtx = { id: "thorgrim", name: "Thorgrim", isAdmin: true, prefix: "" };
@@ -50,6 +51,9 @@ export async function daily(now = new Date()) {
     await saveInvites(keep);
   }
   Object.assign(report, { omnissiah: await watchOmnissiah(now).catch((e: Error) => ({ error: e.message })) });
+  // Glory: each member's progress kept (and news told), and closed votes announced.
+  const glory = await eachClub(async () => ({ settled: await settleAll(now), announced: await announceWinners(now) })).catch((e: Error) => ({ error: e.message }));
+  Object.assign(report, { glory });
   return report;
 }
 

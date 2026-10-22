@@ -53,6 +53,7 @@ import { Collection, newId } from "./store.ts";
 import { blankGame } from "./newGame.ts";
 import { rememberLang } from "./lang.ts";
 import { omnissiahStatus } from "./omnissiah.ts";
+import { bounties, cheer, gloryBoard, listPredictions, liveGames, memberGlory, myGlory, predict, seasonWrapped, voteArmy, voteBattle, votes } from "./glory.ts";
 import { allAccounts, clubMembers } from "./members.ts";
 import { addMembers, clubFor, createClub, getClub, isLeader, isOwner, joinClub, myClubs, removeMember, renameClub, setLeader, type Club } from "./clubs.ts";
 import { approve as approveRequest, decline as declineRequest, listRequests, requestAccess } from "./access.ts";
@@ -632,6 +633,21 @@ app.get("/api/clubs/:id/candidates", requireLeader, async (req, res) => {
   const c = await getClub(param(req, "id"));
   res.json((await allAccounts()).filter((m) => !c?.memberIds.includes(m.id)).map(({ id, name }) => ({ id, name })));
 });
+
+// ---------- glory: levels, achievements, missions, bounties, predictions, votes, live games ----------
+
+app.get("/api/glory/me", async (_req, res) => res.json(await myGlory()));
+app.get("/api/glory/board", async (_req, res) => res.json(await gloryBoard()));
+app.get("/api/glory/members/:id", async (req, res) => res.json(await memberGlory(param(req, "id"))));
+app.get("/api/glory/wrapped/:id", async (req, res) => res.json(await seasonWrapped(param(req, "id"), typeof req.query.season === "string" ? req.query.season : undefined)));
+app.get("/api/glory/bounties", async (_req, res) => res.json(await bounties()));
+app.get("/api/glory/predictions", async (_req, res) => res.json(await listPredictions()));
+app.post("/api/glory/predictions/:id", async (req, res) => res.json(await predict(param(req, "id"), req.body?.pick === "b" ? "b" : "a")));
+app.get("/api/glory/votes", async (_req, res) => res.json(await votes()));
+app.post("/api/glory/votes/battle", async (req, res) => res.json(await voteBattle(String(req.body?.postId ?? ""))));
+app.post("/api/glory/votes/army", async (req, res) => res.json(await voteArmy(String(req.body?.memberId ?? ""), String(req.body?.armyId ?? ""))));
+app.get("/api/glory/live", async (_req, res) => res.json(await liveGames()));
+app.post("/api/glory/live/:owner/:game/cheer", async (req, res) => res.json(await cheer(param(req, "owner"), param(req, "game"), String(req.body?.kind ?? ""))));
 
 app.get("/api/club/members", async (_req, res) => res.json((await clubMembers()).map(({ id, name }) => ({ id, name }))));
 
