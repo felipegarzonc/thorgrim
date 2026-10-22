@@ -3839,15 +3839,22 @@ button.sync-badge.error {
 .carousel-strip::-webkit-scrollbar {
   display: none;
 }
+/* As tall as the score sheet (no dead space around it); photos fill that
+   height. A post with only photos gets a near-square frame. */
 .carousel-slide {
   flex: 0 0 100%;
-  height: min(78vw, 360px);
+  position: relative;
+  min-height: min(75vw, 300px);
   scroll-snap-align: start;
   background: var(--panel-2);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+.carousel-slide > a {
+  position: absolute;
+  inset: 0;
 }
 .carousel-slide > a,
 .carousel-slide img {
@@ -3892,7 +3899,8 @@ button.sync-badge.error {
   background: transparent;
   border: 0;
   border-radius: 0;
-  padding: 0.4rem 0;
+  margin: 0;
+  padding: 0.5rem 0;
 }
 /* The stat row above already says who, the score and the result. */
 .media-sheet .game-card-body,
