@@ -6,6 +6,7 @@ import { api, withKey } from "../api.ts";
 import { gameDate, gameHref, sideInfo } from "../gameView.tsx";
 import { Avatar, Icon, useLoad, useMeta } from "../ui.tsx";
 import { gamePhotoUrl } from "./report.tsx";
+import { Challenges } from "./Members.tsx";
 
 export async function newGame() {
   const g = await api<Game>("/games", { method: "POST", json: {} });
@@ -49,6 +50,8 @@ export function HomePage({ unread = 0 }: { unread?: number }) {
           </button>
         </section>
       )}
+
+      {meta?.accounts && <Challenges compact />}
 
       {hero && <GameHero game={hero} lists={lists} />}
 

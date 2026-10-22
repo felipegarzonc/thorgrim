@@ -114,3 +114,20 @@ describe("a tournament", () => {
     expect(done.standings.reduce((n, s) => n + s.played, 0)).toBe(4);
   });
 });
+
+describe("challenges", () => {
+  it("challenge, accept: a game both players share", async () => {
+    const ch = await import("./challenges.ts");
+    const sg = await import("./sharedGames.ts");
+    await expect(runAs(ana, () => ch.challenge({ to: "ana" }))).rejects.toThrow(/yourself/);
+    const c = await runAs(ana, () => ch.challenge({ to: "cid", message: "Rematch?", points: 1000 }));
+    await expect(runAs(ana, () => ch.challenge({ to: "cid" }))).rejects.toThrow(/already challenged/);
+    expect((await runAs(cid, () => ch.myChallenges())).map((x) => x.id)).toContain(c.id);
+    expect(await runAs(ben, () => ch.myChallenges())).not.toContainEqual(expect.objectContaining({ id: c.id }));
+    await expect(runAs(ana, () => ch.accept(c.id))).rejects.toThrow(/challenged member/);
+    const gameId = await runAs(cid, () => ch.accept(c.id));
+    const seen = await runAs(cid, async () => sg.viewGame((await sg.openGame(gameId))!));
+    expect(seen).toMatchObject({ myName: "Cid", opponentName: "Ana", points: 1000, access: { role: "player" } });
+    expect(await runAs(cid, () => ch.accept(c.id))).toBe(gameId);
+  });
+});

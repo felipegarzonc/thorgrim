@@ -48,10 +48,11 @@ import { jobs, startJob } from "./jobs.ts";
 import { addDocument, deleteDocument, docPath, finishUpload, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
 import { bothConfirmed, changeGame, confirmResult, forgetShares, gameLists, joinGame, ladderSides, leaveGame, myGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
-import { forgetResult, ladder, listResults, syncResult } from "./ladder.ts";
+import { forgetResult, ladder, listResults, startSeason, syncResult } from "./ladder.ts";
 import { Collection, newId } from "./store.ts";
 import { blankGame } from "./newGame.ts";
 import { clubMembers } from "./members.ts";
+import { accept as acceptChallenge, challenge, decline as declineChallenge, myChallenges, withdraw as withdrawChallenge } from "./challenges.ts";
 import { createEvent, deleteEvent, editEvent, finishEvent, getEvent, joinEvent, leaveEvent, listEvents, pairRound, setTableResult, tableGame, unpairRound } from "./events.ts";
 import { backgroundJobs, resumePendingTranscriptions, transcribeDocument, transcribeStep } from "./transcribe.ts";
 
@@ -575,8 +576,16 @@ app.post("/api/games/:id/confirm", async (req, res) => {
   res.json(viewGame(next));
 });
 app.get("/api/club/ladder", async (_req, res) => res.json(await ladder()));
+app.post("/api/club/seasons", requireAdmin, async (req, res) => res.json(await startSeason(String(req.body?.name ?? ""))));
 // The club's members (names only), for events, challenges and profiles.
 app.get("/api/club/members", async (_req, res) => res.json((await clubMembers()).map(({ id, name }) => ({ id, name }))));
+
+// Challenges between members (server/challenges.ts).
+app.get("/api/challenges", async (_req, res) => res.json(await myChallenges()));
+app.post("/api/challenges", async (req, res) => res.json(await challenge(req.body ?? {})));
+app.post("/api/challenges/:id/accept", async (req, res) => res.json({ id: await acceptChallenge(param(req, "id")) }));
+app.post("/api/challenges/:id/decline", async (req, res) => res.json(await declineChallenge(param(req, "id"))));
+app.delete("/api/challenges/:id", async (req, res) => res.json(await withdrawChallenge(param(req, "id"))));
 
 // Club nights and tournaments (server/events.ts).
 app.get("/api/events", async (_req, res) => res.json(await listEvents()));

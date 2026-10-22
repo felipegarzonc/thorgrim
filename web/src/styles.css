@@ -4338,3 +4338,97 @@ button.sync-badge.error {
 .member-head p {
   margin: 0.2rem 0 0;
 }
+
+/* Challenges. */
+.challenges {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.challenge {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+}
+.challenge > .ico {
+  width: 1.4rem;
+  height: 1.4rem;
+  color: var(--brass);
+  flex: none;
+  margin-top: 0.15rem;
+}
+.challenge.received {
+  border: 1px solid var(--me-line);
+  background: var(--me-soft);
+}
+.challenge small {
+  display: block;
+  margin: 0.15rem 0 0.4rem;
+}
+.challenge .row {
+  gap: 0.4rem;
+}
+
+/* Seasons. */
+.season-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.season-bar select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+}
+.recap {
+  background: linear-gradient(160deg, var(--me-soft), var(--panel) 60%);
+  border: 1px solid var(--me-line);
+}
+.recap-kicker {
+  margin: 0 0 0.5rem;
+  font-family: var(--display);
+  color: var(--brass);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+.recap-champion {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.7rem;
+}
+.recap-champion > .ico {
+  width: 2.4rem;
+  height: 2.4rem;
+  color: var(--brass);
+}
+.recap-champion span {
+  display: flex;
+  flex-direction: column;
+}
+.recap-champion b {
+  font-family: var(--display);
+  font-size: 1.4rem;
+}
+.recap-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+.recap-grid span {
+  display: flex;
+  flex-direction: column;
+}
+.recap-grid b {
+  font-family: var(--display);
+  font-size: 1.05rem;
+}
+.recap-grid small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}

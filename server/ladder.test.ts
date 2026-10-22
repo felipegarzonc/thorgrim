@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { armyStats, headToHead, standings, type ClubResult } from "../shared/ladder.ts";
+import { armyStats, headToHead, inSeason, seasonRanges, seasonRecap, standings, type ClubResult } from "../shared/ladder.ts";
 import type { Game } from "../shared/types.ts";
 import { runAs, type UserCtx } from "./context.ts";
 
@@ -55,6 +55,29 @@ describe("ladder maths", () => {
       { id: "cid", name: "cid", won: 1, drawn: 0, lost: 0 },
     ]);
     expect(armyStats(rs).find((a) => a.faction === "Ogor Mawtribes")).toEqual({ faction: "Ogor Mawtribes", played: 3, won: 2, rate: 2 / 3 });
+  });
+});
+
+describe("seasons", () => {
+  it("splits results by season and sums up a season", () => {
+    const ranges = seasonRanges([
+      { id: "s2", name: "Winter", start: "2026-12-01" },
+      { id: "s1", name: "Autumn", start: "2026-09-01" },
+    ]);
+    expect(ranges.map((r) => [r.name, r.end])).toEqual([
+      ["Winter", undefined],
+      ["Autumn", "2026-12-01"],
+    ]);
+    const rs = [
+      { ...result("1", ["ana", "Ogor Mawtribes", 60], ["ben", "Skaven", 10]), date: "2026-10-01" },
+      { ...result("2", ["ben", "Skaven", 30], ["cid", "Seraphon", 20]), date: "2026-11-30" },
+      { ...result("3", ["cid", "Seraphon", 50], ["ana", "Ogor Mawtribes", 10]), date: "2026-12-01" },
+    ];
+    const autumn = inSeason(rs, ranges[1]);
+    expect(autumn.map((r) => r.id)).toEqual(["1", "2"]);
+    const recap = seasonRecap(autumn);
+    expect(recap).toMatchObject({ games: 2, champion: { id: "ana" }, mostGames: { name: "ben", played: 2 }, biggestWin: { winner: "ana", score: "60-10", margin: 50 } });
+    expect(recap.mostPlayedArmy?.faction).toBe("Skaven");
   });
 });
 

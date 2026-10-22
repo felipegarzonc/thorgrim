@@ -3,11 +3,16 @@
 // when the second player confirms, and leaves it if its result changes or
 // it is deleted (until both confirm again).
 
-import type { ClubResult } from "../shared/ladder.ts";
+import { inSeason, seasonRanges, seasonRecap, type ClubResult, type Season } from "../shared/ladder.ts";
+import { waitUntil } from "@vercel/functions";
+import { blobs } from "./blobs.ts";
+import { FeedError } from "./feed.ts";
+import { clubMembers } from "./members.ts";
+import { notify } from "./notices.ts";
 import type { Game } from "../shared/types.ts";
 import { currentUser } from "./context.ts";
 import { bothConfirmed, gameLists, ladderSides, type OpenGame } from "./sharedGames.ts";
-import { Collection } from "./store.ts";
+import { Collection, newId } from "./store.ts";
 
 const results = new Collection<ClubResult>("results", "club/");
 
@@ -53,5 +58,38 @@ export async function forgetResult(gameId: string) {
 
 /** For the page: the ladder with the signed-in member's id, to find their row. */
 export async function ladder() {
-  return { me: currentUser().id, results: await listResults() };
+  const [results, seasons] = await Promise.all([listResults(), listSeasons()]);
+  return { me: currentUser().id, results, seasons };
+}
+
+// ---------- seasons ----------
+
+const SEASONS = "club/settings/seasons.json";
+
+export async function listSeasons(): Promise<Season[]> {
+  const raw = await blobs().read(SEASONS);
+  return raw ? (JSON.parse(raw.toString("utf8")) as Season[]) : [];
+}
+
+/**
+ * Start a new season today (admins). The season that ends gets its recap,
+ * and every member hears who won it.
+ */
+export async function startSeason(name: string): Promise<Season[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  const seasons = await listSeasons();
+  if (seasons.some((s) => s.start === today)) throw new FeedError("A season already started today.");
+  const clean = name.trim().slice(0, 60) || `Season ${seasons.length + 1}`;
+  const ending = seasonRanges(seasons)[0];
+  const next = [...seasons, { id: newId(), name: clean, start: today }];
+  await blobs().write(SEASONS, JSON.stringify(next, null, 2), "application/json");
+  const results = await listResults();
+  const done = inSeason(results, ending ? { start: ending.start, end: today } : { start: "0000-00-00", end: today });
+  const recap = seasonRecap(done);
+  const members = (await clubMembers()).map((m) => m.id);
+  const text = recap.champion
+    ? `🏆 ${ending?.name ?? "The season"} is over: ${recap.champion.name} is champion with ${recap.champion.points} points! ${clean} starts now. See the recap in the Ladder.`
+    : `${clean} starts now on the club ladder.`;
+  waitUntil(notify(members, text, "#/club/ladder").catch(() => undefined));
+  return next;
 }

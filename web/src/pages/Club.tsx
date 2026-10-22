@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import type { BattleDetail, FeedPost, FeedPostView, Notice } from "../../../shared/types.ts";
 import { api, withKey } from "../api.ts";
 import { baseFaction } from "../../../shared/season.ts";
-import { armyStats, headToHead, standings, type ClubResult } from "../../../shared/ladder.ts";
+import { armyStats, headToHead, inSeason, seasonRanges, seasonRecap, standings, type ClubResult, type Season, type SeasonRecap } from "../../../shared/ladder.ts";
 import { Avatar, Icon, Seg, useLoad, useMeta, type IconName } from "../ui.tsx";
 import { rowsFromDetail, ScoreSheet, type SheetSide } from "../scoreSheet.tsx";
 import { Story } from "./report.tsx";
@@ -334,20 +334,61 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
 
 /** The club ladder from confirmed results, your record against each member, and how each army does. */
 function Ladder() {
-  const [data] = useLoad<{ me: string; results: ClubResult[] }>("/club/ladder");
+  const meta = useMeta();
+  const [data, reload] = useLoad<{ me: string; results: ClubResult[]; seasons: Season[] }>("/club/ladder");
+  const [pick, setPick] = useState<string>();
   if (!data) return <p className="muted">Loading…</p>;
-  if (!data.results.length)
+  const ranges = seasonRanges(data.seasons ?? []);
+  const season = pick === "all" ? undefined : (ranges.find((s) => s.id === pick) ?? ranges[0]);
+  const results = season ? inSeason(data.results, season) : data.results;
+  const newSeason = async () => {
+    const name = prompt("Name of the new season (the current one ends today):", `Season ${ranges.length + 1}`);
+    if (name === null) return;
+    try {
+      await api("/club/seasons", { method: "POST", json: { name } });
+      setPick(undefined);
+      reload();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+  const picker = (ranges.length > 0 || meta?.user?.isAdmin) && (
+    <div className="season-bar">
+      {ranges.length > 0 && (
+        <select value={season?.id ?? "all"} onChange={(e) => setPick(e.target.value)} aria-label="Season">
+          {ranges.map((s, i) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+              {i === 0 ? " (now)" : ""}
+            </option>
+          ))}
+          <option value="all">All time</option>
+        </select>
+      )}
+      {meta?.user?.isAdmin && (
+        <button type="button" className="ghost small" onClick={newSeason}>
+          <Icon name="flag" /> Start a new season
+        </button>
+      )}
+    </div>
+  );
+  if (!results.length)
     return (
-      <section className="card empty">
-        <h2>No confirmed results yet</h2>
-        <p className="muted">Play a game together (share it with your opponent), and when it ends both of you confirm the result on the Results screen. Confirmed games count here.</p>
-      </section>
+      <div className="stack">
+        {picker}
+        <section className="card empty">
+          <h2>No confirmed results{season ? ` in ${season.name}` : ""} yet</h2>
+          <p className="muted">Play a game together (share it with your opponent), and when it ends both of you confirm the result on the Results screen. Confirmed games count here.</p>
+        </section>
+      </div>
     );
-  const table = standings(data.results);
-  const rivals = headToHead(data.results, data.me);
-  const armies = armyStats(data.results);
+  const table = standings(results);
+  const rivals = headToHead(results, data.me);
+  const armies = armyStats(results);
   return (
     <div className="stack">
+      {picker}
+      {season?.end && <Recap recap={seasonRecap(results)} name={season.name} />}
       <section className="card ladder" aria-label="Standings">
         <div className="ladder-row ladder-head" aria-hidden="true">
           <span>#</span>
@@ -408,6 +449,60 @@ function Ladder() {
         </div>
       </section>
     </div>
+  );
+}
+
+/** A finished season's highlights. */
+function Recap({ recap, name }: { recap: SeasonRecap; name: string }) {
+  return (
+    <section className="card recap">
+      <p className="recap-kicker">{name} · recap</p>
+      {recap.champion && (
+        <div className="recap-champion">
+          <Icon name="trophy" />
+          <span>
+            <small className="muted">Champion</small>
+            <b>{recap.champion.name}</b>
+            <small className="muted">
+              {recap.champion.points} pts · {recap.champion.won}-{recap.champion.drawn}-{recap.champion.lost}
+              {recap.champion.faction ? ` · ${recap.champion.faction}` : ""}
+            </small>
+          </span>
+        </div>
+      )}
+      <div className="recap-grid">
+        <span>
+          <b>{recap.games}</b>
+          <small>games played</small>
+        </span>
+        {recap.mostGames && (
+          <span>
+            <b>{recap.mostGames.name}</b>
+            <small>most games ({recap.mostGames.played})</small>
+          </span>
+        )}
+        {recap.biggestWin && (
+          <span>
+            <b>{recap.biggestWin.score}</b>
+            <small>
+              biggest win: {recap.biggestWin.winner} over {recap.biggestWin.loser}
+            </small>
+          </span>
+        )}
+        {recap.mostPlayedArmy && (
+          <span>
+            <b>{recap.mostPlayedArmy.faction}</b>
+            <small>most played army</small>
+          </span>
+        )}
+        {recap.bestArmy && (
+          <span>
+            <b>{Math.round(recap.bestArmy.rate * 100)}%</b>
+            <small>best army: {recap.bestArmy.faction}</small>
+          </span>
+        )}
+      </div>
+    </section>
   );
 }
 

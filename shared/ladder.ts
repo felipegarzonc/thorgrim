@@ -96,3 +96,57 @@ export function armyStats(results: ClubResult[]): { faction: string; played: num
   }
   return [...by.values()].sort((a, b) => b.played - a.played || b.rate - a.rate);
 }
+
+// ---------- seasons ----------
+
+/** A stretch of the ladder: from `start` until the next season starts. */
+export interface Season {
+  id: string;
+  name: string;
+  /** YYYY-MM-DD */
+  start: string;
+}
+
+/** The seasons with their end (the day before the next starts), latest first. */
+export function seasonRanges(seasons: Season[]): (Season & { end?: string })[] {
+  const sorted = [...seasons].sort((a, b) => a.start.localeCompare(b.start));
+  return sorted.map((s, i) => ({ ...s, end: sorted[i + 1]?.start })).reverse();
+}
+
+/** Results played in a season (end is exclusive). */
+export const inSeason = (results: ClubResult[], s: { start: string; end?: string }) => results.filter((r) => r.date >= s.start && (!s.end || r.date < s.end));
+
+export interface SeasonRecap {
+  games: number;
+  champion?: Standing;
+  /** Who played the most games. */
+  mostGames?: { name: string; played: number };
+  /** The widest winning margin. */
+  biggestWin?: { winner: string; loser: string; score: string; margin: number };
+  mostPlayedArmy?: { faction: string; played: number };
+  bestArmy?: { faction: string; rate: number; played: number };
+}
+
+/** The highlights of a season: champion, most games, biggest win, the armies. */
+export function seasonRecap(results: ClubResult[]): SeasonRecap {
+  const table = standings(results);
+  const armies = armyStats(results);
+  const busiest = [...table].sort((a, b) => b.played - a.played)[0];
+  let biggestWin: SeasonRecap["biggestWin"];
+  for (const r of results) {
+    const w = winnerOf(r);
+    if (w === null) continue;
+    const [win, lose] = [r.players[w], r.players[1 - w]];
+    const margin = win.vp - lose.vp;
+    if (!biggestWin || margin > biggestWin.margin) biggestWin = { winner: win.name, loser: lose.name, score: `${win.vp}-${lose.vp}`, margin };
+  }
+  const best = armies.filter((a) => a.played >= 2).sort((a, b) => b.rate - a.rate || b.played - a.played)[0];
+  return {
+    games: results.length,
+    champion: table[0],
+    mostGames: busiest && { name: busiest.name, played: busiest.played },
+    biggestWin,
+    mostPlayedArmy: armies[0] && { faction: armies[0].faction, played: armies[0].played },
+    bestArmy: best && { faction: best.faction, rate: best.rate, played: best.played },
+  };
+}
