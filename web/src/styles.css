@@ -50,6 +50,8 @@
 
 body {
   margin: 0;
+  /* Nothing may make the page scroll sideways (large text on Android phones). */
+  overflow-x: clip;
   background: var(--bg);
   color: var(--text);
   -webkit-tap-highlight-color: transparent;
@@ -1288,7 +1290,8 @@ button.accent,
 }
 .counter {
   display: grid;
-  grid-template-columns: 2.6rem 1fr 2.6rem;
+  grid-template-columns: 2.6rem minmax(0, 1fr) 2.6rem;
+  min-width: 0;
   align-items: center;
   background: #3a3d43;
   border-radius: 12px;
@@ -1763,12 +1766,18 @@ body.sheet-open {
   font-variant-numeric: tabular-nums;
 }
 .cp-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 4.4rem;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.55rem;
 }
+/* With large phone text the total drops below the counters instead of pushing the page sideways. */
+.cp-row .counter {
+  flex: 1 1 7rem;
+}
+.cp-row .cp-total {
+  flex: 0 0 4.4rem;
+}
 .cp-row.two {
-  grid-template-columns: 1fr 1fr;
   margin-top: 0.55rem;
 }
 .cp-total {
