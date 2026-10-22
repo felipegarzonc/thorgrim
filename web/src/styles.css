@@ -98,13 +98,6 @@ main {
   margin: 0 auto;
   padding: 0 1rem calc(6.5rem + env(safe-area-inset-bottom));
 }
-.footer {
-  text-align: center;
-  color: var(--faint);
-  font-size: 0.72rem;
-  padding: 0 1rem calc(6.5rem + env(safe-area-inset-bottom));
-  margin-top: -5rem;
-}
 
 .bottom-nav {
   position: fixed;
