@@ -15,7 +15,7 @@ import type { ArmyList, FeedPost, Game, GameState, LibraryDoc } from "../shared/
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
 import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips, voiceScore, gameReview } from "./coach.ts";
-import { addComment, deleteComment, deletePost, feed, FeedError, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, readPublicCard, reportPage, saveCard, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
+import { addComment, deleteComment, deletePost, feed, FeedError, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, readPublicCard, readPublicPhoto, reportPage, saveCard, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
 import { markNoticesRead, myNotices, notify } from "./notices.ts";
 import { publicKey, pushTo, subscribe, unsubscribe } from "./push.ts";
 import { gameData, listRules, warscrollText } from "./data.ts";
@@ -52,7 +52,8 @@ import { forgetResult, ladder, listResults, startSeason, syncResult } from "./la
 import { Collection, newId } from "./store.ts";
 import { blankGame } from "./newGame.ts";
 import { rememberLang } from "./lang.ts";
-import { clubMembers } from "./members.ts";
+import { allAccounts, clubMembers } from "./members.ts";
+import { addMembers, clubFor, createClub, getClub, isLeader, isOwner, joinClub, myClubs, removeMember, renameClub, setLeader, type Club } from "./clubs.ts";
 import { approve as approveRequest, decline as declineRequest, listRequests, requestAccess } from "./access.ts";
 import { mailReady } from "./mail.ts";
 import { cronAllowed, CRON_USER, daily as cronDaily, weekly as cronWeekly } from "./cron.ts";
@@ -173,7 +174,9 @@ app.use("/api", async (req, res, next) => {
     }
     const lang = req.get("x-lang") === "es" ? "es" : "en";
     if (!media && req.get("x-lang")) await rememberLang(user.prefix, lang).catch(() => undefined);
-    runAs({ ...user, lang }, () => next());
+    const wanted = req.get("x-club") || (typeof req.query.c === "string" ? req.query.c : undefined);
+    const club = await clubFor(user, wanted);
+    runAs({ ...user, lang, club: club ?? null }, () => next());
   } catch (e) {
     if (e instanceof AuthError) return res.status(e.status).json({ error: e.message, needsLogin: e.status === 401 });
     next(e);
@@ -187,6 +190,10 @@ const requireDeveloper = (_req: Request, res: Response, next: NextFunction) =>
 
 const requireAdmin = (_req: Request, res: Response, next: NextFunction) =>
   currentUser().isAdmin ? next() : res.status(403).json({ error: "Only the admin can do that." });
+
+// A club's leader (or the app's owner) runs the club: its seasons and members.
+const requireLeader = (_req: Request, res: Response, next: NextFunction) =>
+  isLeader() || currentUser().isAdmin ? next() : res.status(403).json({ error: "Only the club's leader can do that." });
 
 // ---------- sign in, invites ----------
 
@@ -257,6 +264,7 @@ app.post("/api/auth/join", async (req, res) => {
   const id = await createLogin(email, password, name);
   await saveAccounts([...(await listAccounts()), { id, email, name, role: inv.role, createdAt: new Date().toISOString() }]);
   await saveInvites((await listInvites()).map((i) => (i.id === inv.id ? { ...i, usedBy: id, usedAt: new Date().toISOString() } : i)));
+  if (inv.clubId) await joinClub(inv.clubId, id);
   const { session } = await signIn(email, password);
   res.json(await signedIn(id, session));
 });
@@ -316,7 +324,7 @@ app.get("/api/admin/invites", requireAdmin, async (_req, res) => {
 });
 app.post("/api/admin/invites", requireAdmin, async (req, res) => {
   if (!accountsEnabled()) return res.status(400).json({ error: "Invites need accounts (Supabase)." });
-  const { invite, token } = await createInvite(String(req.body.note ?? ""), req.body.role === "admin" ? "admin" : "player");
+  const { invite, token } = await createInvite(String(req.body.note ?? ""), req.body.role === "admin" ? "admin" : "player", currentUser().club?.id);
   const { tokenHash: _t, ...rest } = invite;
   res.json({ invite: rest, token });
 });
@@ -351,11 +359,14 @@ const newestFirst = <T extends { createdAt: string }>(xs: T[]) => xs.sort((a, b)
 app.get("/api/media-token", (_req, res) => res.json({ media: mediaToken(currentUser().id) }));
 // Which build is live: open pages compare it with the one they loaded and offer a reload.
 app.get("/api/version", (_req, res) => res.json({ builtAt: gameData().builtAt }));
-app.get("/api/meta", (_req, res) => {
+app.get("/api/meta", async (_req, res) => {
   const d = gameData();
   const u = currentUser();
   res.json({
     user: { id: u.id, name: u.name, isAdmin: u.isAdmin, developer: !!u.developer },
+    club: u.club && u.club.id !== "club" ? { id: u.club.id, name: u.club.name, leader: isLeader(u) } : u.club ? { id: "", name: "", leader: u.isAdmin } : null,
+    clubs: (await myClubs(u)).map((c) => ({ id: c.id, name: c.name })),
+    canCreateClubs: isOwner(u),
     media: mediaToken(u.id),
     accounts: accountsEnabled(),
     source: d.source,
@@ -590,8 +601,36 @@ app.post("/api/games/:id/confirm", async (req, res) => {
   res.json(viewGame(next));
 });
 app.get("/api/club/ladder", async (_req, res) => res.json(await ladder()));
-app.post("/api/club/seasons", requireAdmin, async (req, res) => res.json(await startSeason(String(req.body?.name ?? ""))));
+app.post("/api/club/seasons", requireLeader, async (req, res) => res.json(await startSeason(String(req.body?.name ?? ""))));
 // The club's members (names only), for events, challenges and profiles.
+// ---------- clubs ----------
+
+const clubView = async (c: Club) => {
+  const people = new Map((await allAccounts()).map((m) => [m.id, m.name]));
+  return { id: c.id, name: c.name, leaderId: c.leaderId, createdAt: c.createdAt, members: c.memberIds.filter((id) => people.has(id)).map((id) => ({ id, name: people.get(id) })) };
+};
+app.get("/api/clubs", async (_req, res) => res.json(await Promise.all((await myClubs(currentUser())).map(clubView))));
+app.post("/api/clubs", async (req, res) => {
+  const b = req.body ?? {};
+  const ids = Array.isArray(b.memberIds) ? b.memberIds.map(String) : b.allMembers ? (await allAccounts()).map((m) => m.id) : [];
+  res.json(await clubView(await createClub(String(b.name ?? ""), String(b.leaderId ?? currentUser().id), ids)));
+});
+app.patch("/api/clubs/:id", async (req, res) => {
+  let c: Club | undefined;
+  if (typeof req.body?.name === "string") c = await renameClub(param(req, "id"), req.body.name);
+  if (typeof req.body?.leaderId === "string") c = await setLeader(param(req, "id"), req.body.leaderId);
+  res.json(await clubView(c ?? (await getClub(param(req, "id")))!));
+});
+app.post("/api/clubs/:id/members", async (req, res) =>
+  res.json(await clubView(await addMembers(param(req, "id"), (Array.isArray(req.body?.ids) ? req.body.ids : [req.body?.id]).map(String)))),
+);
+app.delete("/api/clubs/:id/members/:uid", async (req, res) => res.json(await clubView(await removeMember(param(req, "id"), param(req, "uid")))));
+// Everyone with an account: who a leader can add.
+app.get("/api/clubs/:id/candidates", requireLeader, async (req, res) => {
+  const c = await getClub(param(req, "id"));
+  res.json((await allAccounts()).filter((m) => !c?.memberIds.includes(m.id)).map(({ id, name }) => ({ id, name })));
+});
+
 app.get("/api/club/members", async (_req, res) => res.json((await clubMembers()).map(({ id, name }) => ({ id, name }))));
 
 // The army showcase (server/showcase.ts): anyone in the club sees it, each member edits their own.
@@ -840,8 +879,7 @@ const sendReportPage = async (req: Request, res: Response, token: string, lang: 
     .send(await reportPage(token, lang, process.env.APP_URL?.trim().replace(/\/$/, "") || `${req.protocol}://${req.get("host")}`));
 app.get("/api/public/report-page/:token", (req, res) => sendReportPage(req, res, param(req, "token"), req.query.lang === "es" ? "es" : "en"));
 app.get("/api/public/reports/:token/photo/:n", async (req, res) => {
-  const found = await publicPost(param(req, "token"));
-  const data = found && (await readPostPhoto(found.post.id, Number(param(req, "n"))));
+  const data = await readPublicPhoto(param(req, "token"), Number(param(req, "n")));
   return data ? res.type("image/jpeg").set("cache-control", "public, max-age=86400").send(data) : res.status(404).end();
 });
 

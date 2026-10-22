@@ -13,7 +13,8 @@ import type { UserCtx } from "./context.ts";
 import { remindTomorrow, upcoming } from "./events.ts";
 import { postsSince } from "./feed.ts";
 import { listResults, listSeasons } from "./ladder.ts";
-import { clubMembers } from "./members.ts";
+import { allAccounts, clubMembers } from "./members.ts";
+import { eachClub } from "./clubs.ts";
 import { notify } from "./notices.ts";
 import { remindConfirmations } from "./sharedGames.ts";
 
@@ -28,11 +29,12 @@ export const cronAllowed = (authorization: string | undefined) => {
 
 export async function daily(now = new Date()) {
   const today = now.toISOString().slice(0, 10);
-  const spaces = [...new Set((await clubMembers()).map((m) => m.prefix))];
+  const spaces = [...new Set((await allAccounts()).map((m) => m.prefix))];
+  const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
   const report = {
-    eventReminders: await remindTomorrow(today),
+    eventReminders: sum(await eachClub(() => remindTomorrow(today))),
     confirmationReminders: await remindConfirmations(spaces, now.getTime()),
-    challengeReminders: await remindOpen(now.getTime()),
+    challengeReminders: sum(await eachClub(() => remindOpen(now.getTime()))),
     expiredInvites: 0,
     oldRequests: await forgetOldRequests(now.getTime()),
   };
@@ -91,14 +93,18 @@ export function digestText(d: Digest, lang: Lang): string {
   return text;
 }
 
+/** Each club hears about its own week. */
 export async function weekly(now = new Date()) {
-  const digest = await weekOf(now);
-  if (!digest) return { sent: 0 };
-  const members = await clubMembers();
-  await notify(
-    members.map((m) => m.id),
-    (lang) => digestText(digest, lang),
-    "#/club",
-  );
-  return { sent: members.length, digest };
+  const clubs = await eachClub(async (club) => {
+    const digest = await weekOf(now);
+    if (!digest) return { club: club.name, sent: 0 };
+    const members = await clubMembers();
+    await notify(
+      members.map((m) => m.id),
+      (lang) => digestText(digest, lang),
+      "#/club",
+    );
+    return { club: club.name, sent: members.length, digest };
+  });
+  return { sent: clubs.reduce((s, c) => s + c.sent, 0), clubs };
 }

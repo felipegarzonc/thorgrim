@@ -7,6 +7,11 @@ import { currentLang } from "./i18n.ts";
 
 const KEY = "aos-coach-access-key";
 const SESSION = "thorgrim-session";
+const CLUB = "thorgrim-club";
+
+/** The club this browser is working in (a player can be in several). */
+export const currentClub = (): string => read(CLUB) ?? "";
+export const setCurrentClub = (id: string) => write(CLUB, id || null);
 
 export interface Session {
   access_token: string;
@@ -69,7 +74,9 @@ export function mediaExpiry(): number {
 /** Link to a server file (an uploaded PDF, a photo) that opens with the photo pass. */
 export const withKey = (url: string) => {
   const t = read(MEDIA);
-  return t ? `${url}${url.includes("?") ? "&" : "?"}m=${encodeURIComponent(t)}` : url;
+  const c = currentClub();
+  const club = c ? `&c=${encodeURIComponent(c)}` : "";
+  return t ? `${url}${url.includes("?") ? "&" : "?"}m=${encodeURIComponent(t)}${club}` : url;
 };
 
 export const LOGIN_EVENT = "aos-coach-login-required";
@@ -100,6 +107,7 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
   if (current) headers.authorization = `Bearer ${current.access_token}`;
   else if (accessKey()) headers["x-access-key"] = accessKey();
   headers["x-lang"] = currentLang();
+  if (currentClub()) headers["x-club"] = currentClub();
   let body = init.body;
   if (init.json !== undefined) {
     headers["content-type"] = "application/json";

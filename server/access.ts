@@ -107,7 +107,7 @@ function inviteEmail(r: AccessRequest, link: string) {
 export async function approve(id: string, origin: string): Promise<{ request: AccessRequest; link: string; email: { subject: string; text: string } }> {
   const r = await load(id);
   if (r.status !== "pending") throw new FeedError("This request was already answered.");
-  const { token } = await createInvite(`${r.name}${r.club ? ` · ${r.club}` : ""}`, "player");
+  const { token } = await createInvite(`${r.name}${r.club ? ` · ${r.club}` : ""}`, "player", currentUser().club?.id);
   // Through the invite's preview page (web/public/join.html), in their language.
   const link = `${origin}/${r.lang === "es" ? "es/" : ""}join/${token}`;
   const mail = inviteEmail(r, link);

@@ -1057,10 +1057,38 @@ export const ES_PHRASES: Record<string, string> = {
   "Too many wrong passwords. Try again in 15 minutes.": "Demasiadas contraseñas incorrectas. Prueba otra vez en 15 minutos.",
   "Wrong app password.": "Contraseña de la app incorrecta.",
   "Not found": "No encontrado",
+  // Clubs
+  "You're not in a club yet.": "Aún no estás en un club.",
+  "Ask a club leader to add you. Your games, lists and Thorgrim work as always.": "Pídele a un líder de club que te añada. Tus partidas, listas y Thorgrim funcionan como siempre.",
+  "You're not in a club yet: ask a club leader to add you.": "Aún no estás en un club: pídele a un líder de club que te añada.",
+  "Switch club": "Cambiar de club",
+  Leader: "Líder",
+  "Add members": "Añadir miembros",
+  "Everyone with an account is already in the club. Invite new players from your Profile.": "Todos los que tienen cuenta ya están en el club. Invita jugadores nuevos desde tu Perfil.",
+  Clubs: "Clubes",
+  "New club": "Club nuevo",
+  "Club name": "Nombre del club",
+  Create: "Crear",
+  Open: "Abrir",
+  "Add everyone with an account": "Añadir a todos los que tienen cuenta",
+  "You lead new clubs; members are added from the club's Members tab.": "Tú lideras los clubes nuevos; los miembros se añaden desde la pestaña Miembros del club.",
+  "No clubs yet: everyone shares one club space until you create the first one (it keeps what's there).": "Aún no hay clubes: todos comparten un mismo espacio hasta que crees el primero (conserva lo que ya hay).",
+  "Only the club's leader can do that.": "Solo el líder del club puede hacer eso.",
+  "Only the app's owner can create clubs for now.": "Por ahora solo el dueño de la app puede crear clubes.",
+  "Give the club a name.": "Ponle un nombre al club.",
+  "There's already a club with that name.": "Ya existe un club con ese nombre.",
+  "The leader stays in the club: name another leader first.": "El líder se queda en el club: nombra otro líder primero.",
+  "The new leader has to be a member of the club.": "El nuevo líder tiene que ser miembro del club.",
+  "That club doesn't exist.": "Ese club no existe.",
+  "This report is already posted in another club.": "Este reporte ya está publicado en otro club.",
 };
 
 /** Text with names and numbers in it. */
 export const ES_PATTERNS: [RegExp, string][] = [
+  [/^(\d+) members$/, "$1 miembros"],
+  [/^Add (\d+)$/, "Añadir $1"],
+  [/^·? ?(\d+) members · leader (.+)$/, "· $1 miembros · líder $2"],
+  [/^Remove (.+)$/, "Quitar a $1"],
   // Steps, rounds, turns, phases
   [/^Round (\d+)$/, "Ronda $1"],
   [/^ROUND (\d+)$/, "RONDA $1"],

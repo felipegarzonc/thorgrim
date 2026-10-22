@@ -166,28 +166,73 @@ export function MembersList() {
   const [ladder, reloadLadder] = useLoad<{ me: string; results: ClubResult[] }>("/club/ladder");
   // Admins also see who is invited and hasn't joined yet.
   const [invites, reloadInvites] = useLoad<{ id: string; note: string; expiresAt: string }[]>(meta?.user?.isAdmin ? "/admin/invites" : null);
-  useRefreshOnReturn(reloadMembers, reloadLadder, reloadInvites);
+  // The club's leader adds and removes members.
+  const clubId = meta?.club?.leader ? meta.club.id : "";
+  const [club, reloadClub] = useLoad<ClubInfo[]>(clubId ? "/clubs" : null);
+  useRefreshOnReturn(reloadMembers, reloadLadder, reloadInvites, reloadClub);
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string>();
+  const leaderId = club?.find((c) => c.id === clubId)?.leaderId;
+  const remove = async (m: ClubMember) => {
+    if (!confirm(`Remove ${m.name} from the club?`)) return;
+    setError(undefined);
+    try {
+      await api(`/clubs/${clubId}/members/${m.id}`, { method: "DELETE" });
+      reloadMembers();
+      reloadClub();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
   if (!members) return <Skeleton />;
   const table = ladder ? standings(ladder.results) : [];
   const sorted = [...members].sort((a, b) => a.name.localeCompare(b.name));
   return (
     <div className="stack">
     <Challenges />
+    {clubId && (
+      <div className="row">
+        <span className="grow small muted">{`${members.length} members`}</span>
+        <button type="button" onClick={() => setAdding(true)}>
+          <Icon name="plus" /> Add members
+        </button>
+      </div>
+    )}
+    {error && <p className="small error">{error}</p>}
     <div className="card rivals members">
       {sorted.map((m) => {
         const s = table.find((x) => x.id === m.id);
         return (
-          <a key={m.id} className="rival rival-link" href={`#/club/member/${m.id}`}>
-            <Avatar faction={s?.faction} size={1.8} />
-            <span className="grow">
-              <b>{m.name}</b>
-              <small className="muted">{s ? `${s.faction || "—"} · ${s.won}-${s.drawn}-${s.lost} on the ladder` : "No ladder games yet"}</small>
-            </span>
-            <Icon name="right" />
-          </a>
+          <div key={m.id} className="member-row">
+            <a className="rival rival-link grow" href={`#/club/member/${m.id}`}>
+              <Avatar faction={s?.faction} size={1.8} />
+              <span className="grow">
+                <b>{m.name}</b>
+                {m.id === leaderId && <span className="badge">Leader</span>}
+                <small className="muted">{s ? `${s.faction || "—"} · ${s.won}-${s.drawn}-${s.lost} on the ladder` : "No ladder games yet"}</small>
+              </span>
+              <Icon name="right" />
+            </a>
+            {clubId && leaderId && m.id !== leaderId && (
+              <button type="button" className="icon-button" aria-label={`Remove ${m.name}`} onClick={() => remove(m)}>
+                <Icon name="close" />
+              </button>
+            )}
+          </div>
         );
       })}
     </div>
+    {adding && (
+      <AddMembers
+        clubId={clubId}
+        onClose={() => setAdding(false)}
+        onAdded={() => {
+          setAdding(false);
+          reloadMembers();
+          reloadClub();
+        }}
+      />
+    )}
     {invites && invites.length > 0 && (
       <section>
         <h2 className="section-title">Invited, not joined yet ({invites.length})</h2>
@@ -205,6 +250,59 @@ export function MembersList() {
       </section>
     )}
     </div>
+  );
+}
+
+interface ClubInfo {
+  id: string;
+  name: string;
+  leaderId: string;
+  members: ClubMember[];
+}
+
+/** The leader picks people with an account to bring into the club. */
+function AddMembers({ clubId, onClose, onAdded }: { clubId: string; onClose: () => void; onAdded: () => void }) {
+  const [people] = useLoad<ClubMember[]>(`/clubs/${clubId}/candidates`);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const add = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api(`/clubs/${clubId}/members`, { method: "POST", json: { ids: picked } });
+      onAdded();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet
+      title="Add members"
+      onClose={onClose}
+      actions={
+        <button type="button" className="primary" disabled={!picked.length || busy} onClick={add}>
+          {picked.length ? `Add ${picked.length}` : "Add"}
+        </button>
+      }
+    >
+      {!people ? (
+        <Skeleton cards={1} />
+      ) : !people.length ? (
+        <p className="muted">Everyone with an account is already in the club. Invite new players from your Profile.</p>
+      ) : (
+        <div className="stack">
+          {people.map((p) => (
+            <label key={p.id} className="inline check-row">
+              <input type="checkbox" checked={picked.includes(p.id)} onChange={(e) => setPicked((cur) => (e.target.checked ? [...cur, p.id] : cur.filter((x) => x !== p.id)))} />
+              <span translate="no">{p.name}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      {error && <p className="small error">{error}</p>}
+    </Sheet>
   );
 }
 

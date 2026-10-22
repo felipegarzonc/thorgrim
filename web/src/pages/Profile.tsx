@@ -2,7 +2,7 @@
 // invite links, monthly coach limits, switching accounts off, new passwords.
 
 import { useEffect, useState } from "react";
-import { accessKey, api, signOut } from "../api.ts";
+import { accessKey, api, setCurrentClub, signOut } from "../api.ts";
 import { Card, Icon, Seg, useLoad, useMeta, useRefreshOnReturn } from "../ui.tsx";
 import { langSetting, setLangSetting } from "../i18n.ts";
 import { shareText, shareUrl } from "../links.ts";
@@ -247,9 +247,77 @@ export function ProfilePage() {
         </Card>
       )}
 
+      {meta?.canCreateClubs && me.accounts && <ClubsAdmin />}
       {meta?.user?.isAdmin && me.accounts && <AccessRequests />}
       {meta?.user?.isAdmin && me.accounts && <PlayersAdmin selfId={me.user.id} />}
     </div>
+  );
+}
+
+interface ClubRow {
+  id: string;
+  name: string;
+  leaderId: string;
+  members: { id: string; name: string }[];
+}
+
+/** The app's owner creates clubs and names their leader. */
+function ClubsAdmin() {
+  const meta = useMeta();
+  const [clubs] = useLoad<ClubRow[]>("/clubs");
+  const [name, setName] = useState("");
+  const [everyone, setEveryone] = useState(false);
+  const [error, setError] = useState<string>();
+  const create = async () => {
+    setError(undefined);
+    try {
+      const c = await api<ClubRow>("/clubs", { method: "POST", json: { name, leaderId: meta?.user?.id, allMembers: everyone } });
+      setName("");
+      setCurrentClub(c.id);
+      window.location.reload();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  return (
+    <Card title="Clubs">
+      {clubs?.map((c) => (
+        <div key={c.id} className="row">
+          <span className="grow">
+            <b translate="no">{c.name}</b>
+            <small className="muted">{` · ${c.members.length} members · leader ${c.members.find((m) => m.id === c.leaderId)?.name ?? "—"}`}</small>
+          </span>
+          {meta?.club?.id === c.id ? (
+            <span className="badge">Open</span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentClub(c.id);
+                window.location.reload();
+              }}
+            >
+              Open
+            </button>
+          )}
+        </div>
+      ))}
+      {clubs && !clubs.length && <p className="small muted">No clubs yet: everyone shares one club space until you create the first one (it keeps what's there).</p>}
+      <label>
+        New club
+        <span className="row">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Club name" maxLength={60} />
+          <button type="button" disabled={!name.trim()} onClick={create}>
+            Create
+          </button>
+        </span>
+      </label>
+      <label className="inline">
+        <input type="checkbox" checked={everyone} onChange={(e) => setEveryone(e.target.checked)} /> Add everyone with an account
+      </label>
+      <p className="small muted">You lead new clubs; members are added from the club's Members tab.</p>
+      {error && <p className="small error">{error}</p>}
+    </Card>
   );
 }
 

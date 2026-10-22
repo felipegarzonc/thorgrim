@@ -5712,3 +5712,40 @@ button:active:not(:disabled),
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Clubs: the switcher, leader controls, no club yet. */
+.club-switch {
+  max-width: 45%;
+  font-family: var(--font-display, inherit);
+}
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.member-row {
+  border-bottom: 1px solid var(--line);
+}
+.member-row:last-child {
+  border-bottom: 0;
+}
+.member-row .rival-link {
+  min-width: 0;
+  border-bottom: 0;
+}
+.member-row .badge {
+  margin-left: 0.4rem;
+}
+.check-row {
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.empty-club {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+.empty-club svg {
+  width: 2.4rem;
+  height: 2.4rem;
+  color: var(--brass, #d9ae55);
+}

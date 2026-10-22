@@ -4,6 +4,10 @@ import { api } from "./api.ts";
 
 export interface Meta {
   user?: { id: string; name: string; isAdmin: boolean; developer?: boolean };
+  /** The club this request worked in (null: in no club yet). `leader`: can run it. */
+  club?: { id: string; name: string; leader: boolean } | null;
+  clubs?: { id: string; name: string }[];
+  canCreateClubs?: boolean;
   accounts?: boolean;
   source: string;
   commit: string;

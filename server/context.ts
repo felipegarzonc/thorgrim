@@ -15,6 +15,8 @@ export interface UserCtx {
   developer?: boolean;
   /** The language the page is in (server/lang.ts). */
   lang?: "en" | "es";
+  /** The club this request works in (server/clubs.ts); none for a player in no club. */
+  club?: { id: string; name: string; prefix: string; leaderId: string } | null;
 }
 
 /** On your own computer without accounts: one user who owns everything. */

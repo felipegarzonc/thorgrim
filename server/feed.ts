@@ -12,20 +12,30 @@ import { result, sideRoundVp, tacticSteps } from "../shared/scoring.ts";
 import { flipGame } from "../shared/perspective.ts";
 import type { ArmyList, BattleDetail, FeedPost, FeedPostView, Game } from "../shared/types.ts";
 import { blobs } from "./blobs.ts";
-import { currentUser } from "./context.ts";
+import { currentUser, runAs } from "./context.ts";
 import { noticesIn, notify, seenIn } from "./notices.ts";
 import { doubleTurns, gameBadges, playerBadges, reportSides, runningScore, type ReportSides } from "../shared/report.ts";
 import { changeGame, gameLists, isGamePhoto, myGames, viewGame, type OpenGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
+import { clubSpace, getClub, listClubs } from "./clubs.ts";
 import { translate, type Lang } from "../shared/i18n/index.ts";
 import { headToHead, type ClubResult } from "../shared/ladder.ts";
 import { listResults } from "./ladder.ts";
 
-const CLUB = "club/";
-const posts = new Collection<FeedPost>("posts", CLUB);
-const shareLinks = new Collection<{ id: string; postId: string }>("post-links", CLUB);
-const photoPath = (postId: string, n: number) => `${CLUB}post-photos/${postId}/${n}.jpg`;
-const cardPath = (postId: string) => `${CLUB}post-cards/${postId}.jpg`;
+// Everything below lives in the current club's space (server/clubs.ts).
+const posts = (space = clubSpace()) => new Collection<FeedPost>("posts", space);
+const shareLinks = (space = clubSpace()) => new Collection<{ id: string; postId: string }>("post-links", space);
+const photoPath = (postId: string, n: number, space = clubSpace()) => `${space}post-photos/${postId}/${n}.jpg`;
+const cardPath = (postId: string, space = clubSpace()) => `${space}post-cards/${postId}.jpg`;
+
+/** Run `fn` in another club's space (a post lives in the club it was posted to). */
+async function inClub<T>(clubId: string | undefined, fn: () => Promise<T>): Promise<T> {
+  const here = currentUser().club;
+  if (!clubId || clubId === here?.id) return fn();
+  const c = await getClub(clubId);
+  if (!c) return fn();
+  return runAs({ ...currentUser(), club: { id: c.id, name: c.name, prefix: c.prefix, leaderId: c.leaderId } }, fn);
+}
 
 export const REACTIONS = ["⚔️", "🔥", "😂", "👏", "💀"];
 const MAX_PHOTOS = 8;
@@ -42,7 +52,7 @@ export class FeedError extends Error {
 /** What's new for the signed-in member: unread notices and posts by others since they last looked. */
 export async function unread(): Promise<{ notices: number; posts: number }> {
   const me = currentUser();
-  const [notices, seen, all] = await Promise.all([noticesIn(me.prefix).list(), seenIn(me.prefix).get("feed"), posts.list()]);
+  const [notices, seen, all] = await Promise.all([noticesIn(me.prefix).list(), seenIn(me.prefix).get("feed"), posts().list()]);
   const since = seen?.at ?? "";
   return { notices: notices.filter((n) => !n.read).length, posts: all.filter((p) => p.authorId !== me.id && p.createdAt > since).length };
 }
@@ -70,12 +80,12 @@ export function postView(p: FeedPost, results?: ClubResult[]): FeedPostView {
 }
 
 export async function feed(): Promise<FeedPostView[]> {
-  const [all, results] = await Promise.all([posts.list(), listResults()]);
+  const [all, results] = await Promise.all([posts().list(), listResults()]);
   return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((p) => postView(p, results));
 }
 
 export async function getPost(id: string): Promise<FeedPost> {
-  const p = await posts.get(id);
+  const p = await posts().get(id);
   if (!p) throw new FeedError("That post was removed.", 404);
   return p;
 }
@@ -165,7 +175,8 @@ export async function publishReport(o: OpenGame): Promise<FeedPost> {
   const game = viewGame(o);
   const report = game.report;
   if (!report?.story.trim()) throw new FeedError("Write the battle report first.");
-  const existing = report.postId ? await posts.get(report.postId) : undefined;
+  if (report.postId && report.postClub && report.postClub !== currentUser().club?.id) throw new FeedError("This report is already posted in another club.");
+  const existing = report.postId ? await posts().get(report.postId) : undefined;
   if (existing) {
     if (!isPlayer(existing) && !currentUser().isAdmin) throw new FeedError("Only the game's players can change its post.", 403);
     return (await syncPost(o)) ?? existing;
@@ -196,8 +207,11 @@ export async function publishReport(o: OpenGame): Promise<FeedPost> {
     reactions: {},
     comments: [],
   };
-  await posts.save(post);
-  await changeGame(o, [{ path: ["report", "postId"], set: id }]);
+  await posts().save(post);
+  await changeGame(o, [
+    { path: ["report", "postId"], set: id },
+    { path: ["report", "postClub"], set: currentUser().club?.id },
+  ]);
   await notify(playerIds, `${me.name || sides.me.name} posted the report of your game: ${post.title}`, `#/club/${id}`);
   return post;
 }
@@ -208,9 +222,13 @@ export async function publishReport(o: OpenGame): Promise<FeedPost> {
  * notifications. Returns the post when there is one.
  */
 export async function syncPost(o: OpenGame): Promise<FeedPost | undefined> {
+  return inClub(o.game.report?.postClub, () => syncHere(o));
+}
+
+async function syncHere(o: OpenGame): Promise<FeedPost | undefined> {
   const report = o.game.report;
   if (!report?.postId || !report.story.trim()) return undefined;
-  const existing = await posts.get(report.postId);
+  const existing = await posts().get(report.postId);
   if (!existing || existing.gameId !== o.game.id) return undefined;
   // Seen from the side of whoever posted it, as when it was posted.
   const me = currentUser().id;
@@ -232,7 +250,7 @@ export async function syncPost(o: OpenGame): Promise<FeedPost | undefined> {
   const { updatedAt: _a, ...a } = next;
   const { updatedAt: _b, ...b } = existing;
   if (JSON.stringify(a) === JSON.stringify(b)) return existing;
-  return posts.save({ ...next, updatedAt: new Date().toISOString() });
+  return posts().save({ ...next, updatedAt: new Date().toISOString() });
 }
 
 export async function deletePost(id: string): Promise<FeedPost> {
@@ -240,8 +258,8 @@ export async function deletePost(id: string): Promise<FeedPost> {
   if (!isPlayer(p) && !currentUser().isAdmin) throw new FeedError("Only the game's players can remove its post.", 403);
   for (let n = 0; n < p.photos; n++) await blobs().remove(photoPath(id, n));
   if (p.cardAt) await blobs().remove(cardPath(id)).catch(() => undefined);
-  if (p.shareToken) await shareLinks.delete(p.shareToken);
-  await posts.delete(id);
+  if (p.shareToken) await shareLinks().delete(p.shareToken);
+  await posts().delete(id);
   return p;
 }
 
@@ -262,7 +280,7 @@ export async function react(id: string, emoji: string): Promise<FeedPost> {
   const me = currentUser().id;
   const who = p.reactions[emoji] ?? [];
   p.reactions = { ...p.reactions, [emoji]: who.includes(me) ? who.filter((x) => x !== me) : [...who, me] };
-  return posts.save(p);
+  return posts().save(p);
 }
 
 export async function addComment(id: string, text: string): Promise<FeedPost> {
@@ -272,7 +290,7 @@ export async function addComment(id: string, text: string): Promise<FeedPost> {
   const p = await getPost(id);
   const me = currentUser();
   p.comments = [...p.comments, { id: newId(), authorId: me.id, authorName: me.name || "A member", text: clean, at: new Date().toISOString() }];
-  await posts.save(p);
+  await posts().save(p);
   // The game's players and everyone else in the conversation hear about it.
   const short = clean.length > 80 ? `${clean.slice(0, 80)}…` : clean;
   await notify([p.authorId, ...p.playerIds, ...p.comments.map((c) => c.authorId)], `${me.name || "A member"} commented on "${p.title}": ${short}`, `#/club/${id}`);
@@ -285,11 +303,11 @@ export async function deleteComment(id: string, commentId: string): Promise<Feed
   if (!c) return p;
   if (c.authorId !== currentUser().id && !isPlayer(p) && !currentUser().isAdmin) throw new FeedError("You can only remove your own comments.", 403);
   p.comments = p.comments.filter((x) => x.id !== commentId);
-  return posts.save(p);
+  return posts().save(p);
 }
 
 export async function readPostPhoto(id: string, n: number): Promise<Buffer | undefined> {
-  const p = await posts.get(id);
+  const p = await posts().get(id);
   if (!p || !Number.isInteger(n) || n < 0 || n >= p.photos) return undefined;
   return blobs().read(photoPath(id, n));
 }
@@ -301,27 +319,39 @@ export async function sharePost(id: string): Promise<FeedPost> {
   if (!isPlayer(p)) throw new FeedError("Only the game's players can share its report outside the club.", 403);
   if (p.shareToken) return p;
   p.shareToken = crypto.randomBytes(16).toString("hex");
-  await shareLinks.save({ id: p.shareToken, postId: p.id });
-  return posts.save(p);
+  await shareLinks().save({ id: p.shareToken, postId: p.id });
+  return posts().save(p);
 }
 
 export async function unsharePost(id: string): Promise<FeedPost> {
   const p = await getPost(id);
   if (!isPlayer(p) && !currentUser().isAdmin) throw new FeedError("Only the game's players can stop sharing it.", 403);
-  if (p.shareToken) await shareLinks.delete(p.shareToken);
+  if (p.shareToken) await shareLinks().delete(p.shareToken);
   delete p.shareToken;
-  return posts.save(p);
+  return posts().save(p);
 }
 
 /** A shared report as anyone with the link sees it: the story, photos and score, nothing about the club. */
 export async function publicPost(token: string) {
-  const link = /^[a-f0-9]{32}$/.test(token) ? await shareLinks.get(token) : undefined;
-  const p = link && (await posts.get(link.postId));
+  if (!/^[a-f0-9]{32}$/.test(token)) return undefined;
+  // Shared links are opened without signing in: look in every club's space.
+  const clubs = await listClubs();
+  const spaces = clubs.length ? clubs.map((c) => c.prefix) : ["club/"];
+  let space = "";
+  let link: { id: string; postId: string } | undefined;
+  for (const s of spaces) {
+    link = await shareLinks(s).get(token);
+    if (link) {
+      space = s;
+      break;
+    }
+  }
+  const p = link && (await posts(space).get(link.postId));
   if (!p || p.shareToken !== token) return undefined;
   const { title, story, photos, sides, battleplan, points, date, badges, createdAt, updatedAt, result } = p;
   // The score sheet goes out too; the game log and army lists stay in the club.
   const detail = p.detail && { rounds: p.detail.rounds, tactics: p.detail.tactics };
-  return { post: p, view: { title, story, photos, sides, battleplan, points, date, badges, createdAt, updatedAt, result, detail } };
+  return { post: p, space, view: { title, story, photos, sides, battleplan, points, date, badges, createdAt, updatedAt, result, detail } };
 }
 
 // ---------- the share picture and page ----------
@@ -335,12 +365,12 @@ export async function saveCard(id: string, jpeg: Buffer): Promise<FeedPost> {
   if (!Buffer.isBuffer(jpeg) || !jpeg.subarray(0, 3).equals(JPEG) || jpeg.length > 2_000_000) throw new FeedError("That picture didn't arrive right.");
   await blobs().write(cardPath(id), jpeg, "image/jpeg");
   // Not an update of the post itself: updatedAt stays, so the card counts as fresh.
-  return posts.save({ ...p, cardAt: new Date().toISOString() });
+  return posts().save({ ...p, cardAt: new Date().toISOString() });
 }
 
 export async function readPublicCard(token: string): Promise<Buffer | undefined> {
   const found = await publicPost(token);
-  return found?.post.cardAt ? blobs().read(cardPath(found.post.id)) : undefined;
+  return found?.post.cardAt ? blobs().read(cardPath(found.post.id, found.space)) : undefined;
 }
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -398,4 +428,11 @@ export async function reportPage(token: string, lang: Lang, origin: string): Pro
 }
 
 /** Posts made since `iso` (for the weekly digest). */
-export const postsSince = async (iso: string) => (await posts.list()).filter((p) => p.createdAt >= iso);
+export const postsSince = async (iso: string) => (await posts().list()).filter((p) => p.createdAt >= iso);
+
+/** A photo of a shared report (no sign-in), from the club it lives in. */
+export async function readPublicPhoto(token: string, n: number): Promise<Buffer | undefined> {
+  const found = await publicPost(token);
+  if (!found || !Number.isInteger(n) || n < 0 || n >= found.post.photos) return undefined;
+  return blobs().read(photoPath(found.post.id, n, found.space));
+}

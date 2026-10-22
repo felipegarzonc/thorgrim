@@ -15,9 +15,11 @@ import { blankGame } from "./newGame.ts";
 import { notify } from "./notices.ts";
 import { createSharedGame, openGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
+import { clubSpace } from "./clubs.ts";
 import { FeedError } from "./feed.ts";
 
-const events = new Collection<ClubEvent>("events", "club/");
+/** The current club's events. */
+const events = () => new Collection<ClubEvent>("events", clubSpace());
 
 /** An event as the page sees it: with each table's result and the standings. */
 export interface EventView extends ClubEvent {
@@ -31,7 +33,7 @@ const tableKey = (round: number, table: number) => `${round}:${table}`;
 const ladderId = (eventId: string, round: number, table: number) => `ev-${eventId}-${round}-${table}`;
 
 async function load(id: string): Promise<ClubEvent> {
-  const e = await events.get(id);
+  const e = await events().get(id);
   if (!e) throw new FeedError("That event was removed.", 404);
   return e;
 }
@@ -86,7 +88,7 @@ async function view(e: ClubEvent): Promise<EventView> {
 }
 
 export async function listEvents(): Promise<EventView[]> {
-  const all = await events.list();
+  const all = await events().list();
   // Upcoming first (soonest first), then past ones (latest first).
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = all.filter((e) => !e.finishedAt && e.date >= today).sort((a, b) => a.date.localeCompare(b.date));
@@ -120,7 +122,7 @@ export async function createEvent(b: Partial<ClubEvent>): Promise<EventView> {
     players: [],
     pairings: [],
   };
-  await events.save(e);
+  await events().save(e);
   // Tell the club, without making the organiser wait for everyone's phones.
   const members = (await clubMembers()).map((m) => m.id);
   const [, m, d] = e.date.split("-");
@@ -141,13 +143,13 @@ export async function editEvent(id: string, b: Partial<ClubEvent>): Promise<Even
   if (b.bcpUrl !== undefined) next.bcpUrl = bcpUrl(b.bcpUrl);
   if (b.points !== undefined && Number(b.points) > 0) next.points = Math.min(5000, Math.round(Number(b.points)));
   if (b.rounds !== undefined && e.kind === "tournament") next.rounds = Math.max(e.pairings.length || 1, Math.min(8, Math.round(Number(b.rounds) || 3)));
-  return view(await events.save(next));
+  return view(await events().save(next));
 }
 
 export async function deleteEvent(id: string) {
   const e = await load(id);
   mustManage(e);
-  await events.delete(id);
+  await events().delete(id);
 }
 
 export async function joinEvent(id: string, faction?: string): Promise<EventView> {
@@ -156,7 +158,7 @@ export async function joinEvent(id: string, faction?: string): Promise<EventView
   const u = me();
   const players = e.players.filter((p) => p.id !== u.id);
   players.push({ id: u.id, name: u.name || "Player", faction: clean(faction, 80) || undefined });
-  const saved = await events.save({ ...e, players });
+  const saved = await events().save({ ...e, players });
   if (!e.players.some((p) => p.id === u.id)) await notify([e.organiser.id], `${u.name || "A member"} signed up for ${e.name}.`, `#/club/event/${e.id}`);
   return view(saved);
 }
@@ -165,7 +167,7 @@ export async function leaveEvent(id: string): Promise<EventView> {
   const e = await load(id);
   const u = currentUser().id;
   if (e.pairings.some((r) => r.tables.some((t) => t.a === u || t.b === u))) throw new FeedError("You're already paired: ask the organiser to sort it out.");
-  return view(await events.save({ ...e, players: e.players.filter((p) => p.id !== u) }));
+  return view(await events().save({ ...e, players: e.players.filter((p) => p.id !== u) }));
 }
 
 /** Pair the next round and tell each player who they play. */
@@ -181,7 +183,7 @@ export async function pairRound(id: string): Promise<EventView> {
   const round = (last?.round ?? 0) + 1;
   // Players who signed up after the last round join in with no points.
   const tables = pairNextRound(current.standings, round);
-  const saved = await events.save({ ...e, pairings: [...e.pairings, { round, tables }] });
+  const saved = await events().save({ ...e, pairings: [...e.pairings, { round, tables }] });
   const name = (pid: string | null) => e.players.find((p) => p.id === pid)?.name ?? "?";
   waitUntil(
     (async () => {
@@ -205,7 +207,7 @@ export async function unpairRound(id: string): Promise<EventView> {
   const last = e.pairings[e.pairings.length - 1];
   if (!last) return view(e);
   if (last.tables.some((t) => t.gameId || t.manual)) throw new FeedError("Games already started in this round: enter or fix their results instead.");
-  return view(await events.save({ ...e, pairings: e.pairings.slice(0, -1) }));
+  return view(await events().save({ ...e, pairings: e.pairings.slice(0, -1) }));
 }
 
 /** Start (or open) the shared game of a table. Either player can. Returns the game's id. */
@@ -223,7 +225,7 @@ export async function tableGame(id: string, round: number, table: number): Promi
   const bcp = e.bcpUrl ? { bcp: { event: e.name, round, table: table + 1, url: e.bcpUrl } } : {};
   const saved = await createSharedGame(a, b, { ...game, ...bcp, event: { id: e.id, name: e.name, round, table: table + 1 } });
   const pairings = e.pairings.map((r) => (r.round === round ? { ...r, tables: r.tables.map((x, i) => (i === table ? { ...x, gameId: saved.id } : x)) } : r));
-  await events.save({ ...e, pairings });
+  await events().save({ ...e, pairings });
   await notify([u === a.id ? b.id : a.id], `Your ${e.name} game (round ${round}) is ready: open it from Games.`, `#/games/${saved.id}`);
   return saved.id;
 }
@@ -240,7 +242,7 @@ export async function setTableResult(id: string, round: number, table: number, s
   const pairings = e.pairings.map((x) =>
     x.round === round ? { ...x, tables: x.tables.map((y, i) => (i === table ? { ...y, manual: score ?? undefined } : y)) } : x,
   );
-  const saved = await events.save({ ...e, pairings });
+  const saved = await events().save({ ...e, pairings });
   const name = (pid: string) => e.players.find((p) => p.id === pid)?.name ?? "Player";
   const faction = (pid: string) => e.players.find((p) => p.id === pid)?.faction ?? "";
   if (score)
@@ -264,7 +266,7 @@ export async function finishEvent(id: string): Promise<EventView> {
   const e = await load(id);
   mustManage(e);
   const v = await view({ ...e, finishedAt: new Date().toISOString() });
-  await events.save({ ...e, finishedAt: v.finishedAt });
+  await events().save({ ...e, finishedAt: v.finishedAt });
   const winner = v.standings[0];
   if (winner && e.pairings.length)
     waitUntil(notify(e.players.map((p) => p.id), `${e.name} is over: ${winner.name} wins with ${winner.points} points!`, `#/club/event/${e.id}`).catch(() => undefined));
@@ -275,7 +277,7 @@ export async function finishEvent(id: string): Promise<EventView> {
 export async function remindTomorrow(today: string): Promise<number> {
   const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
   let n = 0;
-  for (const e of await events.list()) {
+  for (const e of await events().list()) {
     if (e.finishedAt || e.date !== tomorrow || e.remindedFor === e.date || !e.players.length) continue;
     const when = [e.time, e.place].filter(Boolean).join(", ");
     await notify(
@@ -286,7 +288,7 @@ export async function remindTomorrow(today: string): Promise<number> {
           : `Tomorrow: ${e.name}${when ? ` (${when})` : ""}. You're signed up: get your list ready, commander.`,
       `#/club/event/${e.id}`,
     );
-    await events.save({ ...e, remindedFor: e.date });
+    await events().save({ ...e, remindedFor: e.date });
     n++;
   }
   return n;
@@ -295,5 +297,5 @@ export async function remindTomorrow(today: string): Promise<number> {
 /** Club nights and tournaments in the next week (for the weekly digest). */
 export async function upcoming(today: string): Promise<ClubEvent[]> {
   const week = new Date(Date.parse(`${today}T12:00:00Z`) + 7 * 86_400_000).toISOString().slice(0, 10);
-  return (await events.list()).filter((e) => !e.finishedAt && e.date >= today && e.date <= week).sort((a, b) => a.date.localeCompare(b.date));
+  return (await events().list()).filter((e) => !e.finishedAt && e.date >= today && e.date <= week).sort((a, b) => a.date.localeCompare(b.date));
 }

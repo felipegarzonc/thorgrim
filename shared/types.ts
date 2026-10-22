@@ -298,6 +298,8 @@ export interface BattleReport {
   writtenAt?: string;
   /** The club feed post made from it, once posted. */
   postId?: string;
+  /** The club it was posted to. */
+  postClub?: string;
 }
 
 /** A battle report posted to the club feed (members only). */

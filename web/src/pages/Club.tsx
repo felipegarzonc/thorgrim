@@ -4,7 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { BattleDetail, FeedPost, FeedPostView, Notice } from "../../../shared/types.ts";
-import { api, withKey } from "../api.ts";
+import { api, setCurrentClub, withKey } from "../api.ts";
 import { baseFaction } from "../../../shared/season.ts";
 import { armyStats, headToHead, inSeason, seasonRanges, seasonRecap, standings, type ClubResult, type Season, type SeasonRecap } from "../../../shared/ladder.ts";
 import { Avatar, Icon, Seg, useLoad, useMeta, type IconName } from "../ui.tsx";
@@ -578,6 +578,7 @@ function ClubHome({ tab, postId, unreadNotices }: { tab: ClubTab; postId?: strin
   const [error, setError] = useState<string>();
   const [view, setView] = useState<"feed" | "activity">("feed");
   const [filter, setFilter] = useState("all");
+  const meta = useMeta();
   const setTab = (t: ClubTab) => window.location.replace(`#/club/${t}`);
 
   useEffect(() => {
@@ -592,10 +593,43 @@ function ClubHome({ tab, postId, unreadNotices }: { tab: ClubTab; postId?: strin
   const filtered = posts?.filter((p) => filter === "all" || (filter === "mine" ? p.mine : p.sides.some((x) => x.faction && baseFaction(x.faction) === filter)));
   const shown = postId ? posts?.filter((p) => p.id === postId) : filtered;
 
+  if (meta?.club === null)
+    return (
+      <div className="stack">
+        <h1>Club</h1>
+        <section className="card empty-club">
+          <Icon name="swords" />
+          <p>
+            <b>You're not in a club yet.</b>
+          </p>
+          <p className="muted small">Ask a club leader to add you. Your games, lists and Thorgrim work as always.</p>
+        </section>
+      </div>
+    );
+
   return (
     <div className="stack">
       <div className="page-head">
-        <h1 className="grow">{view === "activity" ? "Activity" : "Club"}</h1>
+        <h1 className="grow" translate={view === "activity" || !meta?.club?.name ? undefined : "no"}>
+          {view === "activity" ? "Activity" : meta?.club?.name || "Club"}
+        </h1>
+        {view !== "activity" && (meta?.clubs?.length ?? 0) > 1 && (
+          <select
+            className="club-switch"
+            aria-label="Switch club"
+            value={meta?.club?.id}
+            onChange={(e) => {
+              setCurrentClub(e.target.value);
+              window.location.reload();
+            }}
+          >
+            {meta?.clubs?.map((c) => (
+              <option key={c.id} value={c.id} translate="no">
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
         <button
           type="button"
           className={`icon-button ${view === "activity" ? "on" : ""}`}

@@ -28,6 +28,8 @@ export interface Invite {
   tokenHash: string;
   note: string;
   role: "admin" | "player";
+  /** The club they join with it. */
+  clubId?: string;
   createdAt: string;
   expiresAt: string;
   usedBy?: string;
@@ -156,13 +158,14 @@ export async function userIdFromToken(token: string): Promise<string> {
 
 const hashToken = (t: string) => crypto.createHash("sha256").update(t).digest("hex");
 
-export async function createInvite(note: string, role: Invite["role"]): Promise<{ invite: Invite; token: string }> {
+export async function createInvite(note: string, role: Invite["role"], clubId?: string): Promise<{ invite: Invite; token: string }> {
   const token = crypto.randomBytes(18).toString("base64url");
   const invite: Invite = {
     id: crypto.randomBytes(6).toString("hex"),
     tokenHash: hashToken(token),
     note: note.trim().slice(0, 80),
     role,
+    ...(clubId && clubId !== "club" ? { clubId } : {}),
     createdAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 14 * 86_400_000).toISOString(),
   };

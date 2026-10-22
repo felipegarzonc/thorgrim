@@ -13,15 +13,17 @@ import type { Game } from "../shared/types.ts";
 import { currentUser } from "./context.ts";
 import { bothConfirmed, gameLists, ladderSides, type OpenGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
+import { clubSpace } from "./clubs.ts";
 
-const results = new Collection<ClubResult>("results", "club/");
+/** The current club's confirmed results. */
+const results = () => new Collection<ClubResult>("results", clubSpace());
 
-export const listResults = () => results.list();
+export const listResults = () => results().list();
 
 /** Bring the game's ladder record in line with its confirmations. */
 export async function syncResult(o: OpenGame): Promise<void> {
   if (!bothConfirmed(o)) {
-    if (await results.get(o.game.id)) await results.delete(o.game.id);
+    if (await results().get(o.game.id)) await results().delete(o.game.id);
     return;
   }
   const { ownerId, playerId } = ladderSides(o);
@@ -33,7 +35,7 @@ export async function syncResult(o: OpenGame): Promise<void> {
     .map((c) => c.at)
     .sort()
     .pop()!;
-  await results.save({
+  await results().save({
     id: g.id,
     date: g.date ?? g.createdAt.slice(0, 10),
     battleplan: g.battleplan,
@@ -48,12 +50,12 @@ export async function syncResult(o: OpenGame): Promise<void> {
 
 /** A result the organiser of a club event entered (no shared game behind it). */
 export async function saveEventResult(r: ClubResult) {
-  await results.save(r);
+  await results().save(r);
 }
 
 /** A deleted game leaves the ladder. */
 export async function forgetResult(gameId: string) {
-  if (await results.get(gameId)) await results.delete(gameId);
+  if (await results().get(gameId)) await results().delete(gameId);
 }
 
 /** For the page: the ladder with the signed-in member's id, to find their row. */
@@ -64,10 +66,10 @@ export async function ladder() {
 
 // ---------- seasons ----------
 
-const SEASONS = "club/settings/seasons.json";
+const seasonsPath = () => `${clubSpace()}settings/seasons.json`;
 
 export async function listSeasons(): Promise<Season[]> {
-  const raw = await blobs().read(SEASONS);
+  const raw = await blobs().read(seasonsPath());
   return raw ? (JSON.parse(raw.toString("utf8")) as Season[]) : [];
 }
 
@@ -82,7 +84,7 @@ export async function startSeason(name: string): Promise<Season[]> {
   const clean = name.trim().slice(0, 60) || `Season ${seasons.length + 1}`;
   const ending = seasonRanges(seasons)[0];
   const next = [...seasons, { id: newId(), name: clean, start: today }];
-  await blobs().write(SEASONS, JSON.stringify(next, null, 2), "application/json");
+  await blobs().write(seasonsPath(), JSON.stringify(next, null, 2), "application/json");
   const results = await listResults();
   const done = inSeason(results, ending ? { start: ending.start, end: today } : { start: "0000-00-00", end: today });
   const recap = seasonRecap(done);
