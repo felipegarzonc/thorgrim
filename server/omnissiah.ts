@@ -20,7 +20,12 @@ export const metaSchemas = {
     includes: z.string().optional().describe("A unit, formation or word the list must mention"),
     limit: z.number().int().optional().describe("Up to 10 (default 5)"),
   }),
-  aos_articles: z.object({ query: z.string().describe("A faction, unit, formation or topic"), limit: z.number().int().optional() }),
+  aos_articles: z.object({
+    query: z.string().describe("A faction, unit, formation or topic"),
+    limit: z.number().int().optional(),
+    source: z.enum(["tabletop", "woehammer", "frontline", "spikeybits", "bols"]).optional(),
+  }),
+  aos_rules_updates: z.object({}),
 } as const;
 
 export type MetaTool = keyof typeof metaSchemas;
@@ -30,7 +35,8 @@ export const metaDescriptions: Record<MetaTool, string> = {
   aos_faction_meta: "One faction's tournament detail: recent and overall record, weekly trend, matchups against every faction (with going-first records), and the battle formations played.",
   aos_matchup: "How one faction does against another in recent tournaments, from both sides.",
   aos_articles:
-    "Search Tabletop Battles (formerly Goonhammer) AoS articles: weekly competitive round-ups (top tournament games and why they were won), reviews, tactics. Gives titles, links, dates and short excerpts: link the article, don't retell it.",
+    "Search AoS articles and news: Tabletop Battles (formerly Goonhammer) weekly competitive round-ups, Woehammer meta stats commentary and top lists, Frontline Gaming tactics, Spikey Bits and Bell of Lost Souls news. Gives titles, links, dates and short excerpts: link the article, don't retell it.",
+  aos_rules_updates: "The latest battlescrolls, points updates, errata and FAQs seen in AoS news. Check it before trusting stats: numbers from before the latest change may no longer hold.",
   aos_tournament_lists: "Real tournament lists with their records, newest first. Filter by faction, minimum wins, date, or a unit the list must include. Use for list building and 'what is winning' questions.",
 };
 
@@ -73,7 +79,10 @@ export async function runMetaTool(name: MetaTool, input: unknown): Promise<strin
       out = await get("/matchup", { a: args.faction, b: args.opponent });
       break;
     case "aos_articles":
-      out = await get("/articles", { q: args.query, limit: Math.min(Number(args.limit ?? 3), 5) });
+      out = await get("/articles", { q: args.query, limit: Math.min(Number(args.limit ?? 3), 5), source: args.source });
+      break;
+    case "aos_rules_updates":
+      out = await get("/rules/changes", { limit: 5 });
       break;
     case "aos_tournament_lists":
       out = await get("/lists", { faction: args.faction, minWins: args.min_wins, since: args.since, includes: args.includes, limit: Math.min(Number(args.limit ?? 5), 10) });
