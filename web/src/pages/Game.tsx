@@ -22,15 +22,25 @@ import { doubleTurns, gameBadges, reportSides, runningScore } from "../../../sha
 
 type Step = string;
 const ROUND_STEPS = Array.from({ length: BATTLE_ROUNDS }, (_, i) => `round-${i + 1}`);
-const STEPS: Step[] = ["players", "setup", "battleplan", "tactics-me", "tactics-opponent", "plan", ...ROUND_STEPS, "results"];
+// Every screen of a game (the menu lists them all)...
+const STEPS: Step[] = ["players", "setup", "battleplan", "tactics", "plan", ...ROUND_STEPS, "results"];
+// ...and the quick way through it: game details and the coach's plan are optional, so Next skips them.
+const FLOW: Step[] = STEPS.filter((s) => s !== "setup" && s !== "plan");
+/** Older links to the two tactics screens open the combined one. */
+const OLD_STEPS: Record<string, Step> = { "tactics-me": "tactics", "tactics-opponent": "tactics" };
 const STEP_TITLE: Record<string, string> = {
   players: "Players",
-  setup: "Game Setup",
+  setup: "Game details (optional)",
   battleplan: "Battleplan",
-  "tactics-me": "Your Battle Tactics",
-  "tactics-opponent": "Opponent's Battle Tactics",
-  plan: "Game Plan",
+  tactics: "Battle Tactics",
+  plan: "Game plan (optional)",
   results: "Results",
+};
+/** The quick-flow step before / after any step (optional ones sit between their neighbours). */
+const flowStep = (current: Step, dir: 1 | -1): Step | undefined => {
+  const i = STEPS.indexOf(current);
+  const around = dir === 1 ? STEPS.slice(i + 1) : STEPS.slice(0, i).reverse();
+  return around.find((s) => FLOW.includes(s));
 };
 const stepTitle = (s: Step) => STEP_TITLE[s] ?? `Round ${s.split("-")[1]}`;
 const cap = (k: string) => k[0].toUpperCase() + k.slice(1);
@@ -196,8 +206,9 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
   };
   const update: Update = (patch, log) => void mutate((g) => ({ ...g, state: { ...g.state, ...patch } }), log);
 
-  const current = STEPS.includes(step ?? "") ? step! : defaultStep(game);
-  const idx = STEPS.indexOf(current);
+  const current = OLD_STEPS[step ?? ""] ?? (STEPS.includes(step ?? "") ? step! : defaultStep(game));
+  const prevStep = flowStep(current, -1);
+  const nextStep = flowStep(current, 1);
   const go = (s: Step) => {
     window.location.hash = `#/games/${game.id}/${s}`;
     window.scrollTo(0, 0);
@@ -248,8 +259,12 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
         {current === "players" && <PlayersStep game={game} lists={lists} mutate={mutate} reloadLists={reloadLists} shareChanged={meta?.accounts ? shareChanged : undefined} />}
         {current === "setup" && <SetupStep game={game} mutate={mutate} />}
         {current === "battleplan" && <BattleplanStep game={game} mutate={mutate} />}
-        {current === "tactics-me" && <TacticsStep game={game} side="me" mutate={mutate} />}
-        {current === "tactics-opponent" && <TacticsStep game={game} side="opponent" mutate={mutate} />}
+        {current === "tactics" && (
+          <div className="stack">
+            <TacticsStep game={game} side="me" mutate={mutate} />
+            <TacticsStep game={game} side="opponent" mutate={mutate} />
+          </div>
+        )}
         {current === "plan" && <PlanStep game={game} mutate={mutate} saved={() => saving.current} go={go} />}
         {current.startsWith("round-") && (
           <RoundStep
@@ -270,7 +285,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
       </div>
 
       <footer className="step-bar">
-        <button type="button" className="icon" aria-label="Previous step" disabled={idx <= 0} onClick={() => go(STEPS[idx - 1])}>
+        <button type="button" className="icon" aria-label="Previous step" disabled={!prevStep} onClick={() => prevStep && go(prevStep)}>
           <Icon name="left" />
         </button>
         <span className="step-title">{stepTitle(current)}</span>
@@ -279,8 +294,8 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
       <button
         type="button"
         className="fab step-fab"
-        aria-label={current === "results" ? "Finish game" : `Next: ${stepTitle(STEPS[idx + 1])}`}
-        onClick={() => (current === "results" ? finish() : go(STEPS[idx + 1]))}
+        aria-label={current === "results" || !nextStep ? "Finish game" : `Next: ${stepTitle(nextStep)}`}
+        onClick={() => (current === "results" || !nextStep ? finish() : go(nextStep))}
       >
         <Icon name={current === "results" ? "check" : "right"} />
       </button>
@@ -1317,6 +1332,13 @@ function RoundStep(props: {
       </Group>
       )}
 
+      {n === 1 && !game.plan && (
+        <button type="button" className="order-summary plan-offer" onClick={() => go("plan")}>
+          <Icon name="spark" />
+          <span className="grow">Want the coach's game plan for this battle?</span>
+          <span className="order-change">Get it</span>
+        </button>
+      )}
       {game.plan?.rounds.find((r) => r.round === n) && (
         <div className="round-plan">
           <Icon name="spark" />

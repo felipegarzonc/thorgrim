@@ -3873,3 +3873,8 @@ button.sync-badge.error {
 .game-loading {
   padding: 2rem 1rem;
 }
+.plan-offer .ico {
+  color: var(--brass);
+  width: 1.2rem;
+  height: 1.2rem;
+}
