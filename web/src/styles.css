@@ -3938,3 +3938,86 @@ button.sync-badge.error {
 .res-row .grow {
   min-width: 0;
 }
+
+/* Chess clock: both players' time, the running one lit in the army colour. */
+.chess-clock {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  margin: 0.4rem 0 0.2rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  text-align: left;
+}
+.clock-side {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  opacity: 0.6;
+}
+.clock-side small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clock-side b {
+  font-family: var(--display);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.1rem;
+}
+.chess-clock:not(.running) .clock-side,
+.clock-side.on {
+  opacity: 1;
+}
+.clock-side.on b {
+  color: var(--army, var(--brass));
+}
+.clock-ctl {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--brass);
+  white-space: nowrap;
+}
+.clock-ctl .ico {
+  width: 1rem;
+  height: 1rem;
+}
+.forget-count {
+  color: var(--brass);
+}
+
+/* Scoring by voice. */
+.voice-score {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.4rem 0.5rem;
+  background: var(--panel);
+}
+.voice-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.voice-row input {
+  flex: 1;
+  min-width: 0;
+}
+.voice-found ul {
+  margin: 0.3rem 0 0.5rem;
+  padding-left: 1.1rem;
+}
+.voice-found li {
+  margin: 0.15rem 0;
+}
+.voice-found p {
+  margin: 0.4rem 0 0;
+}

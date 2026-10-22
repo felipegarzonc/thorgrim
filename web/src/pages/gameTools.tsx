@@ -6,7 +6,7 @@ import type { AttackProfile, Crit, SimulationResult } from "../../../engine/dice
 import { CORE_COMMANDS, SEASON_ABILITIES, usableBy } from "../../../shared/season.ts";
 import type { Ability, ArmyList, FactionRule, Game, GameState, ListUnit, Phase, Unit } from "../../../shared/types.ts";
 import { api } from "../api.ts";
-import { Card, RulesText } from "../ui.tsx";
+import { Card, Icon, RulesText } from "../ui.tsx";
 
 export type Side = "me" | "opponent";
 export type Update = (patch: Partial<GameState>, log?: string) => void;
@@ -68,7 +68,14 @@ interface Source {
   ability: Ability;
 }
 
-export function PhaseChecklist({ game, armies, units }: { game: Game; armies: Record<Side, Army>; units: Record<string, Unit> }) {
+const ONCE_PER_BATTLE = /once per battle(?! round)/i;
+const usedKey = (x: { owner: Side; ability: Ability }) => `${x.owner}:${x.ability.name}`;
+
+/**
+ * What each player can do this phase, folded under a summary that says how
+ * many. Once-per-battle abilities can be marked as used, and then drop out.
+ */
+export function PhaseChecklist({ game, armies, units, update }: { game: Game; armies: Record<Side, Army>; units: Record<string, Unit>; update: Update }) {
   const s = game.state;
   const sources = useMemo(() => {
     const out: Source[] = [];
@@ -85,7 +92,16 @@ export function PhaseChecklist({ game, armies, units }: { game: Game; armies: Re
     return out;
   }, [armies, units, s.units]);
 
-  const now = sources.filter((x) => usableNow(x.ability, s.phase, x.owner, s.activePlayer));
+  const used = s.used ?? {};
+  const isUsed = (x: Source) => ONCE_PER_BATTLE.test(x.ability.timing ?? "") && used[usedKey(x)] !== undefined;
+  const now = sources.filter((x) => usableNow(x.ability, s.phase, x.owner, s.activePlayer) && !isUsed(x));
+  const spent = sources.filter(isUsed);
+  const markUsed = (x: Source, on: boolean) => {
+    const next = { ...used };
+    if (on) next[usedKey(x)] = s.round;
+    else delete next[usedKey(x)];
+    update({ used: next }, on ? `Used ${x.ability.name} (once per battle).` : undefined);
+  };
   const reactions = sources.filter((x) => x.ability.timing?.toLowerCase().startsWith("reaction"));
   const commands = [...CORE_COMMANDS, ...SEASON_ABILITIES];
   const commandsFor = (o: Side) => commands.filter((c) => usableBy(c, s.phase, o, s.activePlayer) && (c.cost === 0 || c.cost <= s.cp[o]));
@@ -109,6 +125,16 @@ export function PhaseChecklist({ game, armies, units }: { game: Game; armies: Re
           <div className="body">
             {x.ability.declare && <RulesText text={`*Declare:* ${x.ability.declare}`} />}
             <RulesText text={x.ability.effect} />
+            {ONCE_PER_BATTLE.test(x.ability.timing ?? "") &&
+              (isUsed(x) ? (
+                <button type="button" className="small ghost" onClick={() => markUsed(x, false)}>
+                  Used in round {used[usedKey(x)]} · Undo
+                </button>
+              ) : (
+                <button type="button" className="small" onClick={() => markUsed(x, true)}>
+                  Mark as used
+                </button>
+              ))}
           </div>
         </details>
       </li>
@@ -140,7 +166,16 @@ export function PhaseChecklist({ game, armies, units }: { game: Game; armies: Re
   const mine = now.filter((x) => x.owner === "me");
   const theirs = now.filter((x) => x.owner === "opponent");
 
+  const yours = mine.length + commandsFor("me").length;
+  const them = theirs.length + commandsFor("opponent").length;
   return (
+    <details className="forget-wrap">
+      <summary>
+        <span>
+          Don't forget this phase{yours + them > 0 && <span className="forget-count"> · {yours} yours · {them} theirs</span>}
+        </span>
+        <Icon name="down" />
+      </summary>
     <Card title={`${s.phase} — don't forget`}>
       <ul className="forget">
         {mine.map((x, i) => (
@@ -169,6 +204,18 @@ export function PhaseChecklist({ game, armies, units }: { game: Game; armies: Re
           </ul>
         </details>
       )}
+      {spent.length > 0 && (
+        <details>
+          <summary className="muted small" style={{ padding: "0.5rem 0", cursor: "pointer" }}>
+            Once per battle, already used ({spent.length})
+          </summary>
+          <ul className="forget">
+            {spent.map((x, i) => (
+              <AbilityItem key={`u${i}`} x={x} />
+            ))}
+          </ul>
+        </details>
+      )}
       {reactions.length > 0 && (
         <details>
           <summary className="muted small" style={{ padding: "0.5rem 0", cursor: "pointer" }}>
@@ -182,6 +229,7 @@ export function PhaseChecklist({ game, armies, units }: { game: Game; armies: Re
         </details>
       )}
     </Card>
+    </details>
   );
 }
 

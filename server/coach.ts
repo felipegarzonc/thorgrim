@@ -19,6 +19,7 @@ import { docPath, getPages, libraryDocs, listDocuments, parsePageRange, searchLi
 import { checkBudget, HAIKU_PRICE, recordUsage } from "./accounts.ts";
 import { anthropic } from "./anthropic.ts";
 import { reportFacts, reportSides } from "../shared/report.ts";
+import { cleanChanges, voiceOptions, type VoiceChange } from "../shared/voice.ts";
 import { currentUser } from "./context.ts";
 import { Collection } from "./store.ts";
 
@@ -712,4 +713,68 @@ export async function battleReport(ctx: CoachContext, photoPaths: string[]): Pro
     .join("");
   const out = JSON.parse(text) as { title: string; story: string };
   return { title: out.title.trim(), story: out.story.trim() };
+}
+
+// ---------- scoring by voice ----------
+
+const VOICE_SYSTEM = `You turn what a Warhammer Age of Sigmar player said at the table into score changes for the current battle round. The player may speak English or Spanish, casually, with numbers as words.
+- "me" is the player holding the phone ("I", "me", "yo", "mi") and the side named first below; "opponent" is the other side. Players may also be named.
+- objective: a scoring line the side achieved this round. Use the exact label from the list. "Scored both/all objectives" or "10 points from objectives" means every line whose points add up to it.
+- tactic: a battle tactic card where the side completed its next step. Use the exact card name from that side's list.
+- extraVp: victory points not covered by the lines above (a twist, a special rule), as a number.
+- cpGained / cpSpent: command points gained or spent, as a number.
+- fury / rage: the new fury level or number of rage dice.
+Only what was clearly said. If nothing fits, return no changes and say why in "unclear" (short, in the player's language).`;
+
+const voiceSchema = {
+  type: "object",
+  properties: {
+    changes: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          side: { type: "string", enum: ["me", "opponent"] },
+          kind: { type: "string", enum: ["objective", "tactic", "extraVp", "cpGained", "cpSpent", "fury", "rage"] },
+          label: { type: "string" },
+          amount: { type: "integer" },
+        },
+        required: ["side", "kind"],
+        additionalProperties: false,
+      },
+    },
+    unclear: { type: "string" },
+  },
+  required: ["changes"],
+  additionalProperties: false,
+};
+
+/** What a player said about the score, as changes to battle round `round` (shared/voice.ts). */
+export async function voiceScore(game: Game, round: number, said: string): Promise<{ changes: VoiceChange[]; unclear?: string }> {
+  await checkBudget();
+  const o = voiceOptions(game, round);
+  const names = { me: game.myName || "Me", opponent: game.opponentName || "Opponent" };
+  const facts = [
+    `Battle round ${round}. Sides: me = ${names.me}, opponent = ${names.opponent}.`,
+    `Scoring lines: ${o.objectives.length ? o.objectives.map((l) => `"${l}" (${scoringFor(game.battleplan, round)?.find((x) => x.label === l)?.vp ?? 0})`).join(", ") : "none (use extraVp for objective points)"}.`,
+    `Battle tactic cards with a step left: me: ${o.tactics.me.join(", ") || "none"}; opponent: ${o.tactics.opponent.join(", ") || "none"}.`,
+    `They said: """${said.slice(0, 600)}"""`,
+  ].join("\n");
+  const response = await anthropic()
+    .beta.messages.stream({
+      model: REPORT_MODEL,
+      max_tokens: 2000,
+      system: VOICE_SYSTEM,
+      messages: [{ role: "user", content: facts }],
+      output_config: { effort: "low", format: { type: "json_schema", schema: voiceSchema } },
+    })
+    .finalMessage();
+  await recordUsage(response.usage, HAIKU_PRICE);
+  if (response.stop_reason !== "end_turn") throw new Error("Couldn't understand that. Try again.");
+  const text = response.content
+    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+  const out = JSON.parse(text) as { changes: VoiceChange[]; unclear?: string };
+  return { changes: cleanChanges(game, round, out.changes ?? []), unclear: out.unclear?.trim() || undefined };
 }

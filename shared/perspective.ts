@@ -47,6 +47,8 @@ export function flipState(s: GameState): GameState {
   if (s.seizedInitiative !== undefined) out.seizedInitiative = other(s.seizedInitiative);
   if (s.scoredTurns) out.scoredTurns = flipKeys(s.scoredTurns);
   if (s.rounds) out.rounds = s.rounds.map(flipRound);
+  if (s.clock) out.clock = { ...s.clock, me: s.clock.opponent, opponent: s.clock.me };
+  if (s.used) out.used = flipKeys(s.used);
   return out;
 }
 

@@ -5,8 +5,10 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { baseFaction, BATTLE_ROUNDS, CORE_COMMANDS, isBattleplanDoc, SEASON_ABILITIES, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
 import { derive, emptyRound, nextTacticStep, planBasis, result, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
-import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type GlossaryEntry, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TacticStep, type TurnTips, type Unit } from "../../../shared/types.ts";
+import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type GameState, type GlossaryEntry, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TacticStep, type TurnTips, type Unit } from "../../../shared/types.ts";
 import { applyOps, diff } from "../../../shared/patch.ts";
+import { clockTimes, formatClock, passClock, toggleClock } from "../../../shared/clock.ts";
+import { applyVoice, describeChange, type VoiceChange } from "../../../shared/voice.ts";
 import { api, pendingJob, runJob, waitForJob, withKey } from "../api.ts";
 import { gameDate, sideInfo } from "../gameView.tsx";
 import { shrinkPhoto, VoiceButton } from "../media.tsx";
@@ -193,6 +195,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
   const mutate: Mutate = (fn, log) => {
     const cur = ref.current!;
     let next = fn(cur);
+    next = { ...next, state: passClock(cur.state, next.state) };
     next = { ...next, state: derive(next) };
     if (log) {
       const s = cur.state;
@@ -234,7 +237,14 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
     window.location.hash = untouched ? "#/home" : "#/games";
   };
   const finish = async () => {
-    await mutate((g) => ({ ...g, finished: g.finished ?? { conclusion: "played", at: new Date().toISOString() } }), "Game finished.");
+    await mutate(
+      (g) => ({
+        ...g,
+        state: g.state.clock?.since ? toggleClock(g.state) : g.state,
+        finished: g.finished ?? { conclusion: "played", at: new Date().toISOString() },
+      }),
+      "Game finished.",
+    );
     window.location.hash = "#/games";
   };
 
@@ -1359,6 +1369,8 @@ function RoundStep(props: {
         </div>
       )}
 
+      {(isLive || rec?.first) && <VoiceScore game={game} n={n} mutate={mutate} names={names} saved={props.saved} />}
+
       {isLive && <TurnCard {...props} color={armyColor(factions[s.activePlayer])} />}
 
       {(["me", "opponent"] as const).map((side) => (
@@ -1550,6 +1562,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
         ))}
       </nav>
       {s.seizedInitiative === active && <p className="small warning">Seized the initiative: no battle tactics this turn.</p>}
+      <ChessClock state={s} names={names} toggle={() => mutate((g) => ({ ...g, state: toggleClock(g.state) }))} />
 
       <div className="tips">
         <div className="tips-head">
@@ -1620,17 +1633,122 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
         }}
       />
 
-      <details className="forget-wrap">
-        <summary>
-          Don't forget this phase <Icon name="down" />
-        </summary>
-        <PhaseChecklist game={game} armies={armies} units={units} />
-      </details>
+      <PhaseChecklist game={game} armies={armies} units={units} update={update} />
 
       <button type="button" className="primary wide" onClick={next}>
         {nextLabel} <Icon name="right" />
       </button>
     </section>
+  );
+}
+
+/** Say (or type) what was scored; the coach turns it into changes, the player checks them, then they're applied. */
+function VoiceScore({ game, n, mutate, names, saved }: { game: Game; n: number; mutate: Mutate; names: Record<Side, string>; saved: () => Promise<unknown> }) {
+  const meta = useMeta();
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState<{ said: string; changes: VoiceChange[]; unclear?: string }>();
+  const [error, setError] = useState<string>();
+  if (!meta?.coachReady) return null;
+
+  const ask = async (said: string) => {
+    if (!said.trim()) return;
+    setBusy(true);
+    setError(undefined);
+    setFound(undefined);
+    try {
+      await saved();
+      const r = await api<{ changes: VoiceChange[]; unclear?: string }>(`/games/${game.id}/voice`, { method: "POST", json: { round: n, text: said } });
+      setFound({ said, ...r });
+      setText("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const apply = async () => {
+    if (!found) return;
+    const lines = found.changes.map((c) => describeChange(c, names, game, n));
+    setFound(undefined);
+    await mutate((g) => applyVoice(g, n, found.changes), `Scored by voice: ${lines.join("; ")}.`);
+  };
+
+  return (
+    <section className="voice-score">
+      <form
+        className="voice-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void ask(text);
+        }}
+      >
+        <VoiceButton label="Say the score" onText={(t) => void ask(t)} />
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Say or type the score…" aria-label="Say or type what was scored" disabled={busy} />
+        {text.trim() && (
+          <button type="submit" className="small" disabled={busy}>
+            Go
+          </button>
+        )}
+      </form>
+      {busy && <p className="muted small thinking">Working out the score…</p>}
+      {error && <p className="error small">{error}</p>}
+      {found && (
+        <div className="voice-found">
+          <p className="small muted">“{found.said}”</p>
+          {found.changes.length ? (
+            <>
+              <ul>
+                {found.changes.map((c, i) => (
+                  <li key={i}>{describeChange(c, names, game, n)}</li>
+                ))}
+              </ul>
+              <div className="row">
+                <button type="button" className="primary small" onClick={apply}>
+                  <Icon name="check" /> Apply
+                </button>
+                <button type="button" className="ghost small" onClick={() => setFound(undefined)}>
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="small">
+              {found.unclear || "Nothing to score in that."}{" "}
+              <button type="button" className="ghost small" onClick={() => setFound(undefined)}>
+                OK
+              </button>
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Each player's time, ticking for whoever's turn it is. Tap to start or pause. */
+function ChessClock({ state, names, toggle }: { state: GameState; names: Record<Side, string>; toggle: () => void }) {
+  const running = !!state.clock?.since;
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [running]);
+  const times = clockTimes(state);
+  return (
+    <button type="button" className={`chess-clock ${running ? "running" : ""}`} onClick={toggle} aria-label={running ? "Pause the clock" : "Start the clock"}>
+      {(["me", "opponent"] as const).map((side) => (
+        <span key={side} className={`clock-side ${running && state.activePlayer === side ? "on" : ""}`}>
+          <small>{side === "me" ? "You" : names.opponent}</small>
+          <b>{formatClock(times[side])}</b>
+        </span>
+      ))}
+      <span className="clock-ctl">
+        <Icon name={running ? "pause" : "clock"} />
+        {running ? "Pause" : state.clock ? "Resume" : "Start clock"}
+      </span>
+    </button>
   );
 }
 

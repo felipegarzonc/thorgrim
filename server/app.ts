@@ -14,7 +14,7 @@ import type { Op } from "../shared/patch.ts";
 import type { ArmyList, Game, GameState, LibraryDoc } from "../shared/types.ts";
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
-import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips } from "./coach.ts";
+import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips, voiceScore } from "./coach.ts";
 import { addComment, deleteComment, deletePost, feed, FeedError, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
 import { markNoticesRead, myNotices, notify } from "./notices.ts";
 import { publicKey, pushTo, subscribe, unsubscribe } from "./push.ts";
@@ -672,6 +672,15 @@ app.post("/api/games/:id/report", async (req, res) => {
   const [myList, opponentList] = await gameLists(o);
   await checkBudget();
   res.json({ job: await startJob("report", () => battleReport({ game, myList, opponentList }, game.report?.photos ?? [])) });
+});
+// Scoring by voice: what the player said, as changes for them to check (shared/voice.ts).
+app.post("/api/games/:id/voice", async (req, res) => {
+  const o = await openOr404(req, res);
+  if (!o) return;
+  const round = Number(req.body?.round);
+  const said = String(req.body?.text ?? "").trim();
+  if (!Number.isInteger(round) || round < 1 || round > 5 || !said) return res.status(400).json({ error: "Say what was scored." });
+  res.json(await voiceScore(viewGame(o), round, said));
 });
 // Poll a background coach request (see server/jobs.ts).
 app.get("/api/jobs/:id", async (req, res) => {

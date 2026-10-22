@@ -208,6 +208,10 @@ export interface GameState {
   tablePhoto?: { path: string; at: string; round: number; phase: Phase };
   /** Coach tips per turn, keyed "round:side". */
   tips?: Record<string, TurnTips>;
+  /** Chess clock: time each player used (ms); `since` is set while it runs for the active player (shared/clock.ts). */
+  clock?: { me: number; opponent: number; since?: string };
+  /** Once-per-battle abilities marked as used: "side:ability" -> battle round. */
+  used?: Record<string, number>;
 }
 
 export const PHASES = [

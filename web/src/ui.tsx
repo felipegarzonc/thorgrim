@@ -156,6 +156,9 @@ const ICONS = {
   swords: "M4 4l10 10 M4 4h4 M4 4v4 M20 4L10 14 M20 4h-4 M20 4v4 M7 17l-3 3 M17 17l3 3 M9 15l-2 2 M15 15l2 2",
   skull: "M12 3a8 8 0 0 0-5 14v3h10v-3a8 8 0 0 0-5-14z M9 12h.01 M15 12h.01 M10 20v-2 M14 20v-2",
   laugh: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M8 14a4 4 0 0 0 8 0z M9 9h.01 M15 9h.01",
+  clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7v5l3 2",
+  pause: "M9 5v14 M15 5v14",
+  trophy: "M8 4h8v5a4 4 0 0 1-8 0z M8 6H5a3 3 0 0 0 3 4 M16 6h3a3 3 0 0 1-3 4 M12 13v4 M8 21h8 M9 17h6v4H9z",
   club: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z M2.5 20a6.5 6.5 0 0 1 13 0 M16 4.5a3.5 3.5 0 0 1 0 6.5 M18 14a6.5 6.5 0 0 1 3.5 6",
 } as const;
 export type IconName = keyof typeof ICONS;
