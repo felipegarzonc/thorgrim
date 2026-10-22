@@ -7,7 +7,7 @@ import type { BattleDetail, FeedPost, FeedPostView, Notice } from "../../../shar
 import { api, withKey } from "../api.ts";
 import { baseFaction } from "../../../shared/season.ts";
 import { armyStats, headToHead, standings, type ClubResult } from "../../../shared/ladder.ts";
-import { armyColor, Avatar, Icon, Seg, useLoad, useMeta, type IconName } from "../ui.tsx";
+import { Avatar, Icon, Seg, useLoad, useMeta, type IconName } from "../ui.tsx";
 import { rowsFromDetail, ScoreSheet, type SheetSide } from "../scoreSheet.tsx";
 import { Story } from "./report.tsx";
 
@@ -50,52 +50,70 @@ export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; ph
     rows,
   });
   const status = post.result === "win" ? "VICTORY" : post.result === "loss" ? "DEFEAT" : post.result === "draw" ? "DRAW" : "";
+  const tactics = post.detail?.tactics.me ?? [];
+  const tacticVp = tactics.reduce((n, t) => n + t.done.length * 5, 0);
   return (
     <>
-      {a && b && post.detail ? (
-        <ScoreSheet
-          date={post.date ? new Date(`${post.date}T12:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : ""}
-          status={status}
-          tone={post.result ?? ""}
-          sides={[side(a, rowsFromDetail(post.detail, "me")), side(b, rowsFromDetail(post.detail, "opponent"))]}
-          footer={["Age of Sigmar 4e · Pitched Battles 2026-27", post.battleplan, post.points && `${post.points}pts`].filter(Boolean).join(" · ")}
-        />
-      ) : (
-        a &&
-        b && (
-          <div className="post-score">
-            <div className="post-score-row">
-              <span>
-                <b>{a.name}</b>
-                <small style={{ color: armyColor(a.faction) }}>{a.faction ? baseFaction(a.faction) : ""}</small>
-              </span>
-              <span className="post-vp">
-                {a.vp}–{b.vp}
-              </span>
-              <span className="right">
-                <b>{b.name}</b>
-                <small style={{ color: armyColor(b.faction) }}>{b.faction ? baseFaction(b.faction) : ""}</small>
-              </span>
-            </div>
-          </div>
-        )
+      <h2 className="post-title">{post.title}</h2>
+      <div className="post-lines">
+        {(post.battleplan || post.points) && (
+          <span>
+            <Icon name="map" /> {[post.battleplan, post.points && `${post.points} pts`].filter(Boolean).join(" · ")}
+          </span>
+        )}
+        {a && b && (
+          <span>
+            <Avatar faction={a.faction} size={1.15} /> {a.faction ? baseFaction(a.faction) : a.name} <span className="muted">vs</span> <Avatar faction={b.faction} size={1.15} />{" "}
+            {b.faction ? baseFaction(b.faction) : b.name}
+          </span>
+        )}
+        {!!post.badges.length && (
+          <span>
+            <Icon name="flag" /> {post.badges.join(" · ")}
+          </span>
+        )}
+      </div>
+      {a && b && (
+        <div className="post-stats">
+          <span>
+            <small>Score</small>
+            <b>
+              {a.vp}–{b.vp}
+            </b>
+          </span>
+          {status && (
+            <span>
+              <small>Result</small>
+              <b className={`post-result ${post.result ?? ""}`}>{status.charAt(0) + status.slice(1).toLowerCase()}</b>
+            </span>
+          )}
+          {tactics.length > 0 && (
+            <span>
+              <small>Tactics</small>
+              <b>
+                {tacticVp}/{tactics.length * 15}
+              </b>
+            </span>
+          )}
+        </div>
       )}
-      {post.photos > 0 && (
-        <div className="post-photos" aria-label="Battle photos">
+      {(post.detail || post.photos > 0) && (
+        <div className={`post-media ${post.photos ? "" : "solo"}`} aria-label="Score sheet and battle photos">
+          {a && b && post.detail && (
+            <div className="media-sheet">
+              <ScoreSheet
+                date=""
+                status={status}
+                tone={post.result ?? ""}
+                sides={[side(a, rowsFromDetail(post.detail, "me")), side(b, rowsFromDetail(post.detail, "opponent"))]}
+                footer=""
+              />
+            </div>
+          )}
           {Array.from({ length: post.photos }, (_, n) => (
             <a key={n} href={photoUrl(n)} target="_blank" rel="noreferrer">
               <img src={photoUrl(n)} alt={`Battle photo ${n + 1}`} loading="lazy" />
             </a>
-          ))}
-        </div>
-      )}
-      <h2 className="post-title">{post.title}</h2>
-      {!!post.badges.length && (
-        <div className="post-badges">
-          {post.badges.map((x) => (
-            <span key={x} className="badge">
-              {x}
-            </span>
           ))}
         </div>
       )}
