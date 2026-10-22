@@ -4,6 +4,7 @@
 // are set; without them the tools are left out and the coach searches the
 // web as before.
 
+import crypto from "node:crypto";
 import { z } from "zod";
 
 export const omnissiahReady = () => !!(process.env.OMNISSIAH_URL?.trim() && process.env.OMNISSIAH_KEY?.trim());
@@ -43,12 +44,14 @@ async function get(path: string, params: Record<string, string | number | undefi
 }
 
 /** The last daily read (for the admin): whether it's set up, and how the read went. */
-export async function omnissiahStatus(): Promise<{ configured: boolean; status?: unknown; error?: string }> {
+export async function omnissiahStatus(): Promise<{ configured: boolean; keyFingerprint?: string; status?: unknown; error?: string }> {
   if (!omnissiahReady()) return { configured: false };
+  // Compare with the fingerprint Omnissiah shows at its / page: different means different keys.
+  const keyFingerprint = crypto.createHash("sha256").update(process.env.OMNISSIAH_KEY!.trim()).digest("hex").slice(0, 8);
   try {
-    return { configured: true, status: await get("/status") };
+    return { configured: true, keyFingerprint, status: await get("/status") };
   } catch (e) {
-    return { configured: true, error: (e as Error).message };
+    return { configured: true, keyFingerprint, error: (e as Error).message };
   }
 }
 
