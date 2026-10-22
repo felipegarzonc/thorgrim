@@ -6,7 +6,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/index.mjs": {
-      "maxDuration": 300,
+      "maxDuration": 800,
       "includeFiles": "{data/aos.json,dist-server/**}"
     }
   },
@@ -78,6 +78,16 @@
       ],
       "destination": "https://thorgrim.co/$1",
       "permanent": true
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/daily",
+      "schedule": "7 16 * * *"
+    },
+    {
+      "path": "/api/cron/weekly",
+      "schedule": "13 8 * * 1"
     }
   ]
 }

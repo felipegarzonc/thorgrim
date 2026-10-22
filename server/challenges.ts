@@ -21,6 +21,8 @@ export interface Challenge {
   gameId?: string;
   createdAt: string;
   answeredAt?: string;
+  /** When the challenged member was reminded (server/cron.ts), so once only. */
+  remindedAt?: string;
 }
 
 const challenges = new Collection<Challenge>("challenges", "club/");
@@ -91,4 +93,20 @@ export async function withdraw(id: string): Promise<Challenge> {
   if (c.from.id !== currentUser().id) throw new FeedError("Only the challenger can withdraw it.", 403);
   if (c.status !== "open") return c;
   return challenges.save({ ...c, status: "cancelled", answeredAt: new Date().toISOString() });
+}
+
+/** Challenges unanswered for two days: remind the challenged member once. */
+export async function remindOpen(now = Date.now()): Promise<number> {
+  let n = 0;
+  for (const c of await challenges.list()) {
+    if (c.status !== "open" || c.remindedAt || now - Date.parse(c.createdAt) < 2 * 86_400_000) continue;
+    await notify(
+      [c.to.id],
+      (lang) => (lang === "es" ? `${c.from.name} sigue esperando tu respuesta a su desafío.` : `${c.from.name} is still waiting for your answer to their challenge.`),
+      "#/club/members",
+    );
+    await challenges.save({ ...c, remindedAt: new Date(now).toISOString() });
+    n++;
+  }
+  return n;
 }

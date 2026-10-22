@@ -5,6 +5,7 @@ import { useState } from "react";
 import { headToHead, standings, type ClubResult } from "../../../shared/ladder.ts";
 import type { FeedPostView } from "../../../shared/types.ts";
 import { api, withKey } from "../api.ts";
+import { moment } from "../analytics.tsx";
 import { shrinkPhoto } from "../media.tsx";
 import { Avatar, FactionPicker, Icon, Sheet, useLoad, useMeta } from "../ui.tsx";
 import { Carousel } from "./Club.tsx";
@@ -105,6 +106,7 @@ function ChallengeSheet({ member, onClose }: { member: ClubMember; onClose: () =
     setError(undefined);
     try {
       await api("/challenges", { method: "POST", json: { to: member.id, message, date, points: Number(points) } });
+      moment("Challenge sent");
       setSent(true);
     } catch (e) {
       setError((e as Error).message);

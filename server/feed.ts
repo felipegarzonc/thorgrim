@@ -396,3 +396,6 @@ export async function reportPage(token: string, lang: Lang, origin: string): Pro
 </html>
 `;
 }
+
+/** Posts made since `iso` (for the weekly digest). */
+export const postsSince = async (iso: string) => (await posts.list()).filter((p) => p.createdAt >= iso);

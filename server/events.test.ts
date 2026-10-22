@@ -173,3 +173,44 @@ describe("access requests (private beta)", () => {
     await expect(ac.requestAccess({ name: "Spam", email: "s9@example.com" }, "2.2.2.2")).rejects.toThrow(/Slow down/);
   });
 });
+
+describe("scheduled work", () => {
+  it("reminds once: tomorrow's event, an unanswered challenge; and sums up the week", async () => {
+    const cron = await import("./cron.ts");
+    const ev = await import("./events.ts");
+    const ch = await import("./challenges.ts");
+    const notices = await import("./notices.ts");
+    const today = new Date().toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+
+    const e = await runAs(ana, () => ev.createEvent({ name: "Thursday Night", date: tomorrow, time: "19:00" }));
+    await runAs(cid, () => ev.joinEvent(e.id));
+    const c = await runAs(ben, () => ch.challenge({ to: "ana", message: "Fight me" }));
+
+    const first = await runAs(cron.CRON_USER, () => cron.daily(new Date()));
+    expect(first.eventReminders).toBe(1);
+    expect((await runAs(cid, () => notices.myNotices()))[0].text).toMatch(/^Tomorrow: Thursday Night \(19:00\)/);
+    // Two days later: the challenge reminder; the event isn't reminded again.
+    const later = await runAs(cron.CRON_USER, () => cron.daily(new Date(Date.now() + 2 * 86_400_000 + 60_000)));
+    expect(later.challengeReminders).toBe(1);
+    expect(later.eventReminders).toBe(0);
+    expect((await runAs(ana, () => notices.myNotices())).some((n) => n.text.includes("Ben is still waiting"))).toBe(true);
+    await runAs(ana, () => ch.decline(c.id));
+
+    const week = await cron.weekOf(new Date());
+    expect(week?.next).toMatchObject({ name: "Thursday Night", date: tomorrow });
+    expect(cron.digestText({ games: 2, reports: 1, leader: { name: "Ana", points: 6 }, next: { name: "Cup", date: "2026-10-30" } }, "es")).toBe(
+      "Esta semana en el club: 2 partidas en la liga · 1 crónica. Lidera la liga Ana (6 pts). Próximo evento: Cup, el 30/10.",
+    );
+    void today;
+  });
+
+  it("only runs with the cron secret", async () => {
+    const cron = await import("./cron.ts");
+    process.env.CRON_SECRET = "a-long-enough-cron-secret";
+    expect(cron.cronAllowed("Bearer a-long-enough-cron-secret")).toBe(true);
+    expect(cron.cronAllowed("Bearer nope")).toBe(false);
+    delete process.env.CRON_SECRET;
+    expect(cron.cronAllowed("Bearer a-long-enough-cron-secret")).toBe(false);
+  });
+});

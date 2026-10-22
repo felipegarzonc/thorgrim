@@ -22,6 +22,7 @@ import { drawResult, shareImage, type ShareRow } from "../shareImage.ts";
 import { WarscrollCard } from "./Lists.tsx";
 import { BattleReportCard, ReviewCard } from "./report.tsx";
 import { shareText, shareUrl } from "../links.ts";
+import { moment } from "../analytics.tsx";
 import { VpLines } from "../vpChart.tsx";
 import { ScoreSheet } from "../scoreSheet.tsx";
 import { doubleTurns, gameBadges, reportSides, runningScore } from "../../../shared/report.ts";
@@ -247,6 +248,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
       }),
       "Game finished.",
     );
+    moment("Game finished");
     window.location.hash = "#/games";
   };
 
@@ -1679,6 +1681,7 @@ function VoiceScore({ game, n, mutate, names, saved }: { game: Game; n: number; 
     const lines = found.changes.map((c) => describeChange(c, names, game, n));
     setFound(undefined);
     await mutate((g) => applyVoice(g, n, found.changes), `Scored by voice: ${lines.join("; ")}.`);
+    moment("Scored by voice");
   };
 
   return (

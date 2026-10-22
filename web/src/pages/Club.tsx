@@ -12,6 +12,7 @@ import { rowsFromDetail, ScoreSheet, type SheetSide } from "../scoreSheet.tsx";
 import { Story } from "./report.tsx";
 import { shareUrl } from "../links.ts";
 import { drawReportCard } from "../reportCard.ts";
+import { moment } from "../analytics.tsx";
 import { EventPage, EventsList } from "./Events.tsx";
 import { MemberPage, MembersList } from "./Members.tsx";
 
@@ -318,6 +319,7 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
                       p = await drawCard(p).catch(() => p);
                       drawing.current = false;
                       if (p.shareToken) void sendLink(shareUrl("r", p.shareToken));
+                      moment("Report shared");
                       return p;
                     })
                   }

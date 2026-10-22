@@ -5,6 +5,7 @@
 import { useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from "react";
 import { publicApi } from "../api.ts";
 import { currentLang } from "../i18n.ts";
+import { moment } from "../analytics.tsx";
 
 const SIGN_IN = "#/signin";
 
@@ -189,6 +190,7 @@ export function RequestAccess() {
     setError(undefined);
     try {
       await publicApi("/public/access-requests", { ...form, lang: currentLang() });
+      moment("Access requested");
       setState("sent");
     } catch (err) {
       setError((err as Error).message);

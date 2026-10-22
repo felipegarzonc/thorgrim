@@ -3,6 +3,7 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { publicApi, setAccessKey, setSession, type Session } from "../api.ts";
+import { moment } from "../analytics.tsx";
 
 interface Status {
   accounts: boolean;
@@ -197,7 +198,13 @@ export function Join({ token }: { token: string }) {
     );
   return (
     <Shell title="Join Thorgrim" sub="Your Age of Sigmar coach: track your games and get advice every turn. Create your account to start.">
-      <form onSubmit={submit(async () => done(await publicApi<SignedIn>("/auth/join", { ...f, token })))}>
+      <form
+        onSubmit={submit(async () => {
+          const signedIn = await publicApi<SignedIn>("/auth/join", { ...f, token });
+          moment("Account created");
+          done(signedIn);
+        })}
+      >
         <AccountFields {...f} set={set} />
         {error && <p className="error small">{error}</p>}
         <button type="submit" className="primary wide" disabled={!ok || busy}>

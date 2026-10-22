@@ -55,6 +55,7 @@ import { rememberLang } from "./lang.ts";
 import { clubMembers } from "./members.ts";
 import { approve as approveRequest, decline as declineRequest, listRequests, requestAccess } from "./access.ts";
 import { mailReady } from "./mail.ts";
+import { cronAllowed, CRON_USER, daily as cronDaily, weekly as cronWeekly } from "./cron.ts";
 import { addPhoto as addShowcasePhoto, deleteArmy, deletePhoto as deleteShowcasePhoto, readPhoto as readShowcasePhoto, saveArmy, showcaseOf } from "./showcase.ts";
 import { accept as acceptChallenge, challenge, decline as declineChallenge, myChallenges, withdraw as withdrawChallenge } from "./challenges.ts";
 import { createEvent, deleteEvent, editEvent, finishEvent, getEvent, joinEvent, leaveEvent, listEvents, pairRound, setTableResult, tableGame, unpairRound } from "./events.ts";
@@ -153,6 +154,8 @@ export function readMediaToken(token: string): string | undefined {
 app.use("/api", async (req, res, next) => {
   if (missingPassword) return res.status(503).json({ error: "Set APP_ACCESS_KEY (the app password, 8+ characters) in the hosting settings, then redeploy." });
   if (req.path.startsWith("/auth/")) return next(); // sign-in routes check for themselves
+  // Scheduled work (server/cron.ts): only with Vercel's CRON_SECRET, run as Thorgrim.
+  if (req.path.startsWith("/cron/")) return cronAllowed(req.get("authorization")) ? runAs(CRON_USER, () => next()) : res.status(401).json({ error: "Not allowed" });
   if (req.path.startsWith("/public/")) return next(); // shared battle reports: anyone with the link
   if (tooMany(req)) return res.status(429).json({ error: "Too many wrong passwords. Try again in 15 minutes." });
   try {
@@ -813,6 +816,9 @@ app.post("/api/notices/read", async (_req, res) => {
   res.json({ ok: true });
 });
 // A battle report shared outside the club (no sign-in).
+// Scheduled work (vercel.json "crons").
+app.get("/api/cron/daily", async (_req, res) => res.json(await cronDaily()));
+app.get("/api/cron/weekly", async (_req, res) => res.json(await cronWeekly()));
 // Private beta: a visitor asks for access (server/access.ts).
 app.post("/api/public/access-requests", async (req, res) => {
   await requestAccess(req.body ?? {}, req.ip ?? "?");

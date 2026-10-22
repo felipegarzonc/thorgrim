@@ -9,6 +9,7 @@ import { reviewBasis, type BattleReport, type FeedPostView, type Game, type Game
 import { api, pendingJob, runJob, waitForJob, withKey } from "../api.ts";
 import { shrinkPhoto } from "../media.tsx";
 import { Icon, useMeta } from "../ui.tsx";
+import { moment } from "../analytics.tsx";
 
 type Mutate = (fn: (g: Game) => Game, log?: string) => Promise<void>;
 
@@ -184,6 +185,7 @@ export function BattleReportCard({ game, mutate, saved }: { game: Game; mutate: 
     try {
       await saved();
       const p = await api<FeedPostView>("/feed", { method: "POST", json: { gameId: game.id } });
+      moment("Report posted");
       await setReport((r) => ({ ...r, postId: p.id }));
       window.location.hash = `#/club/${p.id}`;
     } catch (e) {

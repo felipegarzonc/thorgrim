@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../api.ts";
 import { VoiceButton } from "../media.tsx";
 import { Card, Markdown, useMeta } from "../ui.tsx";
+import { moment } from "../analytics.tsx";
 
 interface Entry {
   role: "user" | "coach";
@@ -42,6 +43,7 @@ export function CoachChat(props: {
     const shown = body.question ?? PRESET_LABEL[body.preset ?? ""] ?? "";
     setEntries((e) => [...e, { role: "user", text: shown, at: new Date().toISOString() }]);
     setQuestion("");
+    moment("Asked Thorgrim");
     try {
       const answer = await api<Entry>(`/coach/${props.convoId}`, { method: "POST", json: body });
       // Reload so the stored transcript (with preset prompts) is shown.

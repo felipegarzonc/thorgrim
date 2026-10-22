@@ -44,7 +44,7 @@ export const isGamePhoto = (prefix: string, gameId: string, path: unknown): path
   typeof path === "string" && path.startsWith(`${prefix}game-photos/${gameId}/`) && /^\d+\.jpg$/.test(path.slice(`${prefix}game-photos/${gameId}/`.length));
 
 /** Fields the page can't change: identity and sharing are handled here. */
-const FIXED = new Set(["id", "createdAt", "version", "share", "viewers", "listSpaces", "access", "confirmations", "event"]);
+const FIXED = new Set(["id", "createdAt", "version", "share", "viewers", "listSpaces", "access", "confirmations", "event", "confirmReminder"]);
 
 /** The final result in the creator's terms; a confirmation counts only while the result is unchanged. */
 export const resultKey = (g: Game) => `${g.state.vp.me}:${g.state.vp.opponent}:${g.finished?.conclusion ?? ""}`;
@@ -230,4 +230,38 @@ export async function forgetShares(o: OpenGame) {
   const share = o.game.share;
   if (share?.token) await invites.delete(share.token);
   for (const p of share?.players ?? []) await linksIn(p.prefix).delete(o.game.id);
+}
+
+/**
+ * Finished shared games one player confirmed for the ladder a day ago and the
+ * other hasn't: remind that one, once per result. `spaces` are the members'.
+ */
+export async function remindConfirmations(spaces: string[], now = Date.now()): Promise<number> {
+  let n = 0;
+  for (const prefix of spaces) {
+    for (const game of await gamesIn(prefix).list()) {
+      if (!game.finished || !game.share?.players.length || game.confirmReminder === resultKey(game)) continue;
+      const o: OpenGame = { game, prefix, role: "owner" };
+      const { ownerId, playerId } = ladderSides(o);
+      const owner = confirmedBy(game, ownerId);
+      const player = confirmedBy(game, playerId);
+      if (owner === player) continue;
+      const confirmedAt = Object.values(game.confirmations ?? {}).map((c) => c.at).sort().pop() ?? "";
+      if (now - Date.parse(confirmedAt) < 86_400_000) continue;
+      const waiting = owner ? playerId : ownerId;
+      const who = owner ? game.myName || game.share.ownerName : game.opponentName || game.share.players[0]?.name;
+      if (!waiting) continue;
+      await notify(
+        [waiting],
+        (lang) =>
+          lang === "es"
+            ? `${who || "Tu rival"} ya confirmó el resultado de vuestra partida: confírmalo tú para que cuente en la liga.`
+            : `${who || "Your opponent"} confirmed the result of your game: confirm it too so it counts on the ladder.`,
+        `#/games/${game.id}/results`,
+      );
+      await gamesIn(prefix).save({ ...game, confirmReminder: resultKey(game) });
+      n++;
+    }
+  }
+  return n;
 }

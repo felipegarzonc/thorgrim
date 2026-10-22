@@ -7,7 +7,7 @@ import type { Notice } from "../shared/types.ts";
 import { accountsEnabled, listAccounts } from "./accounts.ts";
 import { currentUser, userPrefix } from "./context.ts";
 import { pushTo } from "./push.ts";
-import { translate } from "../shared/i18n/index.ts";
+import { translate, type Lang } from "../shared/i18n/index.ts";
 import { langOf } from "./lang.ts";
 import { Collection, newId } from "./store.ts";
 
@@ -20,8 +20,11 @@ async function spaces(): Promise<Map<string, string>> {
   return new Map((await listAccounts()).filter((a) => !a.disabled).map((a) => [a.id, userPrefix(a.id, !!a.owner)]));
 }
 
-/** Tell these members something happened (never the one who did it). */
-export async function notify(userIds: string[], text: string, href: string) {
+/**
+ * Tell these members something happened (never the one who did it), in each
+ * one's language: the text is translated (shared/i18n), or written per language.
+ */
+export async function notify(userIds: string[], text: string | ((lang: Lang) => string), href: string) {
   const me = currentUser().id;
   const where = await spaces();
   const at = new Date().toISOString();
@@ -29,7 +32,8 @@ export async function notify(userIds: string[], text: string, href: string) {
     const prefix = where.get(id);
     if (id === me || prefix === undefined) continue;
     // In the member's own language.
-    const said = translate(text, await langOf(prefix).catch(() => "en" as const));
+    const lang = await langOf(prefix).catch(() => "en" as const);
+    const said = typeof text === "function" ? text(lang) : translate(text, lang);
     await noticesIn(prefix).save({ id: `${Date.now().toString(36)}-${newId()}`, at, text: said.slice(0, 300), href });
     // And to their phones, if they turned notifications on (never holding up the request for long).
     await Promise.race([pushTo(prefix, { title: "Thorgrim", body: said.slice(0, 200), href }).catch(() => undefined), new Promise((r) => setTimeout(r, 4000))]);

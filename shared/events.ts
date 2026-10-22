@@ -21,6 +21,8 @@ export interface ClubEvent {
   players: { id: string; name: string; faction?: string }[];
   pairings: EventRound[];
   finishedAt?: string;
+  /** The date its players were reminded of it (server/cron.ts), so once only. */
+  remindedFor?: string;
 }
 
 export interface EventRound {

@@ -1,10 +1,12 @@
-// Vercel Web Analytics (cookieless page views). The app routes with the hash
+// Vercel Web Analytics (cookieless page views and the beta's key moments)
+// and Speed Insights (how fast screens load on players' phones). The app routes with the hash
 // (#/games/<id>/round-3), and some of those hold secrets (invite, join and
 // public report tokens), so Vercel only ever gets the screen with every id
 // replaced (/games/[id]/round) and never the hash itself.
 
 import { useEffect, useState } from "react";
-import { Analytics } from "@vercel/analytics/react";
+import { Analytics, track } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 const CLUB_TABS = new Set(["reports", "events", "ladder", "members"]);
 
@@ -30,6 +32,35 @@ export function screenOf(hash: string): string {
   }
 }
 
+/** The beta's key moments, counted by name only (no ids, no personal data). */
+export type Moment =
+  | "Access requested"
+  | "Account created"
+  | "Game created"
+  | "Game finished"
+  | "Report posted"
+  | "Report shared"
+  | "Asked Thorgrim"
+  | "Scored by voice"
+  | "Event created"
+  | "Challenge sent";
+export const moment = (name: Moment) => {
+  try {
+    track(name);
+  } catch {
+    /* analytics never gets in the way */
+  }
+};
+
+/** A vital or event's URL with only the clean screen in it. */
+const clean = (url: string, screen: string) => {
+  const u = new URL(url);
+  u.hash = "";
+  u.search = "";
+  u.pathname = screen;
+  return u.toString();
+};
+
 export function PageAnalytics() {
   const read = () => (!window.location.hash && window.location.pathname === "/welcome" ? "/welcome" : screenOf(window.location.hash));
   const [screen, setScreen] = useState(read);
@@ -38,18 +69,11 @@ export function PageAnalytics() {
     window.addEventListener("hashchange", on);
     return () => window.removeEventListener("hashchange", on);
   }, []);
+  // Belt and braces: never the hash or query (tokens), only the clean screen.
   return (
-    <Analytics
-      route={screen}
-      path={screen}
-      beforeSend={(event) => {
-        // Belt and braces: never the hash or query (tokens), only the clean screen.
-        const url = new URL(event.url);
-        url.hash = "";
-        url.search = "";
-        url.pathname = screen;
-        return { ...event, url: url.toString() };
-      }}
-    />
+    <>
+      <Analytics route={screen} path={screen} beforeSend={(event) => ({ ...event, url: clean(event.url, screen) })} />
+      <SpeedInsights route={screen} beforeSend={(event) => ({ ...event, url: clean(event.url, screen), route: screen })} />
+    </>
   );
 }

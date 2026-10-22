@@ -7,9 +7,11 @@ import { gameDate, gameHref, sideInfo } from "../gameView.tsx";
 import { Avatar, Icon, useLoad, useMeta } from "../ui.tsx";
 import { gamePhotoUrl } from "./report.tsx";
 import { Challenges } from "./Members.tsx";
+import { moment } from "../analytics.tsx";
 
 export async function newGame() {
   const g = await api<Game>("/games", { method: "POST", json: {} });
+  moment("Game created");
   window.location.hash = `#/games/${g.id}/players`;
 }
 

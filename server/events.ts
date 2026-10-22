@@ -266,3 +266,30 @@ export async function finishEvent(id: string): Promise<EventView> {
     waitUntil(notify(e.players.map((p) => p.id), `${e.name} is over: ${winner.name} wins with ${winner.points} points!`, `#/club/event/${e.id}`).catch(() => undefined));
   return v;
 }
+
+/** The day before an event: remind everyone signed up (once). Returns how many events. */
+export async function remindTomorrow(today: string): Promise<number> {
+  const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  let n = 0;
+  for (const e of await events.list()) {
+    if (e.finishedAt || e.date !== tomorrow || e.remindedFor === e.date || !e.players.length) continue;
+    const when = [e.time, e.place].filter(Boolean).join(", ");
+    await notify(
+      e.players.map((p) => p.id),
+      (lang) =>
+        lang === "es"
+          ? `Mañana: ${e.name}${when ? ` (${when})` : ""}. Estás apuntado: prepara tu lista, comandante.`
+          : `Tomorrow: ${e.name}${when ? ` (${when})` : ""}. You're signed up: get your list ready, commander.`,
+      `#/club/event/${e.id}`,
+    );
+    await events.save({ ...e, remindedFor: e.date });
+    n++;
+  }
+  return n;
+}
+
+/** Club nights and tournaments in the next week (for the weekly digest). */
+export async function upcoming(today: string): Promise<ClubEvent[]> {
+  const week = new Date(Date.parse(`${today}T12:00:00Z`) + 7 * 86_400_000).toISOString().slice(0, 10);
+  return (await events.list()).filter((e) => !e.finishedAt && e.date >= today && e.date <= week).sort((a, b) => a.date.localeCompare(b.date));
+}

@@ -146,7 +146,7 @@ interface Job<T> {
 
 const JOB_KEY = (key: string) => `thorgrim-job:${key}`;
 export const pendingJob = (key: string) => read(JOB_KEY(key));
-const MAX_WAIT_MS = 6 * 60_000;
+const MAX_WAIT_MS = 14 * 60_000;
 
 export async function waitForJob<T>(id: string, key?: string): Promise<T> {
   const started = Date.now();

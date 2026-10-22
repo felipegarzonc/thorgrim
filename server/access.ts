@@ -121,3 +121,16 @@ export async function decline(id: string): Promise<AccessRequest> {
   if (r.status !== "pending") return r;
   return requests.save({ ...r, status: "declined", decidedAt: new Date().toISOString(), decidedBy: currentUser().name || currentUser().id });
 }
+
+/** Answered requests older than three months go (the person's email with them). */
+export async function forgetOldRequests(now = Date.now()): Promise<number> {
+  const cutoff = new Date(now - 90 * 86_400_000).toISOString();
+  let n = 0;
+  for (const r of await requests.list()) {
+    if (r.status !== "pending" && (r.decidedAt ?? r.createdAt) < cutoff) {
+      await requests.delete(r.id);
+      n++;
+    }
+  }
+  return n;
+}

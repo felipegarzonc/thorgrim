@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { ClubEvent, EventStanding, TableResult } from "../../../shared/events.ts";
 import { baseFaction } from "../../../shared/season.ts";
 import { api } from "../api.ts";
+import { moment } from "../analytics.tsx";
 import { Avatar, FactionPicker, Icon, Seg, Sheet, useLoad, useMeta } from "../ui.tsx";
 
 export interface EventView extends ClubEvent {
@@ -87,6 +88,7 @@ function EventForm({ event, onClose, onSaved }: { event?: EventView; onClose: ()
     try {
       const body = { kind, name, date, time, place, points: Number(points), rounds: Number(rounds), notes };
       onSaved(await api<EventView>(event ? `/events/${event.id}` : "/events", { method: event ? "PATCH" : "POST", json: body }));
+      if (!event) moment("Event created");
     } catch (e) {
       setError((e as Error).message);
     } finally {
