@@ -34,7 +34,7 @@ function Feature({ icon, title, children }: { icon: ReactNode; title: string; ch
 /** The round screen, drawn as a phone. */
 function PhoneRound() {
   return (
-    <div className="lp-phone" role="img" aria-label="The round screen: both armies' score, command points and fury, the chess clock and the coach's plan for the turn">
+    <div className="lp-phone" role="img" aria-label="The round screen: both armies' score, command points and fury, the chess clock and Thorgrim's plan for the turn">
       <div className="lp-phone-screen">
         <div className="lp-ph-top">
           <b>38-20 Goy vs Diego</b>
@@ -79,7 +79,7 @@ function PhoneRound() {
           <em>Pause</em>
         </div>
         <div className="lp-ph-tip">
-          <b>Coach · Charge</b>
+          <b>Thorgrim · Charge</b>
           <p>Charge the Mournfangs into the unit on objective B: holding it wins the round. Keep the Stonehorn back for their counter-charge.</p>
         </div>
         <div className="lp-ph-next">Next: Combat</div>
@@ -164,7 +164,7 @@ export function Landing() {
             <a href="#lp-table" onClick={jump}>At the table</a>
             <a href="#lp-after" onClick={jump}>After the battle</a>
             <a href="#lp-club" onClick={jump}>Your club</a>
-            <a href="#lp-coach" onClick={jump}>The coach</a>
+            <a href="#lp-coach" onClick={jump}>Thorgrim</a>
           </nav>
           <a href={SIGN_IN} className="lp-btn primary small">
             Sign in
@@ -177,7 +177,7 @@ export function Landing() {
           <Eyebrow>Warhammer Age of Sigmar · tracker &amp; coach</Eyebrow>
           <h1>Every battle remembered. Every turn coached.</h1>
           <p className="lp-lead">
-            Score your games round by round on your phone, get a plan from the coach every turn, and turn each battle into a legend your club can read, react to and
+            Score your games round by round on your phone, get a plan from Thorgrim every turn, and turn each battle into a legend your club can read, react to and
             rank on the ladder.
           </p>
           <div className="lp-actions">
@@ -236,7 +236,7 @@ export function Landing() {
           <article className="lp-card">
             <h3>A plan for every turn</h3>
             <p>
-              Before the game, the coach studies both lists, the battleplan and your tactic cards. During it, each turn gets a short plan phase by phase, and you can
+              Before the game, Thorgrim studies both lists, the battleplan and your tactic cards. During it, each turn gets a short plan phase by phase, and you can
               tell it what just happened to re-plan.
             </p>
           </article>
@@ -248,12 +248,12 @@ export function Landing() {
           <Eyebrow>After the battle</Eyebrow>
           <h2>Your game, told as a legend.</h2>
           <p className="lp-lead">
-            Snap the battlefield and your best models. The coach turns what you recorded into an epic battle report: true to the score, grim and glorious in the
+            Snap the battlefield and your best models. Thorgrim turns what you recorded into an epic battle report: true to the score, grim and glorious in the
             telling. Post it to your club with the score sheet as the cover.
           </p>
           <ul className="lp-list">
             <li>
-              <b>Coach's review:</b> how it was won or lost, where the points went, and one thing to try next game.
+              <b>Thorgrim's review:</b> how it was won or lost, where the points went, and one thing to try next game.
             </li>
             <li>
               <b>Your stats:</b> win rate by army and battleplan, your best and weakest battle tactics, points per round, double turns.
@@ -333,7 +333,7 @@ export function Landing() {
       <section id="lp-coach" className="lp-wrap lp-section">
         <div className="lp-coach">
           <div className="lp-split-copy">
-            <Eyebrow>The coach</Eyebrow>
+            <Eyebrow>Thorgrim</Eyebrow>
             <h2>Rules questions, answered from the books.</h2>
             <p className="lp-lead">
               Powered by Claude. It knows every faction's warscrolls and points, searches the core rules, the General's Handbook and battletomes and cites the page,

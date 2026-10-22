@@ -502,9 +502,9 @@ export function BoardInfo({ state, update }: { state: GameState; update: Update 
   const [notes, setNotes] = useState(state.notes);
   const dirty = objectives !== state.objectives || notes !== state.notes;
   return (
-    <Card title="Board for the coach">
+    <Card title="Board for Thorgrim">
       <p className="muted small" style={{ marginTop: 0 }}>
-        Optional. The coach asks when it needs positions; anything you note here it sees with every question.
+        Optional. Thorgrim asks when he needs positions; anything you note here he sees with every question.
       </p>
       <label>
         Objectives

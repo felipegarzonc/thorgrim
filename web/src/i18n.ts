@@ -5,7 +5,7 @@
 // React may split a sentence into several text nodes ("Round ", "2"); the
 // English of each node is remembered, so a whole element's sentence is
 // translated at once, and React's later updates to any piece still work.
-// Players' own words (names, stories, rules text, the coach's answers) are
+// Players' own words (names, stories, rules text, Thorgrim's answers) are
 // left alone: those elements carry translate="no".
 
 import { translate, type Lang } from "../../shared/i18n/index.ts";
@@ -40,7 +40,7 @@ export function currentLang(): Lang {
 }
 
 const ATTRS = ["placeholder", "aria-label", "title", "alt"];
-const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEXTAREA", "INPUT", "CODE", "PRE"]);
+const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "CODE", "PRE"]);
 
 /** English as React last wrote it, and what we wrote over it. */
 const english = new WeakMap<Text, string>();
@@ -63,7 +63,8 @@ function write(t: Text, value: string) {
 
 function translateElement(el: Element, lang: Lang) {
   if (skipped(el)) return;
-  const kids = [...el.childNodes];
+  // What the player types (a textarea's text) stays; its placeholder and label are translated below.
+  const kids = el.tagName === "TEXTAREA" ? [] : [...el.childNodes];
   const texts = kids.filter((n): n is Text => n.nodeType === Node.TEXT_NODE);
   if (texts.length) {
     const whole = texts.map(englishOf);

@@ -44,7 +44,7 @@ export function HomePage({ unread = 0 }: { unread?: number }) {
       {!games.length && (
         <section className="card empty">
           <h2>Ready for your first battle?</h2>
-          <p className="muted">Set up a game: both armies, the battleplan and your battle tactics. The coach then gives you a plan for every turn.</p>
+          <p className="muted">Set up a game: both armies, the battleplan and your battle tactics. Thorgrim then gives you a plan for every turn.</p>
           <button type="button" className="primary" onClick={newGame}>
             <Icon name="plus" /> New game
           </button>
@@ -66,7 +66,7 @@ export function HomePage({ unread = 0 }: { unread?: number }) {
           <span className="quick-ico">
             <Icon name="spark" />
           </span>
-          Ask the coach
+          Ask Thorgrim
         </a>
       </div>
 

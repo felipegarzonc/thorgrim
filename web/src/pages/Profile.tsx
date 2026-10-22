@@ -49,7 +49,7 @@ function UsageBar({ spent, limit }: { spent: number; limit: number | null }) {
         <span className="muted">{limit === null ? "no limit" : `of ${usd(limit)} this month`}</span>
       </div>
       {limit !== null && (
-        <div className="usage-bar" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Coach allowance used">
+        <div className="usage-bar" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Thorgrim allowance used">
           <span className={pct >= 90 ? "high" : ""} style={{ width: `${pct}%` }} />
         </div>
       )}
@@ -213,7 +213,7 @@ export function ProfilePage() {
         />
       </Card>
       <PhoneNotifications />
-      <Card title="Coach usage">
+      <Card title="Thorgrim usage">
         <UsageBar spent={me.usage.costUsd} limit={me.usage.limitUsd} />
         <p className="muted small">
           {me.usage.requests} coach requests in {me.usage.month}. Estimated from Claude's prices; the admin's Anthropic bill is the exact figure.
@@ -344,7 +344,7 @@ function PlayersAdmin({ selfId }: { selfId: string }) {
 
       <Card title="Players">
         <div className="row spread" style={{ marginTop: 0 }}>
-          <span className="small muted">Default coach limit per player per month</span>
+          <span className="small muted">Default Thorgrim limit per player per month</span>
           <span className="row" style={{ margin: 0, flexWrap: "nowrap" }}>
             <span className="money">
               $<input type="number" min={0} step={1} value={defLimit ?? settings?.defaultLimitUsd ?? 5} onChange={(e) => setDefLimit(e.target.value)} aria-label="Default monthly limit in dollars" />

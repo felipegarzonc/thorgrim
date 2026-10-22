@@ -111,7 +111,7 @@ export function Markdown({ text }: { text: string }) {
   }
   closeList();
   closeTable();
-  // Rules text and the coach's own words: never run through the page translation.
+  // Rules text and Thorgrim's own words: never run through the page translation.
   return <div className="markdown" translate="no" dangerouslySetInnerHTML={{ __html: out.join("") }} />;
 }
 
@@ -213,7 +213,7 @@ export function Group({ label, children, className }: { label?: ReactNode; child
   );
 }
 
-/** Full-screen sheet over the page (menus, pickers, the coach). */
+/** Full-screen sheet over the page (menus, pickers, Thorgrim). */
 export function Sheet({ title, onClose, children, actions }: { title: ReactNode; onClose: () => void; children: ReactNode; actions?: ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

@@ -55,7 +55,7 @@ export function CoachChat(props: {
   };
 
   const reset = async () => {
-    if (!confirm("Start a fresh conversation? The coach forgets this chat (the game itself is kept).")) return;
+    if (!confirm("Start a fresh conversation? Thorgrim forgets this chat (the game itself is kept).")) return;
     await api(`/coach/${props.convoId}`, { method: "DELETE" });
     setEntries([]);
   };
@@ -135,9 +135,9 @@ export function ApiKeySetup() {
   };
   return (
     <div className="key-setup">
-      <h3 style={{ marginTop: 0 }}>Turn on the coach</h3>
+      <h3 style={{ marginTop: 0 }}>Wake Thorgrim</h3>
       <p className="small">
-        The coach runs on Claude and needs your API key (it starts with <code>sk-ant-</code>). Get one at{" "}
+        Thorgrim runs on Claude and needs your API key (it starts with <code>sk-ant-</code>). Get one at{" "}
         <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noreferrer">
           platform.claude.com
         </a>

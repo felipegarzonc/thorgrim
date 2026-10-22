@@ -119,7 +119,7 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
 function errorText(res: Response, data: unknown): string {
   const msg = (data as { error?: string }).error;
   if (msg) return msg;
-  if (res.status === 504 || res.status === 502) return "The coach took too long to answer and the server cut it off.";
+  if (res.status === 504 || res.status === 502) return "Thorgrim took too long to answer and the server cut it off.";
   return `Something went wrong (HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ""}).`;
 }
 
@@ -167,12 +167,12 @@ export async function waitForJob<T>(id: string, key?: string): Promise<T> {
     }
     if (job?.status === "failed") {
       if (key) write(JOB_KEY(key), null);
-      throw new Error(job.error || "The coach request failed.");
+      throw new Error(job.error || "The request to Thorgrim failed.");
     }
     const age = job ? Date.now() - Date.parse(job.startedAt) : Date.now() - started;
     if (age > MAX_WAIT_MS) {
       if (key) write(JOB_KEY(key), null);
-      throw new Error("The coach took too long to answer.");
+      throw new Error("Thorgrim took too long to answer.");
     }
     await new Promise((r) => setTimeout(r, 2500));
   }

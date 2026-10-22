@@ -224,5 +224,5 @@ export async function checkBudget() {
   const limit = await limitFor(id);
   if (limit === null) return;
   const spent = (await usageOf(id)).costUsd;
-  if (spent >= limit) throw new AuthError(`You've used this month's coach allowance ($${limit.toFixed(2)}). Ask the admin to raise it.`, 402);
+  if (spent >= limit) throw new AuthError(`You've used this month's Thorgrim allowance ($${limit.toFixed(2)}). Ask the admin to raise it.`, 402);
 }

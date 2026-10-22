@@ -1,6 +1,6 @@
 // A game, step by step like a scoresheet app: players, setup, battleplan,
 // battle tactics, one screen per battle round, then the results. Each round
-// screen also runs the live turn (phases) with the coach's plan for it.
+// screen also runs the live turn (phases) with Thorgrim's plan for it.
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { baseFaction, BATTLE_ROUNDS, CORE_COMMANDS, isBattleplanDoc, SEASON_ABILITIES, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
@@ -29,7 +29,7 @@ type Step = string;
 const ROUND_STEPS = Array.from({ length: BATTLE_ROUNDS }, (_, i) => `round-${i + 1}`);
 // Every screen of a game (the menu lists them all)...
 const STEPS: Step[] = ["players", "setup", "battleplan", "tactics", "plan", ...ROUND_STEPS, "results"];
-// ...and the quick way through it: game details and the coach's plan are optional, so Next skips them.
+// ...and the quick way through it: game details and Thorgrim's plan are optional, so Next skips them.
 const FLOW: Step[] = STEPS.filter((s) => s !== "setup" && s !== "plan");
 /** Older links to the two tactics screens open the combined one. */
 const OLD_STEPS: Record<string, Step> = { "tactics-me": "tactics", "tactics-opponent": "tactics" };
@@ -260,7 +260,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
           {game.state.vp.me}-{game.state.vp.opponent} {me.name} vs {opp.name}
         </span>
         <SyncBadge sync={sync} retry={queueSend} />
-        <button type="button" className="icon" aria-label="Ask the coach" onClick={() => setSheet("coach")}>
+        <button type="button" className="icon" aria-label="Ask Thorgrim" onClick={() => setSheet("coach")}>
           <Icon name="coach" />
         </button>
         <button type="button" className="icon" aria-label="More" onClick={() => setSheet("menu")}>
@@ -324,7 +324,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
           <ul className="pick-list">
             {(
               [
-                ["coach", "coach", "Ask the coach", "Questions, pre-game brief, post-game review"],
+                ["coach", "coach", "Ask Thorgrim", "Questions, pre-game brief, post-game review"],
                 ["armies", "shield", "Armies & warscrolls", "Both lists, unit by unit"],
                 ["odds", "calc", "Attack odds", "Who can kill what, with current damage"],
                 ["log", "log", "Board notes & game log", "Objectives, positions, what happened"],
@@ -349,7 +349,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
                 onClick={async () => {
                   const question = isPlayer
                     ? "Leave this game? It stays with the player who shared it."
-                    : `Delete this game and its coach conversation?${shared ? " The players you shared it with lose it too." : ""} This can't be undone.`;
+                    : `Delete this game and its conversation with Thorgrim?${shared ? " The players you shared it with lose it too." : ""} This can't be undone.`;
                   if (!confirm(question)) return;
                   await saving.current;
                   await api(`/games/${game.id}`, { method: "DELETE" });
@@ -379,10 +379,10 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
         </Sheet>
       )}
       {sheet === "coach" && (
-        <Sheet title="Coach" onClose={() => setSheet(null)}>
+        <Sheet title="Thorgrim" onClose={() => setSheet(null)}>
           <CoachChat
             convoId={game.id}
-            title="Coach"
+            title="Thorgrim"
             placeholder="e.g. Should I take the double turn? Who should my Stonehorn charge?"
             presets={[
               ["Pre-game brief", "pregame"],
@@ -494,7 +494,7 @@ function ShareGame({ game, changed }: { game: Game; changed: (g: Game) => Promis
         <p>
           <b>{access.ownerName || "Your opponent"}</b> shared this game with you. You both see the same score, CP, fury and rounds, and either of you can change them.
         </p>
-        <p className="small muted">Your coach plan, turn tips and coach chat stay yours. To leave the game, use Leave game in the menu.</p>
+        <p className="small muted">Your plan, turn tips and chat with Thorgrim stay yours. To leave the game, use Leave game in the menu.</p>
       </div>
     );
   const link = access?.token ? `${window.location.origin}${window.location.pathname}#/play/${access.token}` : "";
@@ -506,7 +506,7 @@ function ShareGame({ game, changed }: { game: Game; changed: (g: Game) => Promis
   return (
     <div className="stack">
       <p>Send your opponent a link. Once they open it (they need a Thorgrim account), you both see the same score, CP, fury and rounds, and either of you can change them.</p>
-      <p className="small muted">Each of you keeps your own coach plan, turn tips and coach chat.</p>
+      <p className="small muted">Each of you keeps your own plan, turn tips and chat with Thorgrim.</p>
       {!link ? (
         <button type="button" className="primary wide" disabled={busy} onClick={() => run(() => api<Game>(`/games/${game.id}/share`, { method: "POST" }))}>
           <Icon name="share" /> {busy ? "Making the link…" : "Make a join link"}
@@ -535,7 +535,7 @@ function ShareGame({ game, changed }: { game: Game; changed: (g: Game) => Promis
   );
 }
 
-// ---------- explaining abilities the coach names ----------
+// ---------- explaining abilities Thorgrim names ----------
 
 interface RuleText {
   name: string;
@@ -805,7 +805,7 @@ function SetupStep({ game, mutate }: { game: Game; mutate: Mutate }) {
         type="button"
         className="card danger delete-game"
         onClick={async () => {
-          if (!confirm(isPlayer ? "Leave this game? It stays with the player who shared it." : "Delete this game and its coach conversation?")) return;
+          if (!confirm(isPlayer ? "Leave this game? It stays with the player who shared it." : "Delete this game and its conversation with Thorgrim?")) return;
           await api(`/games/${game.id}`, { method: "DELETE" });
           window.location.hash = "#/games";
         }}
@@ -882,7 +882,7 @@ function BattleplanStep({ game, mutate }: { game: Game; mutate: Mutate }) {
         <p className="map-empty muted small">{game.battleplan ? `No photo of the ${game.battleplan} card in the rules library yet.` : "Pick a battleplan to see its map and rules."}</p>
       )}
       <label>
-        Notes for the coach
+        Notes for Thorgrim
         <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => notes !== game.battleplanNotes && mutate((g) => ({ ...g, battleplanNotes: notes }))} placeholder="Objective positions, terrain, deployment zones…" />
       </label>
     </div>
@@ -950,7 +950,7 @@ function TacticsStep({ game, side, mutate }: { game: Game; side: Side; mutate: M
 
 const QUICK_EVENTS = ["Failed a charge", "Lost a unit", "Destroyed a unit", "Objective changed hands", "Opponent did something unexpected"];
 
-/** Tell the coach what happened (typed, dictated or as a photo of the table); it re-plans the rest of the turn. */
+/** Tell Thorgrim what happened (typed, dictated or as a photo of the table); it re-plans the rest of the turn. */
 function WhatHappened(props: {
   game: Game;
   n: number;
@@ -980,7 +980,7 @@ function WhatHappened(props: {
 
   const add = (t: string) => setText((cur) => (cur ? `${cur.replace(/\s+$/, "")}. ${t}` : t));
 
-  // Note and photo are saved first; if the coach call then fails, "Try again" only repeats that call.
+  // Note and photo are saved first; if the call to Thorgrim then fails, "Try again" only repeats that call.
   const [pending, setPending] = useState<string | null>(null);
   const replan = async (note: string) => {
     setBusy("Re-planning the rest of the turn…");
@@ -1012,7 +1012,7 @@ function WhatHappened(props: {
         setBusy("Sending the photo…");
         const body = await shrinkPhoto(photo);
         const { path } = await api<{ path: string }>(`/games/${game.id}/photo`, { method: "POST", body, headers: { "content-type": "image/jpeg" } });
-        // The latest photo is the coach's view of the table; every photo also joins the game's battle photos (report and club post).
+        // The latest photo is Thorgrim's view of the table; every photo also joins the game's battle photos (report and club post).
         await mutate(
           (g) => ({
             ...g,
@@ -1084,7 +1084,7 @@ function WhatHappened(props: {
       {pending && !busy && <p className="small muted" style={{ margin: 0 }}>Saved in the game log.</p>}
       {s.tablePhoto && !photo && (
         <p className="small muted" style={{ margin: 0 }}>
-          The coach has your photo from round {s.tablePhoto.round} ({s.tablePhoto.phase}).
+          Thorgrim has your photo from round {s.tablePhoto.round} ({s.tablePhoto.phase}).
         </p>
       )}
     </div>
@@ -1111,7 +1111,7 @@ function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; sav
       const basis = planBasis(game);
       const started = (game.state.rounds?.length ?? 0) > 0 && game.state.phase !== "Deployment";
       const p = await runJob<Omit<GamePlan, "basis">>(`/games/${game.id}/plan`, { replan: started }, `plan:${game.id}`);
-      await mutate((g) => ({ ...g, plan: { ...p, basis } }), "Coach wrote the game plan.");
+      await mutate((g) => ({ ...g, plan: { ...p, basis } }), "Thorgrim wrote the game plan.");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1125,7 +1125,7 @@ function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; sav
     setError(undefined);
     try {
       const p = await waitForJob<Omit<GamePlan, "basis">>(id, `plan:${game.id}`);
-      await mutate((g) => ({ ...g, plan: { ...p, basis: planBasis(g) } }), "Coach wrote the game plan.");
+      await mutate((g) => ({ ...g, plan: { ...p, basis: planBasis(g) } }), "Thorgrim wrote the game plan.");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1165,7 +1165,7 @@ function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; sav
 
       {!meta?.coachReady ? (
         <p className="notice">
-          Add your Claude API key on the <a href="#/ask">Coach</a> page and the coach writes a plan for this game here.
+          Add your Claude API key on the <a href="#/ask">Thorgrim</a> page and Thorgrim writes a plan for this game here.
         </p>
       ) : !ready && !plan ? (
         <p className="notice">Pick both armies and the battleplan first: the plan is built from them (and from the battle tactics and the map).</p>
@@ -1249,7 +1249,7 @@ function Replan({ game, mutate, saved }: { game: Game; mutate: Mutate; saved: ()
       await saved();
       const basis = planBasis(game);
       const p = await runJob<Omit<GamePlan, "basis">>(`/games/${game.id}/plan`, { replan: true }, `plan:${game.id}`);
-      await mutate((g) => ({ ...g, plan: { ...p, basis } }), `Coach re-planned the game in round ${game.state.round}.`);
+      await mutate((g) => ({ ...g, plan: { ...p, basis } }), `Thorgrim re-planned the game in round ${game.state.round}.`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1361,7 +1361,7 @@ function RoundStep(props: {
       {n === 1 && !game.plan && (
         <button type="button" className="order-summary plan-offer" onClick={() => go("plan")}>
           <Icon name="spark" />
-          <span className="grow">Want the coach's game plan for this battle?</span>
+          <span className="grow">Want Thorgrim's game plan for this battle?</span>
           <span className="order-change">Get it</span>
         </button>
       )}
@@ -1504,7 +1504,7 @@ function TacticSeals({ done, next }: { done: Set<TacticStep>; next?: TacticStep 
   );
 }
 
-/** The live turn: phases, the coach's plan for this phase, and what not to forget. */
+/** The live turn: phases, Thorgrim's plan for this phase, and what not to forget. */
 function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
   const { game, n, mutate, update, saved, armies, units, names, go, openCoach } = props;
   const meta = useMeta();
@@ -1573,7 +1573,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
       <div className="tips">
         <div className="tips-head">
           <Icon name="spark" />
-          <b>{active === "me" ? `Coach · ${s.phase}` : `Coach · their ${s.phase}`}</b>
+          <b>{active === "me" ? `Thorgrim · ${s.phase}` : `Thorgrim · their ${s.phase}`}</b>
           {tips && (
             <button type="button" className="icon small-icon" aria-label="New plan for this turn" disabled={busy} onClick={() => fetchTips(true)}>
               <Icon name="refresh" />
@@ -1582,7 +1582,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
         </div>
         {!meta?.coachReady ? (
           <p className="muted small">
-            Add your Claude API key on the <a href="#/ask">Coach</a> page to get a plan for every turn.
+            Add your Claude API key on the <a href="#/ask">Thorgrim</a> page to get a plan for every turn.
           </p>
         ) : busy && !tips ? (
           <p className="muted small thinking">Planning this turn…</p>
@@ -1614,7 +1614,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
           </button>
         )}
         <button type="button" className="small ghost accent" onClick={openCoach}>
-          Ask the coach
+          Ask Thorgrim
         </button>
       </div>
 
@@ -1648,7 +1648,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
   );
 }
 
-/** Say (or type) what was scored; the coach turns it into changes, the player checks them, then they're applied. */
+/** Say (or type) what was scored; Thorgrim turns it into changes, the player checks them, then they're applied. */
 function VoiceScore({ game, n, mutate, names, saved }: { game: Game; n: number; mutate: Mutate; names: Record<Side, string>; saved: () => Promise<unknown> }) {
   const meta = useMeta();
   const [text, setText] = useState("");
@@ -2141,7 +2141,7 @@ function ResultsStep({
           <Icon name="share" /> {image ? "Share image" : "Preparing…"}
         </button>
         <button type="button" className="outline" onClick={openCoach}>
-          <Icon name="coach" /> Coach review
+          <Icon name="coach" /> Review with Thorgrim
         </button>
       </div>
       {shareMsg && <p className="small muted">{shareMsg}</p>}

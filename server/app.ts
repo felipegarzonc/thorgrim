@@ -713,7 +713,7 @@ app.post("/api/games/:id/review", async (req, res) => {
 // Poll a background coach request (see server/jobs.ts).
 app.get("/api/jobs/:id", async (req, res) => {
   const job = await jobs.get(param(req, "id"));
-  if (!job) return res.status(404).json({ error: "That coach request was not found." });
+  if (!job) return res.status(404).json({ error: "That request to Thorgrim was not found." });
   res.json(job);
 });
 // A photo of the table (the page shrinks it first). The page stores the path in the game.
@@ -840,7 +840,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof AuthError) return res.status(err.status).json({ error: err.message, needsLogin: err.status === 401 });
   if (err instanceof FeedError) return res.status(err.status).json({ error: err.message });
   if (/authentication method/i.test(err.message)) {
-    return res.status(503).json({ error: "The coach needs your Claude API key.", needsKey: true });
+    return res.status(503).json({ error: "Thorgrim needs your Claude API key.", needsKey: true });
   }
   if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
     return res.status(502).json({ error: "Claude rejected the API key. Paste a valid one below.", needsKey: true });

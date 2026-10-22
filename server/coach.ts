@@ -67,7 +67,7 @@ function coachModel() {
 
 // ---------- system prompt (frozen) ----------
 
-const SYSTEM = `You are an expert Warhammer Age of Sigmar (4th edition) coach. Your player plays Ogor Mawtribes in competitive matched play, using the current General's Handbook season. Your job is to help them make better decisions before, during and after games, and to make them a better player over time, not to play for them.
+const SYSTEM = `You are Thorgrim, the coach in this app: a veteran dwarf general who has seen a thousand battles across the Mortal Realms, and an expert Warhammer Age of Sigmar (4th edition) coach. In conversation you may let that show: a gruff greeting, a dwarfish turn of phrase, now and then. Never at the cost of clarity: rules answers, plans and tips stay plain, exact and short. Your player plays Ogor Mawtribes in competitive matched play, using the current General's Handbook season. Your job is to help them make better decisions before, during and after games, and to make them a better player over time, not to play for them.
 
 How you work:
 - Ground every rules statement in a source: the army data (warscrolls and faction rules from BSData), or the app's rules library (core rules, General's Handbook, battletomes, battleplans, maps) via search_rules / read_rules_pages. Cite briefly, e.g. [Warscroll: Tyrant] or [General's Handbook p.34]. If you cannot find a rule, say so plainly and give your best understanding marked as unverified. Never invent rules text.
@@ -447,7 +447,7 @@ export async function askCoach(
     }
     if (response.stop_reason === "pause_turn") continue;
     if (response.stop_reason === "refusal") {
-      finalText = "The coach couldn't answer that request.";
+      finalText = "Thorgrim couldn't answer that request.";
       break;
     }
 
@@ -474,7 +474,7 @@ export async function askCoach(
     messages.push({ role: "user", content: results });
   }
 
-  if (!finalText) finalText = "(The coach ran out of steps before answering. Try a narrower question.)";
+  if (!finalText) finalText = "(Thorgrim ran out of steps before answering. Try a narrower question.)";
 
   const now = new Date().toISOString();
   const answer: TranscriptEntry = { role: "coach", text: finalText, tools: [...new Set(toolsUsed)], at: now };
@@ -571,8 +571,8 @@ export async function turnTips(ctx: CoachContext, round: number, side: "me" | "o
   });
   await recordUsage(response.usage, coach.price);
   console.log(`turn tips: ${Date.now() - started} ms, stop ${response.stop_reason}, ${response.usage?.output_tokens ?? "?"} output tokens`);
-  if (response.stop_reason === "refusal") throw new Error("The coach couldn't write tips for this turn.");
-  if (response.stop_reason === "max_tokens") throw new Error("The coach's answer was cut off. Try again.");
+  if (response.stop_reason === "refusal") throw new Error("Thorgrim couldn't write tips for this turn.");
+  if (response.stop_reason === "max_tokens") throw new Error("Thorgrim's answer was cut off. Try again.");
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)
@@ -649,7 +649,7 @@ export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {
     .finalMessage();
   await recordUsage(response.usage, coach.price);
   console.log(`game plan: ${Date.now() - started} ms, stop ${response.stop_reason}, ${response.usage?.output_tokens ?? "?"} output tokens`);
-  if (response.stop_reason === "refusal") throw new Error("The coach couldn't write a plan for this game.");
+  if (response.stop_reason === "refusal") throw new Error("Thorgrim couldn't write a plan for this game.");
   if (response.stop_reason === "max_tokens") throw new Error("The plan came out too long. Try again.");
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
@@ -660,7 +660,7 @@ export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {
 
 // ---------- battle report ----------
 
-const REPORT_SYSTEM = `You are the war-chronicler of the Mortal Realms. You turn a Warhammer Age of Sigmar game into a legend for a gaming club's private feed: the story the players will retell for years, read on phones right after the battle.
+const REPORT_SYSTEM = `You are Thorgrim, veteran dwarf general and war-chronicler of the Mortal Realms. You turn a Warhammer Age of Sigmar game into a legend for a gaming club's private feed: the story the players will retell for years, read on phones right after the battle.
 
 The facts you are given are what really happened: who went first, the score round by round, battle tactics completed, double turns, units destroyed, the log and notes, both armies. Every event in the story is one of them. Around them, write like a saga of slaughter and glory:
 - Make it visceral and grim: steel biting into flesh, bones splintering under charges, war-cries and death-screams, blood soaking the earth, banners trampled into the mud, smoke and fire over the battlefield. Choose strong, physical verbs (cleave, crush, rend, shatter, butcher, trample, hurl) and an archaic, mythic voice ("thus", "ere", "by nightfall"). No modern words, no game jargon (no "VP", "CP", "turn", "phase", "dice"); say "glory", "ground", "the second dawn of battle".
@@ -706,7 +706,7 @@ export async function battleReport(ctx: CoachContext, photoPaths: string[]): Pro
     .finalMessage();
   await recordUsage(response.usage, HAIKU_PRICE);
   console.log(`battle report: ${Date.now() - started} ms, stop ${response.stop_reason}, ${response.usage?.output_tokens ?? "?"} output tokens`);
-  if (response.stop_reason === "refusal") throw new Error("The coach couldn't write a report for this game.");
+  if (response.stop_reason === "refusal") throw new Error("Thorgrim couldn't write a report for this game.");
   if (response.stop_reason === "max_tokens") throw new Error("The report came out too long. Try again.");
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
@@ -782,7 +782,7 @@ export async function voiceScore(game: Game, round: number, said: string): Promi
 
 // ---------- post-game review ----------
 
-const REVIEW_SYSTEM = `You are a sharp, friendly Warhammer Age of Sigmar coach. After a game, you give the player ("me" in the facts) a short review they read on their phone in a minute.
+const REVIEW_SYSTEM = `You are Thorgrim, a veteran dwarf general and the app's sharp, friendly Warhammer Age of Sigmar coach. After a game, you give the player ("me" in the facts) a short review they read on their phone in a minute.
 - verdict: one sentence on how the game was won or lost (the decisive round, a double turn, tactics, objectives).
 - lost: 2-3 short points (max 20 words each) on where "me" dropped points or gave them away: rounds where the opponent outscored them, battle tactic steps missed, objectives lost, units lost. Name rounds and numbers. In a win, where the margin slipped.
 - tryNext: one concrete thing to try next game, specific to this matchup and these armies (max 30 words).
@@ -812,7 +812,7 @@ export async function gameReview(ctx: CoachContext): Promise<{ verdict: string; 
     })
     .finalMessage();
   await recordUsage(response.usage, HAIKU_PRICE);
-  if (response.stop_reason !== "end_turn") throw new Error("The coach couldn't review this game. Try again.");
+  if (response.stop_reason !== "end_turn") throw new Error("Thorgrim couldn't review this game. Try again.");
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)

@@ -16,17 +16,17 @@ import { ProfilePage } from "./pages/Profile.tsx";
 import { StatsPage } from "./pages/Stats.tsx";
 import { Icon, MetaContext, type IconName, type Meta } from "./ui.tsx";
 
-// The coach sits in the middle, easiest to reach; Rules (developers only) goes last
+// Thorgrim sits in the middle, easiest to reach; Rules (developers only) goes last
 // so players' five tabs keep their places.
 const TABS: [string, string, IconName][] = [
   ["home", "Home", "home"],
   ["games", "Games", "games"],
-  ["ask", "Coach", "spark"],
+  ["ask", "Thorgrim", "spark"],
   ["club", "Club", "club"],
   ["lists", "Lists", "lists"],
   ["library", "Rules", "rules"],
 ];
-const TITLES: Record<string, string> = { lists: "Army lists", library: "Rules library", calc: "Calculator", ask: "Coach", stats: "Your stats" };
+const TITLES: Record<string, string> = { lists: "Army lists", library: "Rules library", calc: "Calculator", ask: "Ask Thorgrim", stats: "Your stats" };
 
 function useHashRoute(): string[] {
   // thorgrim.vercel.app/welcome (a link to share) opens the landing page too.
@@ -136,10 +136,10 @@ export function App() {
           <p className="notice small">
             {meta.user?.isAdmin ? (
               <>
-                The coach is off until you add your Claude API key. <a href="#/ask">Set it up</a>
+                Thorgrim is off until you add your Claude API key. <a href="#/ask">Set it up</a>
               </>
             ) : (
-              "The coach is off: the admin needs to add the Claude API key."
+              "Thorgrim is off: the admin needs to add the Claude API key."
             )}
           </p>
         )}
@@ -155,7 +155,7 @@ export function App() {
         {tab === "ask" && (
           <CoachChat
             convoId="general"
-            title="Ask the coach"
+            title="Ask Thorgrim"
             placeholder="Rules questions, list building, matchups…"
             intro={<AskIntro />}
             quick={[
@@ -192,8 +192,8 @@ function AskIntro() {
   return (
     <div className="ask-intro">
       <p>
-        Ask anything outside a game: rules, list building, matchups, the meta. For advice <em>during</em> a game, open the game and tap the coach button at the top, so
-        the coach sees both lists, the battleplan and the score.
+        Ask anything outside a game: rules, list building, matchups, the meta. For advice <em>during</em> a game, open the game and tap Thorgrim's button at the top, so
+        Thorgrim sees both lists, the battleplan and the score.
       </p>
       <ul className="small muted">
         <li>Knows every faction's warscrolls and points (army data).</li>

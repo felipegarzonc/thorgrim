@@ -29,7 +29,7 @@ export function Story({ text, short }: { text: string; short?: boolean }) {
   );
 }
 
-/** The coach's short review: how the game went, where the points went, one thing to try next. Written by itself once the game is finished. */
+/** Thorgrim's short review: how the game went, where the points went, one thing to try next. Written by itself once the game is finished. */
 export function ReviewCard({ game, mutate, saved }: { game: Game; mutate: Mutate; saved: () => Promise<unknown> }) {
   const meta = useMeta();
   const review = game.review;
@@ -71,7 +71,7 @@ export function ReviewCard({ game, mutate, saved }: { game: Game; mutate: Mutate
     <section className="card review-card">
       <header className="card-header">
         <h2>
-          <Icon name="spark" /> Coach's review
+          <Icon name="spark" /> Thorgrim's review
         </h2>
         {review && !busy && (
           <button type="button" className="icon small-icon" aria-label="Write the review again" onClick={write}>
@@ -212,7 +212,7 @@ export function BattleReportCard({ game, mutate, saved }: { game: Game; mutate: 
       <h2 className="report-head">
         <Icon name="spark" /> Battle report
       </h2>
-      <p className="small muted">Snap the battlefield, your best models and the key moments. The coach then tells the game as an epic battle, from what you recorded.</p>
+      <p className="small muted">Snap the battlefield, your best models and the key moments. Thorgrim then tells the game as an epic battle, from what you recorded.</p>
 
       <div className="report-photos">
         {photos.map((p) => (
@@ -233,7 +233,7 @@ export function BattleReportCard({ game, mutate, saved }: { game: Game; mutate: 
       </div>
 
       <button type="button" className={report?.story ? "outline wide" : "primary wide"} disabled={writing || !!uploading} onClick={write}>
-        <Icon name="spark" /> {writing ? "The coach is writing…" : report?.story ? "Write it again" : "Write the report"}
+        <Icon name="spark" /> {writing ? "Thorgrim is writing…" : report?.story ? "Write it again" : "Write the report"}
       </button>
 
       {report?.story && (

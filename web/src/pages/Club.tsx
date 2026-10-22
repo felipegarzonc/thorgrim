@@ -619,7 +619,7 @@ function ClubHome({ tab, postId, unreadNotices }: { tab: ClubTab; postId?: strin
           {!postId && posts && !posts.length && (
             <section className="card empty">
               <h2>No battle reports yet</h2>
-              <p className="muted">When a game ends, open its Results: add photos of the battle, let the coach write the story, and post it here for the club.</p>
+              <p className="muted">When a game ends, open its Results: add photos of the battle, let Thorgrim write the story, and post it here for the club.</p>
             </section>
           )}
           {shown?.map((p) => (

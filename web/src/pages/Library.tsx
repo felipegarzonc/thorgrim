@@ -116,15 +116,15 @@ export function LibraryPage() {
     <div className="stack">
       {!canManage && (
         <p className="muted small" style={{ margin: 0 }}>
-          The books and battleplan cards the coach reads. They are kept up to date by the Thorgrim team; search them here.
+          The books and battleplan cards Thorgrim reads. They are kept up to date by the Thorgrim team; search them here.
         </p>
       )}
       {canManage && (
       <Card title="Upload rules (developers)">
         <p className="muted">
-          PDFs (core rules, General's Handbook, battletomes, FAQs) are indexed page by page so the coach can search them and cite pages. Photos of
+          PDFs (core rules, General's Handbook, battletomes, FAQs) are indexed page by page so Thorgrim can search them and cite pages. Photos of
           book pages and scanned PDFs work too: Claude reads those pages once after upload (about a minute per 10 pages). Images (battleplan cards,
-          maps) are shown to the coach automatically in games with that battleplan: put the battleplan's name in the title, e.g. "Into the Fire". Files stay private: on your computer, or in your own storage when the app is online.
+          maps) are shown to Thorgrim automatically in games with that battleplan: put the battleplan's name in the title, e.g. "Into the Fire". Files stay private: on your computer, or in your own storage when the app is online.
         </p>
         <div className="grid2">
           <label>

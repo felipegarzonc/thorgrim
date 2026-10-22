@@ -39,10 +39,10 @@ export async function startJob<T>(kind: string, work: () => Promise<T>): Promise
       console.error(`${kind} job failed:`, e);
       const error =
         e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError
-          ? "Claude rejected the API key. The admin can paste a valid one on the Coach page."
+          ? "Claude rejected the API key. The admin can paste a valid one on the Thorgrim page."
           : /authentication method/i.test((e as Error).message)
-            ? "The coach needs a Claude API key (the admin adds it on the Coach page)."
-            : (e as Error).message || "The coach request failed.";
+            ? "Thorgrim needs a Claude API key (the admin adds it on the Thorgrim page)."
+            : (e as Error).message || "The request to Thorgrim failed.";
       await jobs.save({ ...job, status: "failed", error, code: e instanceof AuthError ? e.status : 500, finishedAt: new Date().toISOString() });
     }
   });

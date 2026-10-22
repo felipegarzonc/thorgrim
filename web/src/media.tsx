@@ -20,7 +20,7 @@ const SpeechRecognition = (window as unknown as { SpeechRecognition?: Recognitio
 
 /**
  * Microphone button: tap, speak, and the words are added to the text.
- * Uses the phone's language; the coach understands Spanish or English.
+ * Uses the phone's language; Thorgrim understands Spanish or English.
  */
 export function VoiceButton({ onText, label = "Dictate" }: { onText: (text: string) => void; label?: string }) {
   const [listening, setListening] = useState(false);
