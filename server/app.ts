@@ -845,6 +845,8 @@ app.post("/api/calc/cast", (req, res) => res.json(castChance(Number(req.body.cas
 const dist = path.resolve("dist");
 if (fs.existsSync(path.join(dist, "index.html"))) {
   app.use(express.static(dist));
+  // Shared links (/join/<token>, /es/play/<token>...): their preview page, which opens the app (as vercel.json does online).
+  app.get(/^\/(es\/)?(join|play|r)\/[^/]+$/, (req, res) => res.sendFile(path.join(dist, `${req.path.startsWith("/es/") ? "es/" : ""}${req.path.split("/").at(-2)}.html`)));
   app.get(/^\/(?!api).*/, (_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 

@@ -108,7 +108,8 @@ export async function approve(id: string, origin: string): Promise<{ request: Ac
   const r = await load(id);
   if (r.status !== "pending") throw new FeedError("This request was already answered.");
   const { token } = await createInvite(`${r.name}${r.club ? ` · ${r.club}` : ""}`, "player");
-  const link = `${origin}/#/join/${token}`;
+  // Through the invite's preview page (web/public/join.html), in their language.
+  const link = `${origin}/${r.lang === "es" ? "es/" : ""}join/${token}`;
   const mail = inviteEmail(r, link);
   const emailed = await sendMail({ to: r.email, ...mail });
   const done = await requests.save({ ...r, status: "approved", decidedAt: new Date().toISOString(), decidedBy: currentUser().name || currentUser().id, emailed });

@@ -164,7 +164,7 @@ describe("access requests (private beta)", () => {
     expect(list.map((r) => `${r.email} ${r.status} ${r.lang}`)).toEqual(["leo@example.com pending es"]);
     const out = await runAs(ana, () => ac.approve(list[0].id, "https://thorgrim.test"));
     expect(out.request).toMatchObject({ status: "approved", emailed: false });
-    expect(out.link).toMatch(/^https:\/\/thorgrim\.test\/#\/join\/[\w-]+$/);
+    expect(out.link).toMatch(/^https:\/\/thorgrim\.test\/es\/join\/[\w-]+$/);
     expect(out.email.subject).toBe("Tu acceso a Thorgrim está listo");
     expect(await accounts.findInvite(out.link.split("/").pop()!)).toMatchObject({ note: "Leo · Dragon Club", role: "player" });
     await expect(runAs(ana, () => ac.approve(list[0].id, "https://thorgrim.test"))).rejects.toThrow(/already answered/);

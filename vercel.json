@@ -12,6 +12,30 @@
   },
   "rewrites": [
     {
+      "source": "/join/:token",
+      "destination": "/join.html"
+    },
+    {
+      "source": "/es/join/:token",
+      "destination": "/es/join.html"
+    },
+    {
+      "source": "/play/:token",
+      "destination": "/play.html"
+    },
+    {
+      "source": "/es/play/:token",
+      "destination": "/es/play.html"
+    },
+    {
+      "source": "/r/:token",
+      "destination": "/r.html"
+    },
+    {
+      "source": "/es/r/:token",
+      "destination": "/es/r.html"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api?__path=:path*"
     },

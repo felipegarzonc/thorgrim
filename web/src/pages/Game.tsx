@@ -21,6 +21,7 @@ import { BattleplanCard } from "../battleplanView.tsx";
 import { drawResult, shareImage, type ShareRow } from "../shareImage.ts";
 import { WarscrollCard } from "./Lists.tsx";
 import { BattleReportCard, ReviewCard } from "./report.tsx";
+import { shareText, shareUrl } from "../links.ts";
 import { VpLines } from "../vpChart.tsx";
 import { ScoreSheet } from "../scoreSheet.tsx";
 import { doubleTurns, gameBadges, reportSides, runningScore } from "../../../shared/report.ts";
@@ -497,9 +498,9 @@ function ShareGame({ game, changed }: { game: Game; changed: (g: Game) => Promis
         <p className="small muted">Your plan, turn tips and chat with Thorgrim stay yours. To leave the game, use Leave game in the menu.</p>
       </div>
     );
-  const link = access?.token ? `${window.location.origin}${window.location.pathname}#/play/${access.token}` : "";
+  const link = access?.token ? shareUrl("play", access.token) : "";
   const shareLink = async () => {
-    if (navigator.share) return navigator.share({ title: "Join my game on Thorgrim", url: link }).catch(() => undefined);
+    if (navigator.share) return navigator.share({ text: shareText("Join my game on Thorgrim:", link) }).catch(() => undefined);
     await navigator.clipboard?.writeText(link);
     setCopied(true);
   };

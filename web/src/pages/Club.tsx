@@ -10,6 +10,7 @@ import { armyStats, headToHead, inSeason, seasonRanges, seasonRecap, standings, 
 import { Avatar, Icon, Seg, useLoad, useMeta, type IconName } from "../ui.tsx";
 import { rowsFromDetail, ScoreSheet, type SheetSide } from "../scoreSheet.tsx";
 import { Story } from "./report.tsx";
+import { shareUrl } from "../links.ts";
 import { EventPage, EventsList } from "./Events.tsx";
 import { MemberPage, MembersList } from "./Members.tsx";
 
@@ -181,9 +182,9 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
       setBusy(false);
     }
   };
-  const link = post.shareToken ? `${window.location.origin}${window.location.pathname}#/r/${post.shareToken}` : "";
+  const link = post.shareToken ? shareUrl("r", post.shareToken) : "";
   const sendLink = async (url: string) => {
-    if (navigator.share) return navigator.share({ title: post.title, url }).catch(() => undefined);
+    if (navigator.share) return navigator.share({ text: `${post.title} ${url}` }).catch(() => undefined);
     await navigator.clipboard?.writeText(url);
     setMsg("Link copied.");
   };
@@ -296,7 +297,7 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
                   onClick={() =>
                     call(async () => {
                       const p = await api<FeedPostView>(`/feed/${post.id}/share`, { method: "POST" });
-                      if (p.shareToken) void sendLink(`${window.location.origin}${window.location.pathname}#/r/${p.shareToken}`);
+                      if (p.shareToken) void sendLink(shareUrl("r", p.shareToken));
                       return p;
                     })
                   }

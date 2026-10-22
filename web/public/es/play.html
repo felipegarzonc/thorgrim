@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- The page behind a shared play link: its preview (WhatsApp, Telegram...), then the app. Generated with the og-*.png images; the app's links point here. -->
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0F1115" />
+<title>Únete a mi partida en Thorgrim</title>
+<meta name="description" content="Abre el enlace para jugar juntos: los dos vemos el mismo marcador, puntos de mando y rondas, cada uno en su móvil." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Thorgrim" />
+<meta property="og:title" content="Únete a mi partida en Thorgrim" />
+<meta property="og:description" content="Abre el enlace para jugar juntos: los dos vemos el mismo marcador, puntos de mando y rondas, cada uno en su móvil." />
+<meta property="og:image" content="https://thorgrim.co/og-game-es.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:locale" content="es_ES" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Únete a mi partida en Thorgrim" />
+<meta name="twitter:description" content="Abre el enlace para jugar juntos: los dos vemos el mismo marcador, puntos de mando y rondas, cada uno en su móvil." />
+<meta name="twitter:image" content="https://thorgrim.co/og-game-es.png" />
+<link rel="icon" href="/icon-192.png" />
+<script>
+  // /es/play/<token> opens the app at #/play/<token>.
+  var token = location.pathname.split("/").filter(Boolean).pop() || "";
+  location.replace("/#/play/" + encodeURIComponent(token));
+</script>
+</head>
+<body style="margin:0;background:#0f1115;color:#ece6da;font-family:system-ui,sans-serif">
+<noscript><p style="padding:24px"><a href="/" style="color:#d9ae55">Thorgrim</a></p></noscript>
+</body>
+</html>

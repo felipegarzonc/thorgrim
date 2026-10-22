@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { accessKey, api, signOut } from "../api.ts";
 import { Card, Icon, Seg, useLoad, useMeta } from "../ui.tsx";
 import { langSetting, setLangSetting } from "../i18n.ts";
+import { shareText, shareUrl } from "../links.ts";
 import { Setup } from "./Auth.tsx";
 
 interface Usage {
@@ -274,16 +275,15 @@ function PlayersAdmin({ selfId }: { selfId: string }) {
   const invite = () =>
     run(async () => {
       const r = await api<{ token: string; invite: Invite }>("/admin/invites", { method: "POST", json: { note, role } });
-      setLink({ url: `${window.location.origin}/#/join/${r.token}`, note: r.invite.note });
+      setLink({ url: shareUrl("join", r.token), note: r.invite.note });
       setCopied(false);
       setNote("");
       reloadInvites();
     });
   const share = async () => {
     if (!link) return;
-    const text = `Join me on Thorgrim, the Age of Sigmar coach: ${link.url}`;
     try {
-      if (navigator.share) await navigator.share({ title: "Thorgrim invite", text, url: link.url });
+      if (navigator.share) await navigator.share({ text: shareText("Join me on Thorgrim, the Age of Sigmar tracker & coach:", link.url) });
       else {
         await navigator.clipboard.writeText(link.url);
         setCopied(true);

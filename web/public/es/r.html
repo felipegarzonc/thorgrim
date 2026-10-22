@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- The page behind a shared r link: its preview (WhatsApp, Telegram...), then the app. Generated with the og-*.png images; the app's links point here. -->
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0F1115" />
+<title>Una crónica de batalla de Thorgrim</title>
+<meta name="description" content="La historia de una batalla de Warhammer Age of Sigmar contada como una leyenda, con la hoja de puntuación y las fotos." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Thorgrim" />
+<meta property="og:title" content="Una crónica de batalla de Thorgrim" />
+<meta property="og:description" content="La historia de una batalla de Warhammer Age of Sigmar contada como una leyenda, con la hoja de puntuación y las fotos." />
+<meta property="og:image" content="https://thorgrim.co/og-report-es.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:locale" content="es_ES" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Una crónica de batalla de Thorgrim" />
+<meta name="twitter:description" content="La historia de una batalla de Warhammer Age of Sigmar contada como una leyenda, con la hoja de puntuación y las fotos." />
+<meta name="twitter:image" content="https://thorgrim.co/og-report-es.png" />
+<link rel="icon" href="/icon-192.png" />
+<script>
+  // /es/r/<token> opens the app at #/r/<token>.
+  var token = location.pathname.split("/").filter(Boolean).pop() || "";
+  location.replace("/#/r/" + encodeURIComponent(token));
+</script>
+</head>
+<body style="margin:0;background:#0f1115;color:#ece6da;font-family:system-ui,sans-serif">
+<noscript><p style="padding:24px"><a href="/" style="color:#d9ae55">Thorgrim</a></p></noscript>
+</body>
+</html>

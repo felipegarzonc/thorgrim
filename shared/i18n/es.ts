@@ -957,6 +957,8 @@ export const ES_PHRASES: Record<string, string> = {
   "Access requests need accounts (Supabase).": "Las solicitudes de acceso necesitan cuentas (Supabase).",
   "This request was already answered.": "Esta solicitud ya se respondió.",
   "That request was removed.": "Esa solicitud se borró.",
+  "Join me on Thorgrim, the Age of Sigmar tracker & coach:": "Únete a Thorgrim, el marcador y coach de Age of Sigmar:",
+  "Join my game on Thorgrim:": "Únete a mi partida en Thorgrim:",
   // ---------- badges ----------
   "Nail-biter": "Final de infarto",
   "Dead even": "Igualadísimo",
