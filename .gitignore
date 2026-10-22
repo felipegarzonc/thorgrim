@@ -6,3 +6,5 @@ storage/
 .env
 dist-server/
 .vercel/
+test-results/
+playwright-report/
