@@ -44,7 +44,16 @@ export const isGamePhoto = (prefix: string, gameId: string, path: unknown): path
   typeof path === "string" && path.startsWith(`${prefix}game-photos/${gameId}/`) && /^\d+\.jpg$/.test(path.slice(`${prefix}game-photos/${gameId}/`.length));
 
 /** Fields the page can't change: identity and sharing are handled here. */
-const FIXED = new Set(["id", "createdAt", "version", "share", "viewers", "listSpaces", "access"]);
+const FIXED = new Set(["id", "createdAt", "version", "share", "viewers", "listSpaces", "access", "confirmations"]);
+
+/** The final result in the creator's terms; a confirmation counts only while the result is unchanged. */
+export const resultKey = (g: Game) => `${g.state.vp.me}:${g.state.vp.opponent}:${g.finished?.conclusion ?? ""}`;
+
+/** The two sides of a shared game for the ladder: its creator and the first player who joined. */
+export function ladderSides(o: OpenGame): { ownerId?: string; playerId?: string } {
+  return { ownerId: o.game.share?.ownerId ?? (o.role === "owner" ? currentUser().id : undefined), playerId: o.game.share?.players[0]?.id };
+}
+const confirmedBy = (g: Game, id?: string) => !!id && g.confirmations?.[id]?.result === resultKey(g);
 
 export async function openGame(id: string): Promise<OpenGame | undefined> {
   const me = currentUser();
@@ -59,8 +68,17 @@ export async function openGame(id: string): Promise<OpenGame | undefined> {
 
 /** The game as the signed-in player sees it: their side is "me". */
 export function viewGame({ game, role }: OpenGame): Game {
-  const { share, viewers, listSpaces: _spaces, ...g } = game;
-  const access = { role, ownerName: share?.ownerName ?? "", players: share?.players.map((p) => p.name) ?? [], ...(role === "owner" && share?.token ? { token: share.token } : {}) };
+  const { share, viewers, listSpaces: _spaces, confirmations: _c, ...g } = game;
+  const { ownerId, playerId } = ladderSides({ game, role, prefix: "" });
+  const sides = { owner: confirmedBy(game, ownerId), player: confirmedBy(game, playerId) };
+  const confirmed = role === "owner" ? { me: sides.owner, opponent: sides.player } : { me: sides.player, opponent: sides.owner };
+  const access = {
+    role,
+    ownerName: share?.ownerName ?? "",
+    players: share?.players.map((p) => p.name) ?? [],
+    ...(role === "owner" && share?.token ? { token: share.token } : {}),
+    ...(share?.players.length ? { confirmed } : {}),
+  };
   if (role === "owner") return { ...g, access };
   const mine = viewers?.[currentUser().id];
   const flipped = flipGame(g);
@@ -92,8 +110,9 @@ const save = (o: OpenGame, game: Game) => gamesIn(o.prefix).save({ ...game, vers
 export async function changeGame(o: OpenGame, ops: Op[]): Promise<OpenGame> {
   const allowed = ops.filter((op) => Array.isArray(op?.path) && !FIXED.has(String(op.path[0])));
   const changed = o.role === "owner" ? applyOps(o.game, allowed) : unviewGame(applyOps(viewGame(o), allowed), o.game);
-  const game: Game = { ...changed, id: o.game.id, createdAt: o.game.createdAt, share: o.game.share, listSpaces: await listSpaces(o, changed) };
+  const game: Game = { ...changed, id: o.game.id, createdAt: o.game.createdAt, share: o.game.share, confirmations: o.game.confirmations, listSpaces: await listSpaces(o, changed) };
   if (!game.share) delete game.share;
+  if (!game.confirmations) delete game.confirmations;
   if (!game.listSpaces) delete game.listSpaces;
   if (game.report) game.report = { ...game.report, photos: (game.report.photos ?? []).filter((p) => isGamePhoto(o.prefix, game.id, p)) };
   if (game.state.tablePhoto && !isGamePhoto(o.prefix, game.id, game.state.tablePhoto.path)) delete game.state.tablePhoto;
@@ -126,6 +145,23 @@ export async function myGames(): Promise<Game[]> {
   const joined = await Promise.all((await linksIn(me.prefix).list()).map((l) => openGame(l.id)));
   return [...own, ...joined.flatMap((o) => (o ? [viewGame(o)] : []))];
 }
+
+/** Confirm the final result for the club ladder (the game's creator or the opponent who joined). */
+export async function confirmResult(o: OpenGame): Promise<OpenGame> {
+  const me = currentUser().id;
+  const { ownerId, playerId } = ladderSides(o);
+  if (!o.game.finished) throw new Error("Finish the game first.");
+  if (!playerId || !ownerId) throw new Error("Only games played together count on the ladder: share the game with your opponent first.");
+  if (me !== ownerId && me !== playerId) throw new Error("Only the two players can confirm the result.");
+  const confirmations = { ...o.game.confirmations, [me]: { result: resultKey(o.game), at: new Date().toISOString() } };
+  return { ...o, game: await save(o, { ...o.game, confirmations }) };
+}
+
+/** Both players confirmed the result as it stands now. */
+export const bothConfirmed = (o: OpenGame) => {
+  const { ownerId, playerId } = ladderSides(o);
+  return !!o.game.finished && confirmedBy(o.game, ownerId) && confirmedBy(o.game, playerId);
+};
 
 /** Make (or keep) the game's join link. Creator only. */
 export async function shareGame(o: OpenGame): Promise<OpenGame> {

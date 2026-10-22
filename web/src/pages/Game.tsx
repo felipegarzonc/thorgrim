@@ -281,7 +281,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
             openCoach={() => setSheet("coach")}
           />
         )}
-        {current === "results" && <ResultsStep game={game} lists={lists} mutate={mutate} saved={() => saving.current} openCoach={() => setSheet("coach")} />}
+        {current === "results" && <ResultsStep game={game} lists={lists} mutate={mutate} saved={() => saving.current} openCoach={() => setSheet("coach")} serverChanged={shareChanged} />}
       </div>
 
       <footer className="step-bar">
@@ -1792,6 +1792,56 @@ function SideBlock({
 
 // ---------- results ----------
 
+/** Both players confirm the final result, so the game counts on the club ladder. */
+function LadderConfirm({ game, saved, changed, names }: { game: Game; saved: () => Promise<unknown>; changed: (g: Game) => Promise<void>; names: Record<Side, string> }) {
+  const meta = useMeta();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  if (!meta?.accounts || !game.finished) return null;
+  const c = game.access?.confirmed;
+  if (!c)
+    return (
+      <p className="ladder-note small muted">
+        <Icon name="flag" /> Results count on the club ladder when you play together: share the game with your opponent (menu › Play together).
+      </p>
+    );
+  const confirm = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await saved();
+      await changed(await api<Game>(`/games/${game.id}/confirm`, { method: "POST" }));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className={`card ladder-confirm ${c.me && c.opponent ? "done" : ""}`} aria-label="Club ladder">
+      <div className="ladder-confirm-head">
+        <Icon name="flag" />
+        <b className="grow">{c.me && c.opponent ? "Counts on the club ladder" : "Confirm the result for the club ladder"}</b>
+      </div>
+      <div className="ladder-who">
+        <span className={c.me ? "ok" : ""}>
+          {c.me ? <Icon name="check" /> : <span className="dot" />} {names.me}
+        </span>
+        <span className={c.opponent ? "ok" : ""}>
+          {c.opponent ? <Icon name="check" /> : <span className="dot" />} {names.opponent}
+        </span>
+      </div>
+      {!c.me && (
+        <button type="button" className="primary wide" disabled={busy} onClick={confirm}>
+          {busy ? "Confirming…" : `Confirm ${game.state.vp.me}–${game.state.vp.opponent}`}
+        </button>
+      )}
+      {c.me && !c.opponent && <p className="small muted">Waiting for {names.opponent} to confirm. Changing the score resets both confirmations.</p>}
+      {error && <p className="error small">{error}</p>}
+    </section>
+  );
+}
+
 /** Each side's VP round by round: a comeback shows as the lines crossing; double turns are marked. */
 function VpChart({ game, names, colors }: { game: Game; names: Record<Side, string>; colors: Record<Side, string> }) {
   const totals = runningScore(game);
@@ -1858,7 +1908,21 @@ const CONCLUSIONS = [
   ["conceded-me", "I conceded"],
 ] as const;
 
-function ResultsStep({ game, lists, mutate, saved, openCoach }: { game: Game; lists?: ArmyList[]; mutate: Mutate; saved: () => Promise<unknown>; openCoach: () => void }) {
+function ResultsStep({
+  game,
+  lists,
+  mutate,
+  saved,
+  openCoach,
+  serverChanged,
+}: {
+  game: Game;
+  lists?: ArmyList[];
+  mutate: Mutate;
+  saved: () => Promise<unknown>;
+  openCoach: () => void;
+  serverChanged: (g: Game) => Promise<void>;
+}) {
   const [conclusion, setConclusion] = useState<NonNullable<Game["finished"]>["conclusion"]>(game.finished?.conclusion ?? "played");
   const s = game.state;
   const rounds = s.rounds ?? [];
@@ -1986,6 +2050,7 @@ function ResultsStep({ game, lists, mutate, saved, openCoach }: { game: Game; li
           ))}
         </div>
       )}
+      <LadderConfirm game={game} saved={saved} changed={serverChanged} names={{ me: me.name, opponent: opp.name }} />
       <label className="field">
         <span className="field-label">Game conclusion</span>
         <span className="field-box">

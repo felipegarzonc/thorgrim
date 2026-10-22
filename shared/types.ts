@@ -254,6 +254,8 @@ export interface Game {
   listSpaces?: Record<string, string>;
   /** How the signed-in player sees this game (sent to the page only). */
   access?: GameAccess;
+  /** Players who confirmed the final result for the club ladder, with the result they confirmed (stored, never sent to the page). */
+  confirmations?: Record<string, { result: string; at: string }>;
   /** The story of the game, written by the coach at the end (one per game, shared by its players). */
   report?: BattleReport;
 }
@@ -340,6 +342,8 @@ export interface GameAccess {
   players: string[];
   /** The join link's secret (the creator only). */
   token?: string;
+  /** Who confirmed the current result for the club ladder (finished shared games). */
+  confirmed?: { me: boolean; opponent: boolean };
 }
 
 /** Points of a list: its units plus the battle formation's cost. */

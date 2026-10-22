@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import type { FeedPost, FeedPostView, Notice } from "../../../shared/types.ts";
 import { api, withKey } from "../api.ts";
 import { baseFaction } from "../../../shared/season.ts";
-import { armyColor, Icon, useLoad, useMeta, type IconName } from "../ui.tsx";
+import { armyStats, headToHead, standings, type ClubResult } from "../../../shared/ladder.ts";
+import { armyColor, Avatar, Icon, Seg, useLoad, useMeta, type IconName } from "../ui.tsx";
 import { Story } from "./report.tsx";
 
 /** Reactions keep their emoji keys on the server; the page shows them as themed icons. */
@@ -256,6 +257,85 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
   );
 }
 
+/** The club ladder from confirmed results, your record against each member, and how each army does. */
+function Ladder() {
+  const [data] = useLoad<{ me: string; results: ClubResult[] }>("/club/ladder");
+  if (!data) return <p className="muted">Loading…</p>;
+  if (!data.results.length)
+    return (
+      <section className="card empty">
+        <h2>No confirmed results yet</h2>
+        <p className="muted">Play a game together (share it with your opponent), and when it ends both of you confirm the result on the Results screen. Confirmed games count here.</p>
+      </section>
+    );
+  const table = standings(data.results);
+  const rivals = headToHead(data.results, data.me);
+  const armies = armyStats(data.results);
+  return (
+    <div className="stack">
+      <section className="card ladder" aria-label="Standings">
+        <div className="ladder-row ladder-head" aria-hidden="true">
+          <span>#</span>
+          <span />
+          <span>Player</span>
+          <span>P</span>
+          <span>W-D-L</span>
+          <span>Pts</span>
+        </div>
+        {table.map((s, i) => (
+          <div key={s.id} className={`ladder-row ${s.id === data.me ? "me" : ""}`}>
+            <span className="ladder-rank">{i + 1}</span>
+            <Avatar faction={s.faction} size={1.8} />
+            <span className="ladder-name">
+              <b>{s.name}</b>
+              <small>
+                VP {s.vpFor - s.vpAgainst >= 0 ? "+" : ""}
+                {s.vpFor - s.vpAgainst} · {s.faction || "—"}
+              </small>
+            </span>
+            <span>{s.played}</span>
+            <span>
+              {s.won}-{s.drawn}-{s.lost}
+            </span>
+            <b className="ladder-pts">{s.points}</b>
+          </div>
+        ))}
+        <p className="small muted ladder-foot">Win 3 points, draw 1. Ties: VP difference, then wins. Only results both players confirmed.</p>
+      </section>
+      {rivals.length > 0 && (
+        <section>
+          <h2 className="section-title">Your record</h2>
+          <div className="card rivals">
+            {rivals.map((r) => (
+              <div key={r.id} className="rival">
+                <span className="grow">vs {r.name}</span>
+                <b>
+                  {r.won}-{r.drawn}-{r.lost}
+                </b>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      <section>
+        <h2 className="section-title">Armies at the club</h2>
+        <div className="card rivals">
+          {armies.map((a) => (
+            <div key={a.faction} className="rival">
+              <Avatar faction={a.faction} size={1.6} />
+              <span className="grow">{a.faction}</span>
+              <span className="muted small">
+                {a.played} game{a.played > 1 ? "s" : ""}
+              </span>
+              <b>{Math.round(a.rate * 100)}%</b>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function Activity() {
   const [notices] = useLoad<Notice[]>("/notices");
   useEffect(() => {
@@ -283,6 +363,7 @@ export function ClubPage({ postId, unreadNotices }: { postId?: string; unreadNot
   const [error, setError] = useState<string>();
   const [view, setView] = useState<"feed" | "activity">("feed");
   const [filter, setFilter] = useState("all");
+  const [tab, setTab] = useState<"reports" | "ladder">("reports");
 
   useEffect(() => {
     api<FeedPostView[]>("/feed")
@@ -311,8 +392,21 @@ export function ClubPage({ postId, unreadNotices }: { postId?: string; unreadNot
           {view !== "activity" && unreadNotices > 0 && <span className="count-dot">{unreadNotices}</span>}
         </button>
       </div>
+      {view === "feed" && !postId && (
+        <Seg
+          label="Club"
+          value={tab}
+          options={[
+            ["reports", "Battle reports"],
+            ["ladder", "Ladder"],
+          ]}
+          onChange={setTab}
+        />
+      )}
       {view === "activity" ? (
         <Activity />
+      ) : tab === "ladder" && !postId ? (
+        <Ladder />
       ) : (
         <>
           {!postId && posts && posts.length > 0 && (

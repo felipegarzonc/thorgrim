@@ -16,7 +16,7 @@ import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
 import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips } from "./coach.ts";
 import { addComment, deleteComment, deletePost, feed, FeedError, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
-import { markNoticesRead, myNotices } from "./notices.ts";
+import { markNoticesRead, myNotices, notify } from "./notices.ts";
 import { gameData, listRules, warscrollText } from "./data.ts";
 import {
   accountSettings,
@@ -46,7 +46,8 @@ import { currentUser, LOCAL_USER, runAs, userPrefix, type UserCtx } from "./cont
 import { jobs, startJob } from "./jobs.ts";
 import { addDocument, deleteDocument, docPath, finishUpload, getPages, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
-import { changeGame, forgetShares, gameLists, joinGame, leaveGame, myGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
+import { bothConfirmed, changeGame, confirmResult, forgetShares, gameLists, joinGame, ladderSides, leaveGame, myGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
+import { forgetResult, ladder, syncResult } from "./ladder.ts";
 import { Collection, newId } from "./store.ts";
 import { backgroundJobs, resumePendingTranscriptions, transcribeDocument, transcribeStep } from "./transcribe.ts";
 
@@ -540,6 +541,7 @@ const opsFrom = (body: unknown): Op[] => {
 const change = async (o: OpenGame, ops: Op[]) => {
   const next = await changeGame(o, ops);
   await syncPost(next).catch((e: Error) => console.error(`Updating the club post of game ${o.game.id} failed:`, e));
+  await syncResult(next).catch((e: Error) => console.error(`Updating the ladder for game ${o.game.id} failed:`, e));
   return next;
 };
 
@@ -604,6 +606,23 @@ app.delete("/api/games/:id/share", async (req, res) => {
   if (o.role !== "owner") return res.status(403).json({ error: "Only the player who created the game can stop sharing it." });
   res.json(viewGame(await stopSharing(o)));
 });
+// The club ladder: both players confirm a shared game's final result.
+app.post("/api/games/:id/confirm", async (req, res) => {
+  const o = await openOr404(req, res);
+  if (!o) return;
+  let next: OpenGame;
+  try {
+    next = await confirmResult(o);
+  } catch (e) {
+    return res.status(400).json({ error: (e as Error).message });
+  }
+  await syncResult(next);
+  const { ownerId, playerId } = ladderSides(next);
+  const other = currentUser().id === ownerId ? playerId : ownerId;
+  if (other && !bothConfirmed(next)) await notify([other], `${currentUser().name || "Your opponent"} confirmed the result of your game: confirm it too so it counts on the club ladder.`, `#/games/${next.game.id}/results`);
+  res.json(viewGame(next));
+});
+app.get("/api/club/ladder", async (_req, res) => res.json(await ladder()));
 app.post("/api/games/join", async (req, res) => {
   try {
     res.json({ id: await joinGame(String(req.body?.token ?? "")) });
@@ -621,6 +640,7 @@ app.delete("/api/games/:id", async (req, res) => {
     return res.json({ ok: true });
   }
   if (o) await forgetShares(o);
+  await forgetResult(id);
   await games.delete(id);
   const photos = `${currentUser().prefix}game-photos/${id}`;
   for (const name of await blobs().list(photos)) await blobs().remove(`${photos}/${name}`);
