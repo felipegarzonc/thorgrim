@@ -193,8 +193,19 @@ export async function deletePost(id: string): Promise<FeedPost> {
   return p;
 }
 
+// Slow down spam: per member, per server instance (enough for a club).
+const recent = new Map<string, number[]>();
+function limit(kind: string, max: number, windowMs: number) {
+  const key = `${kind}:${currentUser().id}`;
+  const now = Date.now();
+  const times = (recent.get(key) ?? []).filter((t) => now - t < windowMs);
+  if (times.length >= max) throw new FeedError("Slow down a little: try again in a few minutes.", 429);
+  recent.set(key, [...times, now]);
+}
+
 export async function react(id: string, emoji: string): Promise<FeedPost> {
   if (!REACTIONS.includes(emoji)) throw new FeedError("Unknown reaction.");
+  limit("react", 60, 10 * 60_000);
   const p = await getPost(id);
   const me = currentUser().id;
   const who = p.reactions[emoji] ?? [];
@@ -205,6 +216,7 @@ export async function react(id: string, emoji: string): Promise<FeedPost> {
 export async function addComment(id: string, text: string): Promise<FeedPost> {
   const clean = text.trim().slice(0, 1000);
   if (!clean) throw new FeedError("Write something first.");
+  limit("comment", 15, 10 * 60_000);
   const p = await getPost(id);
   const me = currentUser();
   p.comments = [...p.comments, { id: newId(), authorId: me.id, authorName: me.name || "A member", text: clean, at: new Date().toISOString() }];

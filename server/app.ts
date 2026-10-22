@@ -59,6 +59,17 @@ export default app;
 app.set("trust proxy", 1); // behind the host's HTTPS proxy when deployed
 app.use(express.json({ limit: "4mb" }));
 
+// Browser safety: no sniffing types, no framing by other sites, no full URLs leaking to other sites.
+app.use((_req, res, next) => {
+  res.set({
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+  });
+  next();
+});
+
 // Health check for the hosting platform (no data, no auth).
 app.get(["/healthz", "/api/healthz"], (_req, res) => res.json({ ok: true }));
 
@@ -105,17 +116,43 @@ async function accountCtx(userId: string): Promise<UserCtx> {
   return { id: acc.id, name: acc.name, isAdmin: acc.role === "admin", prefix: userPrefix(acc.id, !!acc.owner) };
 }
 
+// ---------- photo pass ----------
+// Images and files are loaded by the browser from plain links, which can end
+// up in history and logs. They carry a short-lived pass that only opens
+// photos and files, never the sign-in itself (no session token or app
+// password in a link).
+const MEDIA_TTL_MS = 24 * 3600_000;
+const MEDIA_ROUTE = /^\/(games\/[a-z0-9-]+\/photo|feed\/[a-z0-9-]+\/photo\/\d+|library\/[a-z0-9-]+\/file)$/i;
+const mediaSig = (body: string) => crypto.createHmac("sha256", `thorgrim-media:${accessKey || "local"}`).update(body).digest("base64url");
+export function mediaToken(userId: string): string {
+  const body = `${userId}.${Date.now() + MEDIA_TTL_MS}`;
+  return `${Buffer.from(body).toString("base64url")}.${mediaSig(body)}`;
+}
+/** The user a photo pass was made for, if it is genuine and not expired. */
+export function readMediaToken(token: string): string | undefined {
+  const [b64, sig] = token.split(".");
+  if (!b64 || !sig) return undefined;
+  const body = Buffer.from(b64, "base64url").toString();
+  const want = Buffer.from(mediaSig(body));
+  const got = Buffer.from(sig);
+  if (want.length !== got.length || !crypto.timingSafeEqual(want, got)) return undefined;
+  const dot = body.lastIndexOf(".");
+  return Number(body.slice(dot + 1)) > Date.now() ? body.slice(0, dot) : undefined;
+}
+
 app.use("/api", async (req, res, next) => {
   if (missingPassword) return res.status(503).json({ error: "Set APP_ACCESS_KEY (the app password, 8+ characters) in the hosting settings, then redeploy." });
   if (req.path.startsWith("/auth/")) return next(); // sign-in routes check for themselves
   if (req.path.startsWith("/public/")) return next(); // shared battle reports: anyone with the link
   if (tooMany(req)) return res.status(429).json({ error: "Too many wrong passwords. Try again in 15 minutes." });
   try {
-    const master = req.get("x-access-key") ?? (typeof req.query.key === "string" ? req.query.key : undefined);
-    const bearer = req.get("authorization")?.replace(/^Bearer\s+/i, "") || (typeof req.query.token === "string" ? req.query.token : "");
+    const master = req.get("x-access-key");
+    const bearer = req.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+    const media = req.method === "GET" && MEDIA_ROUTE.test(req.path) && typeof req.query.m === "string" ? readMediaToken(req.query.m) : undefined;
     let user: UserCtx | null = null;
     if (master && sameKey(master)) user = await ownerCtx();
     else if (bearer && accountsEnabled()) user = await accountCtx(await userIdFromToken(bearer).catch(() => Promise.reject(new AuthError("Your session ended. Sign in again."))));
+    else if (media) user = accountsEnabled() && media !== "owner" ? await accountCtx(media) : await ownerCtx();
     else if (!accessKey && !isPublic) user = LOCAL_USER;
     if (!user) {
       if (master) failed(req);
@@ -291,11 +328,13 @@ const newestFirst = <T extends { createdAt: string }>(xs: T[]) => xs.sort((a, b)
 
 // ---------- army data ----------
 
+app.get("/api/media-token", (_req, res) => res.json({ media: mediaToken(currentUser().id) }));
 app.get("/api/meta", (_req, res) => {
   const d = gameData();
   const u = currentUser();
   res.json({
     user: { id: u.id, name: u.name, isAdmin: u.isAdmin, developer: !!u.developer },
+    media: mediaToken(u.id),
     accounts: accountsEnabled(),
     source: d.source,
     commit: d.commit,

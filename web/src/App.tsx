@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, LOGIN_EVENT } from "./api.ts";
+import { api, LOGIN_EVENT, mediaExpiry, setMediaToken } from "./api.ts";
 import { CalculatorPage } from "./pages/Calculator.tsx";
 import { CLUB_SEEN, ClubPage } from "./pages/Club.tsx";
 import { PublicReport } from "./pages/PublicReport.tsx";
@@ -62,8 +62,22 @@ export function App() {
   useEffect(() => {
     const on = () => setNeedLogin(true);
     window.addEventListener(LOGIN_EVENT, on);
-    api<Meta>("/meta").then(setMeta).catch((e: Error) => setError(e.message));
-    return () => window.removeEventListener(LOGIN_EVENT, on);
+    api<Meta & { media?: string }>("/meta")
+      .then((m) => {
+        if (m.media) setMediaToken(m.media);
+        setMeta(m);
+      })
+      .catch((e: Error) => setError(e.message));
+    // A phone left open for a day: renew the photo pass before it runs out.
+    const renew = () => {
+      if (document.visibilityState === "visible" && mediaExpiry() - Date.now() < 6 * 3600_000)
+        void api<{ media: string }>("/media-token").then((r) => setMediaToken(r.media)).catch(() => undefined);
+    };
+    document.addEventListener("visibilitychange", renew);
+    return () => {
+      window.removeEventListener(LOGIN_EVENT, on);
+      document.removeEventListener("visibilitychange", renew);
+    };
   }, []);
 
   // The rules library is for developers only (app password); players never see it.
@@ -73,6 +87,8 @@ export function App() {
   if (tab === "r" && id) return <PublicReport token={id} />;
   if (needLogin) return <Login />;
   if (tab === "play" && id) return <JoinGame token={id} />;
+  // Pages wait for /meta: it brings the photo pass their images need.
+  if (!meta && !error) return <main><p className="muted page-loading">Loading…</p></main>;
 
   // A game has its own top and bottom bars, like a scoresheet.
   if (tab === "games" && id)

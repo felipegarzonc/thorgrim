@@ -43,16 +43,31 @@ export const setSession = (s: Session | null) => write(SESSION, s ? JSON.stringi
 export function signOut() {
   setSession(null);
   setAccessKey("");
+  setMediaToken("");
   window.location.hash = "#/home";
   window.location.reload();
 }
 
-/** Link to a server file (an uploaded PDF, a photo) that carries the sign-in. */
+// The photo pass: a short-lived token that only opens photos and files, so
+// links never carry the sign-in itself. Comes with /api/meta.
+const MEDIA = "thorgrim-media";
+export const setMediaToken = (t: string) => write(MEDIA, t || null);
+/** When the photo pass runs out (ms), or 0. */
+export function mediaExpiry(): number {
+  const t = read(MEDIA);
+  if (!t) return 0;
+  try {
+    const body = atob(t.split(".")[0].replace(/-/g, "+").replace(/_/g, "/"));
+    return Number(body.slice(body.lastIndexOf(".") + 1)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Link to a server file (an uploaded PDF, a photo) that opens with the photo pass. */
 export const withKey = (url: string) => {
-  const sep = url.includes("?") ? "&" : "?";
-  const s = session();
-  if (s) return `${url}${sep}token=${encodeURIComponent(s.access_token)}`;
-  return accessKey() ? `${url}${sep}key=${encodeURIComponent(accessKey())}` : url;
+  const t = read(MEDIA);
+  return t ? `${url}${url.includes("?") ? "&" : "?"}m=${encodeURIComponent(t)}` : url;
 };
 
 export const LOGIN_EVENT = "aos-coach-login-required";
