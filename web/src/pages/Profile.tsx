@@ -1,7 +1,7 @@
 // Your profile (name, password, coach usage) and, for the admin, the players:
 // invite links, monthly coach limits, switching accounts off, new passwords.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { accessKey, api, signOut } from "../api.ts";
 import { Card, Icon, useLoad, useMeta } from "../ui.tsx";
 import { Setup } from "./Auth.tsx";
@@ -53,6 +53,92 @@ function UsageBar({ spent, limit }: { spent: number; limit: number | null }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** The push key as the browser wants it. */
+function keyBytes(base64url: string) {
+  const raw = atob((base64url + "=".repeat((4 - (base64url.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+/** Turn phone notifications on or off for this phone. iPhones need the app on the Home Screen first. */
+function PhoneNotifications() {
+  const supported = typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const installed = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
+  const [on, setOn] = useState<boolean>();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string>();
+  useEffect(() => {
+    if (!supported) return setOn(false);
+    void navigator.serviceWorker
+      .getRegistration()
+      .then((r) => r?.pushManager.getSubscription())
+      .then((sub) => setOn(!!sub && Notification.permission === "granted"));
+  }, []);
+
+  const turnOn = async () => {
+    setBusy(true);
+    setMsg(undefined);
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      if ((await Notification.requestPermission()) !== "granted") throw new Error("Notifications are blocked for this site: allow them in the phone's settings.");
+      const { key } = await api<{ key: string }>("/push/key");
+      const sub = (await reg.pushManager.getSubscription()) ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) }));
+      await api("/push/subscribe", { method: "POST", json: { subscription: sub.toJSON() } });
+      setOn(true);
+      setMsg("On. You'll hear about comments, reports of your games and opponents joining.");
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const turnOff = async () => {
+    setBusy(true);
+    try {
+      const sub = await (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription();
+      if (sub) {
+        await api("/push/unsubscribe", { method: "POST", json: { endpoint: sub.endpoint } });
+        await sub.unsubscribe();
+      }
+      setOn(false);
+      setMsg("Off for this phone.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="Phone notifications">
+      {!supported ? (
+        <p className="small muted">
+          {ios && !installed
+            ? "On iPhone, add Thorgrim to your Home Screen first (Share › Add to Home Screen), open it from there, and turn notifications on here."
+            : "This browser can't show notifications."}
+        </p>
+      ) : (
+        <>
+          <p className="small muted">Comments on your posts, reports of your games and opponents joining your games, on this phone.</p>
+          {on ? (
+            <div className="two-buttons">
+              <button type="button" className="outline" disabled={busy} onClick={() => api("/push/test", { method: "POST" }).then(() => setMsg("Test sent."))}>
+                Send a test
+              </button>
+              <button type="button" className="ghost" disabled={busy} onClick={turnOff}>
+                Turn off
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="primary wide" disabled={busy || on === undefined} onClick={turnOn}>
+              <Icon name="bell" /> {busy ? "Turning on…" : "Turn on notifications"}
+            </button>
+          )}
+        </>
+      )}
+      {msg && <p className="small muted">{msg}</p>}
+    </Card>
   );
 }
 
@@ -108,6 +194,7 @@ export function ProfilePage() {
         <span className="badge">{me.user.role === "admin" ? "Admin" : "Player"}</span>
       </section>
 
+      <PhoneNotifications />
       <Card title="Coach usage">
         <UsageBar spent={me.usage.costUsd} limit={me.usage.limitUsd} />
         <p className="muted small">

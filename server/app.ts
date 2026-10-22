@@ -17,6 +17,7 @@ import { blobs } from "./blobs.ts";
 import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips } from "./coach.ts";
 import { addComment, deleteComment, deletePost, feed, FeedError, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
 import { markNoticesRead, myNotices, notify } from "./notices.ts";
+import { publicKey, pushTo, subscribe, unsubscribe } from "./push.ts";
 import { gameData, listRules, warscrollText } from "./data.ts";
 import {
   accountSettings,
@@ -753,6 +754,24 @@ app.get("/api/feed/:id/photo/:n", async (req, res) => {
   return data ? res.type("image/jpeg").set("cache-control", "private, max-age=86400").send(data) : res.status(404).end();
 });
 app.get("/api/club/unread", async (_req, res) => res.json(await unread()));
+// Phone notifications: the key phones subscribe with, and each phone's subscription.
+app.get("/api/push/key", async (_req, res) => res.json({ key: await publicKey() }));
+app.post("/api/push/subscribe", async (req, res) => {
+  try {
+    await subscribe(req.body?.subscription);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+app.post("/api/push/unsubscribe", async (req, res) => {
+  await unsubscribe(String(req.body?.endpoint ?? ""));
+  res.json({ ok: true });
+});
+app.post("/api/push/test", async (_req, res) => {
+  await pushTo(currentUser().prefix, { title: "Thorgrim", body: "Notifications are on for this phone.", href: "#/club", tag: "test" });
+  res.json({ ok: true });
+});
 app.get("/api/notices", async (_req, res) => res.json(await myNotices()));
 app.post("/api/notices/read", async (_req, res) => {
   await markNoticesRead();

@@ -1,10 +1,12 @@
 // In-app notifications: a short line and a link, kept in each member's own
 // space (a comment on their post, a report of their game, an opponent who
-// joined their game). The Club tab shows how many are unread.
+// joined their game). The Club tab shows how many are unread, and phones
+// with notifications on get them too (server/push.ts).
 
 import type { Notice } from "../shared/types.ts";
 import { accountsEnabled, listAccounts } from "./accounts.ts";
 import { currentUser, userPrefix } from "./context.ts";
+import { pushTo } from "./push.ts";
 import { Collection, newId } from "./store.ts";
 
 export const noticesIn = (prefix: string) => new Collection<Notice>("notices", prefix);
@@ -25,6 +27,8 @@ export async function notify(userIds: string[], text: string, href: string) {
     const prefix = where.get(id);
     if (id === me || prefix === undefined) continue;
     await noticesIn(prefix).save({ id: `${Date.now().toString(36)}-${newId()}`, at, text: text.slice(0, 300), href });
+    // And to their phones, if they turned notifications on (never holding up the request for long).
+    await Promise.race([pushTo(prefix, { title: "Thorgrim", body: text.slice(0, 200), href }).catch(() => undefined), new Promise((r) => setTimeout(r, 4000))]);
   }
 }
 
