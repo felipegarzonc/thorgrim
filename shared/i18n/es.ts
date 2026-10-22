@@ -959,6 +959,13 @@ export const ES_PHRASES: Record<string, string> = {
   "That request was removed.": "Esa solicitud se borró.",
   "Join me on Thorgrim, the Age of Sigmar tracker & coach:": "Únete a Thorgrim, el marcador y coach de Age of Sigmar:",
   "Join my game on Thorgrim:": "Únete a mi partida en Thorgrim:",
+  "A battle report from Thorgrim": "Una crónica de batalla de Thorgrim",
+  "The story of a Warhammer Age of Sigmar battle, told as a legend, with the score sheet and the photos.":
+    "La historia de una batalla de Warhammer Age of Sigmar contada como una leyenda, con la hoja de puntuación y las fotos.",
+  "Join the battles.": "Únete a las batallas.",
+  "Thorgrim scores Age of Sigmar games on your phone, plans every turn with you and tells each battle as a legend for your club. It's in private beta: ask for access and your invite arrives by email.":
+    "Thorgrim puntúa tus partidas de Age of Sigmar en el móvil, planea cada turno contigo y cuenta cada batalla como una leyenda para tu club. Está en beta privada: solicita acceso y te llegará la invitación por email.",
+  "Already a member?": "¿Ya eres miembro?",
   // ---------- badges ----------
   "Nail-biter": "Final de infarto",
   "Dead even": "Igualadísimo",

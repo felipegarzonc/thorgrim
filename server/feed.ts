@@ -17,6 +17,7 @@ import { noticesIn, notify, seenIn } from "./notices.ts";
 import { doubleTurns, gameBadges, playerBadges, reportSides, runningScore, type ReportSides } from "../shared/report.ts";
 import { changeGame, gameLists, isGamePhoto, myGames, viewGame, type OpenGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
+import { translate, type Lang } from "../shared/i18n/index.ts";
 import { headToHead, type ClubResult } from "../shared/ladder.ts";
 import { listResults } from "./ladder.ts";
 
@@ -24,6 +25,7 @@ const CLUB = "club/";
 const posts = new Collection<FeedPost>("posts", CLUB);
 const shareLinks = new Collection<{ id: string; postId: string }>("post-links", CLUB);
 const photoPath = (postId: string, n: number) => `${CLUB}post-photos/${postId}/${n}.jpg`;
+const cardPath = (postId: string) => `${CLUB}post-cards/${postId}.jpg`;
 
 export const REACTIONS = ["⚔️", "🔥", "😂", "👏", "💀"];
 const MAX_PHOTOS = 8;
@@ -237,6 +239,7 @@ export async function deletePost(id: string): Promise<FeedPost> {
   const p = await getPost(id);
   if (!isPlayer(p) && !currentUser().isAdmin) throw new FeedError("Only the game's players can remove its post.", 403);
   for (let n = 0; n < p.photos; n++) await blobs().remove(photoPath(id, n));
+  if (p.cardAt) await blobs().remove(cardPath(id)).catch(() => undefined);
   if (p.shareToken) await shareLinks.delete(p.shareToken);
   await posts.delete(id);
   return p;
@@ -319,4 +322,77 @@ export async function publicPost(token: string) {
   // The score sheet goes out too; the game log and army lists stay in the club.
   const detail = p.detail && { rounds: p.detail.rounds, tactics: p.detail.tactics };
   return { post: p, view: { title, story, photos, sides, battleplan, points, date, badges, createdAt, updatedAt, result, detail } };
+}
+
+// ---------- the share picture and page ----------
+
+const JPEG = Buffer.from([0xff, 0xd8, 0xff]);
+
+/** The picture a shared report shows in WhatsApp and the like, drawn by a player's page (web/src/reportCard.ts). */
+export async function saveCard(id: string, jpeg: Buffer): Promise<FeedPost> {
+  const p = await getPost(id);
+  if (!isPlayer(p) && !currentUser().isAdmin) throw new FeedError("Only the game's players can change its post.", 403);
+  if (!Buffer.isBuffer(jpeg) || !jpeg.subarray(0, 3).equals(JPEG) || jpeg.length > 2_000_000) throw new FeedError("That picture didn't arrive right.");
+  await blobs().write(cardPath(id), jpeg, "image/jpeg");
+  // Not an update of the post itself: updatedAt stays, so the card counts as fresh.
+  return posts.save({ ...p, cardAt: new Date().toISOString() });
+}
+
+export async function readPublicCard(token: string): Promise<Buffer | undefined> {
+  const found = await publicPost(token);
+  return found?.post.cardAt ? blobs().read(cardPath(found.post.id)) : undefined;
+}
+
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
+/**
+ * The page behind a shared report link (/r/<token>, /es/r/<token>): the
+ * report's own preview (title, score, its picture), then members go to the
+ * post in the club and everyone else to the public report, which invites
+ * them to ask for access.
+ */
+export async function reportPage(token: string, lang: Lang, origin: string): Promise<string> {
+  const found = await publicPost(token).catch(() => undefined);
+  const p = found?.post;
+  const t = (s: string) => translate(s, lang);
+  const [a, b] = p?.sides ?? [];
+  const result = p?.result === "win" ? "Victory" : p?.result === "loss" ? "Defeat" : p?.result === "draw" ? "Draw" : "";
+  const title = p ? p.title : t("A battle report from Thorgrim");
+  const description = p && a && b
+    ? [`${a.name} ${a.vp}–${b.vp} ${b.name}`, result && t(result), p.battleplan, t("A battle report from Thorgrim")].filter(Boolean).join(" · ")
+    : t("The story of a Warhammer Age of Sigmar battle, told as a legend, with the score sheet and the photos.");
+  const image = p?.cardAt ? `${origin}/api/public/reports/${token}/card.jpg?v=${encodeURIComponent(p.cardAt)}` : `${origin}/og-report${lang === "es" ? "-es" : ""}.png`;
+  const member = p ? `/#/club/${p.id}` : "";
+  const visitor = `/#/r/${token}`;
+  return `<!doctype html>
+<html lang="${lang}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#0F1115" />
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(description)}" />
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="Thorgrim" />
+<meta property="og:title" content="${esc(title)}" />
+<meta property="og:description" content="${esc(description)}" />
+<meta property="og:image" content="${esc(image)}" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:locale" content="${lang === "es" ? "es_ES" : "en_US"}" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="${esc(image)}" />
+<link rel="icon" href="/icon-192.png" />
+<script>
+  // Members (signed in on this phone) open the post in the club; everyone else the public report.
+  var member = false;
+  try { member = !!(localStorage.getItem("thorgrim-session") || localStorage.getItem("aos-coach-access-key")); } catch (e) {}
+  location.replace(member && ${JSON.stringify(member)} ? ${JSON.stringify(member)} : ${JSON.stringify(visitor)});
+</script>
+</head>
+<body style="margin:0;background:#0f1115;color:#ece6da;font-family:system-ui,sans-serif">
+<noscript><p style="padding:24px"><a href="${esc(visitor)}" style="color:#d9ae55">${esc(title)}</a></p></noscript>
+</body>
+</html>
+`;
 }

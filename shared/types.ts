@@ -330,6 +330,8 @@ export interface FeedPost {
   playerBadges?: string[];
   /** The report's photos the copies were made from (to copy again only when they change). */
   photoSources?: string[];
+  /** When its share picture (the preview in WhatsApp and the like) was last drawn. */
+  cardAt?: string;
 }
 
 /** A finished game laid out for the club: round by round, tactics, both armies, the log. */

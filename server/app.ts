@@ -15,7 +15,7 @@ import type { ArmyList, FeedPost, Game, GameState, LibraryDoc } from "../shared/
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
 import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips, voiceScore, gameReview } from "./coach.ts";
-import { addComment, deleteComment, deletePost, feed, FeedError, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
+import { addComment, deleteComment, deletePost, feed, FeedError, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, readPublicCard, reportPage, saveCard, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
 import { markNoticesRead, myNotices, notify } from "./notices.ts";
 import { publicKey, pushTo, subscribe, unsubscribe } from "./push.ts";
 import { gameData, listRules, warscrollText } from "./data.ts";
@@ -781,6 +781,7 @@ app.delete("/api/feed/:id", async (req, res) => {
 app.post("/api/feed/:id/react", async (req, res) => res.json(await viewPost(await react(param(req, "id"), String(req.body?.emoji ?? "")))));
 app.post("/api/feed/:id/comments", async (req, res) => res.json(await viewPost(await addComment(param(req, "id"), String(req.body?.text ?? "")))));
 app.delete("/api/feed/:id/comments/:commentId", async (req, res) => res.json(await viewPost(await deleteComment(param(req, "id"), param(req, "commentId")))));
+app.post("/api/feed/:id/card", express.raw({ type: "image/jpeg", limit: "3mb" }), async (req, res) => res.json(await viewPost(await saveCard(param(req, "id"), req.body as Buffer))));
 app.post("/api/feed/:id/share", async (req, res) => res.json(await viewPost(await sharePost(param(req, "id")))));
 app.delete("/api/feed/:id/share", async (req, res) => res.json(await viewPost(await unsharePost(param(req, "id")))));
 app.get("/api/feed/:id/photo/:n", async (req, res) => {
@@ -821,6 +822,17 @@ app.get("/api/public/reports/:token", async (req, res) => {
   const found = await publicPost(param(req, "token"));
   return found ? res.json(found.view) : res.status(404).json({ error: "This report isn't shared any more." });
 });
+app.get("/api/public/reports/:token/card.jpg", async (req, res) => {
+  const data = await readPublicCard(param(req, "token"));
+  return data ? res.type("image/jpeg").set("cache-control", "public, max-age=86400").send(data) : res.status(404).end();
+});
+// The page behind a shared report link (vercel.json sends /r/<token> and /es/r/<token> here).
+const sendReportPage = async (req: Request, res: Response, token: string, lang: "en" | "es") =>
+  res
+    .type("html")
+    .set("cache-control", "public, max-age=300")
+    .send(await reportPage(token, lang, process.env.APP_URL?.trim().replace(/\/$/, "") || `${req.protocol}://${req.get("host")}`));
+app.get("/api/public/report-page/:token", (req, res) => sendReportPage(req, res, param(req, "token"), req.query.lang === "es" ? "es" : "en"));
 app.get("/api/public/reports/:token/photo/:n", async (req, res) => {
   const found = await publicPost(param(req, "token"));
   const data = found && (await readPostPhoto(found.post.id, Number(param(req, "n"))));
@@ -846,7 +858,8 @@ const dist = path.resolve("dist");
 if (fs.existsSync(path.join(dist, "index.html"))) {
   app.use(express.static(dist));
   // Shared links (/join/<token>, /es/play/<token>...): their preview page, which opens the app (as vercel.json does online).
-  app.get(/^\/(es\/)?(join|play|r)\/[^/]+$/, (req, res) => res.sendFile(path.join(dist, `${req.path.startsWith("/es/") ? "es/" : ""}${req.path.split("/").at(-2)}.html`)));
+  app.get(/^\/(es\/)?(join|play)\/[^/]+$/, (req, res) => res.sendFile(path.join(dist, `${req.path.startsWith("/es/") ? "es/" : ""}${req.path.split("/").at(-2)}.html`)));
+  app.get(/^\/(es\/)?r\/[^/]+$/, (req, res) => sendReportPage(req, res, req.path.split("/").at(-1)!, req.path.startsWith("/es/") ? "es" : "en"));
   app.get(/^\/(?!api).*/, (_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 

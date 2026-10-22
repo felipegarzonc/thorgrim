@@ -11,6 +11,7 @@ import { Avatar, Icon, Seg, useLoad, useMeta, type IconName } from "../ui.tsx";
 import { rowsFromDetail, ScoreSheet, type SheetSide } from "../scoreSheet.tsx";
 import { Story } from "./report.tsx";
 import { shareUrl } from "../links.ts";
+import { drawReportCard } from "../reportCard.ts";
 import { EventPage, EventsList } from "./Events.tsx";
 import { MemberPage, MembersList } from "./Members.tsx";
 
@@ -183,6 +184,21 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
     }
   };
   const link = post.shareToken ? shareUrl("r", post.shareToken) : "";
+  // The picture the shared link shows (web/src/reportCard.ts): drawn when the link is made, and again when the post changes.
+  const cardStale = (p: FeedPostView) => p.mine && !!p.shareToken && (!p.cardAt || p.cardAt < (p.updatedAt ?? p.createdAt));
+  const drawCard = async (p: FeedPostView) => {
+    const body = await drawReportCard(p);
+    return api<FeedPostView>(`/feed/${p.id}/card`, { method: "POST", body, headers: { "content-type": "image/jpeg" } });
+  };
+  const drawing = useRef(false);
+  useEffect(() => {
+    if (!cardStale(post) || drawing.current) return;
+    drawing.current = true;
+    void drawCard(post)
+      .then(changed)
+      .catch(() => undefined)
+      .finally(() => (drawing.current = false));
+  }, [post.updatedAt, post.cardAt, post.shareToken]);
   const sendLink = async (url: string) => {
     if (navigator.share) return navigator.share({ text: `${post.title} ${url}` }).catch(() => undefined);
     await navigator.clipboard?.writeText(url);
@@ -296,7 +312,11 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
                   disabled={busy}
                   onClick={() =>
                     call(async () => {
-                      const p = await api<FeedPostView>(`/feed/${post.id}/share`, { method: "POST" });
+                      let p = await api<FeedPostView>(`/feed/${post.id}/share`, { method: "POST" });
+                      // The picture first, so the very first preview shows this battle.
+                      drawing.current = true;
+                      p = await drawCard(p).catch(() => p);
+                      drawing.current = false;
                       if (p.shareToken) void sendLink(shareUrl("r", p.shareToken));
                       return p;
                     })

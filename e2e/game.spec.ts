@@ -1,6 +1,7 @@
 // A whole game in the browser: set it up, score a round, finish it, let the
 // coach write the report and post it to the club.
 
+import fs from "node:fs";
 import { expect, test } from "@playwright/test";
 
 test("score a game and post its report to the club", async ({ page }) => {
@@ -52,6 +53,30 @@ test("score a game and post its report to the club", async ({ page }) => {
   await expect(post.locator(".post-title")).toHaveText("The Saga of the Test Table");
   await expect(post.locator(".post-stats")).toContainText("6–0");
   await expect(post.locator(".story")).toContainText("The test army won the day.");
+
+  // Share it outside the club: the link's page carries this battle's own picture.
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await post.getByRole("button", { name: "Share outside the club" }).click();
+  await expect(post.getByText("Link copied.")).toBeVisible({ timeout: 15_000 });
+  const link = await page.evaluate(() => navigator.clipboard.readText());
+  expect(link).toMatch(/\/r\/[a-f0-9]{32}$/);
+  const html = await (await page.request.get(link)).text();
+  expect(html).toContain('og:title" content="The Saga of the Test Table"');
+  expect(html).toContain("Goy 6–0 Diego");
+  const image = /og:image" content="([^"]+)"/.exec(html)![1];
+  expect(image).toMatch(/\/api\/public\/reports\/[a-f0-9]{32}\/card\.jpg/);
+  const card = await page.request.get(image);
+  expect(card.headers()["content-type"]).toBe("image/jpeg");
+  // Someone without an account: the report, then the way to ask for access.
+  const visitor = await page.context().browser()!.newPage();
+  await visitor.goto(link);
+  await expect(visitor).toHaveURL(/#\/r\/[a-f0-9]{32}$/);
+  await expect(visitor.locator(".post-title")).toHaveText("The Saga of the Test Table");
+  await expect(visitor.locator(".public-join")).toContainText("Join the battles.");
+  await expect(visitor.locator(".public-join").getByRole("button", { name: "Request access" })).toBeVisible();
+  if (process.env.E2E_SHOTS) await visitor.screenshot({ path: `${process.env.E2E_SHOTS}/public-report.png`, fullPage: true });
+  await visitor.close();
+  if (process.env.E2E_SHOTS) fs.writeFileSync(`${process.env.E2E_SHOTS}/report-card.jpg`, await card.body());
 });
 
 test("the app in Spanish", async ({ page }) => {

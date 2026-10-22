@@ -5355,3 +5355,30 @@ label.button {
   gap: 6px;
   flex-wrap: wrap;
 }
+
+/* Public report: the way in for people without an account. */
+.public-join {
+  margin: 1.5rem 0 0;
+  padding: 1.5rem 1.1rem;
+  border: 1px solid var(--me-line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--me-soft), var(--panel) 70%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  text-align: center;
+}
+.public-join h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.7rem;
+}
+.public-join > p {
+  margin: 0;
+  max-width: 34rem;
+  line-height: 1.55;
+}
+.public-join .lp-request {
+  margin-top: 0.4rem;
+}

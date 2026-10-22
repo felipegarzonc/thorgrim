@@ -178,7 +178,7 @@ function ClubPost() {
 }
 
 /** The private beta's door: a short form; an admin approves it and the invite goes out by email. */
-function RequestAccess() {
+export function RequestAccess() {
   const [form, setForm] = useState({ name: "", email: "", club: "", message: "", website: "" });
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [error, setError] = useState<string>();
