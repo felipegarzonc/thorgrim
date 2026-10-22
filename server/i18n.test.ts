@@ -6,6 +6,9 @@ describe("Spanish", () => {
     expect(translate("Your season", "es")).toBe("Tu temporada");
     expect(translate(" won ", "es")).toBe(" ganadas ");
     expect(translate("Your season", "en")).toBe("Your season");
+    expect(translate("End turn → Opponent", "es")).toBe("Fin del turno → Rival");
+    expect(translate("End turn → Sebastián", "es")).toBe("Fin del turno → Sebastián");
+    expect(translate("Opponent's turn.", "es")).toBe("Turno de Rival.");
   });
 
   it("translates text with names and numbers, and pieces inside it", () => {
