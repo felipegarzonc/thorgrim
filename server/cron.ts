@@ -3,6 +3,8 @@
 // - daily: reminders (an event tomorrow, a ladder result waiting for its
 //   second confirmation, an unanswered challenge) and tidying up.
 // - weekly: the club's week in a few lines, for every member.
+// - and the tournament meta (server/metaWatch.ts): Monday's chronicle and
+//   army alerts, and a daily look at Omnissiah.
 
 import { inSeason, seasonRanges, standings } from "../shared/ladder.ts";
 import type { Lang } from "../shared/i18n/index.ts";
@@ -17,6 +19,7 @@ import { allAccounts, clubMembers } from "./members.ts";
 import { eachClub } from "./clubs.ts";
 import { notify } from "./notices.ts";
 import { remindConfirmations } from "./sharedGames.ts";
+import { factionAlerts, watchOmnissiah, weeklyChronicle } from "./metaWatch.ts";
 
 /** Who scheduled work runs as: nobody's space, so every member hears it. */
 export const CRON_USER: UserCtx = { id: "thorgrim", name: "Thorgrim", isAdmin: true, prefix: "" };
@@ -46,6 +49,7 @@ export async function daily(now = new Date()) {
     report.expiredInvites = invites.length - keep.length;
     await saveInvites(keep);
   }
+  Object.assign(report, { omnissiah: await watchOmnissiah(now).catch((e: Error) => ({ error: e.message })) });
   return report;
 }
 
@@ -106,5 +110,10 @@ export async function weekly(now = new Date()) {
     );
     return { club: club.name, sent: members.length, digest };
   });
-  return { sent: clubs.reduce((s, c) => s + c.sent, 0), clubs };
+  // The meta: never let it hold up the club's own digest.
+  const meta = {
+    chronicle: await weeklyChronicle(now).catch((e: Error) => ({ error: e.message })),
+    alerts: await factionAlerts(now).catch((e: Error) => ({ error: e.message })),
+  };
+  return { sent: clubs.reduce((s, c) => s + c.sent, 0), clubs, meta };
 }

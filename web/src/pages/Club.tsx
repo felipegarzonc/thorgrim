@@ -210,9 +210,15 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
   const reactors = post.reactions.filter((r) => r.count);
 
   return (
-    <article className={`card post ${single ? "single" : ""}`}>
+    <article className={`card post ${single ? "single" : ""} ${post.kind === "chronicle" ? "chronicle" : ""}`}>
       <header className="post-head">
-        <span className="avatar post-avatar">{(post.authorName || "?").slice(0, 1).toUpperCase()}</span>
+        {post.kind === "chronicle" ? (
+          <span className="avatar post-avatar chronicle-seal" aria-hidden="true">
+            <Icon name="spark" />
+          </span>
+        ) : (
+          <span className="avatar post-avatar">{(post.authorName || "?").slice(0, 1).toUpperCase()}</span>
+        )}
         <span className="grow post-who">
           <b>{post.authorName}</b>
           <small className="muted">
@@ -300,7 +306,25 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
             </button>
           </form>
 
-          {post.canEdit && (
+          {post.canEdit && post.kind === "chronicle" && (
+            <div className="post-owner">
+              <button
+                type="button"
+                className="ghost danger"
+                disabled={busy}
+                onClick={() =>
+                  confirm("Remove this post from the club feed? Its comments and reactions go too.") &&
+                  call(async () => {
+                    await api(`/feed/${post.id}`, { method: "DELETE" });
+                    return null;
+                  })
+                }
+              >
+                <Icon name="trash" /> Remove post
+              </button>
+            </div>
+          )}
+          {post.canEdit && post.kind !== "chronicle" && (
             <div className="post-owner">
               {link ? (
                 <>

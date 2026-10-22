@@ -305,6 +305,8 @@ export interface BattleReport {
 /** A battle report posted to the club feed (members only). */
 export interface FeedPost {
   id: string;
+  /** A battle report (the default), or Thorgrim's weekly meta chronicle (no game behind it). */
+  kind?: "report" | "chronicle";
   createdAt: string;
   updatedAt?: string;
   authorId: string;

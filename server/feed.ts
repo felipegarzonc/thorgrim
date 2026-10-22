@@ -437,3 +437,32 @@ export async function readPublicPhoto(token: string, n: number): Promise<Buffer 
   if (!found || !Number.isInteger(n) || n < 0 || n >= found.post.photos) return undefined;
   return blobs().read(photoPath(found.post.id, n, found.space));
 }
+
+// ---------- Thorgrim's weekly meta chronicle ----------
+
+/** Posts the week's meta chronicle in the current club's feed (by Thorgrim, no game behind it), and tells the members. */
+export async function postChronicle(title: string, story: string, memberIds: string[]): Promise<FeedPost> {
+  const now = new Date().toISOString();
+  const post: FeedPost = {
+    id: newId(),
+    kind: "chronicle",
+    createdAt: now,
+    authorId: "thorgrim",
+    authorName: "Thorgrim",
+    gameId: "",
+    playerIds: [],
+    title,
+    story,
+    tone: "report",
+    photos: 0,
+    sides: [],
+    result: null,
+    battleplan: "",
+    badges: ["Meta chronicle"],
+    reactions: {},
+    comments: [],
+  };
+  await posts().save(post);
+  await notify(memberIds, (lang) => (lang === "es" ? `Thorgrim publicó la crónica del meta de la semana: ${title}` : `Thorgrim posted this week's meta chronicle: ${title}`), `#/club/${post.id}`);
+  return post;
+}

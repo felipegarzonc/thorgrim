@@ -22,7 +22,9 @@ import { reportFacts, reportSides } from "../shared/report.ts";
 import { cleanChanges, voiceOptions, type VoiceChange } from "../shared/voice.ts";
 import { currentUser } from "./context.ts";
 import { langNote } from "./lang.ts";
-import { metaDescriptions, metaSchemas, omnissiahReady, runMetaTool, type MetaTool } from "./omnissiah.ts";
+import type { Lang } from "../shared/i18n/index.ts";
+import { baseFaction } from "../shared/season.ts";
+import { metaDescriptions, metaSchemas, omnissiahGet, omnissiahReady, runMetaTool, type MetaTool } from "./omnissiah.ts";
 import { Collection } from "./store.ts";
 
 type Msg = Anthropic.Beta.BetaMessageParam;
@@ -96,7 +98,7 @@ Answer style:
 
 Web research: you can search and fetch a small set of community sites. Wahapedia (wahapedia.ru/aos4/...) has the core rules, the General's Handbook and faction pages: use it to check a rule when the player's library and the army data don't cover it, and cite the page URL. Prefer the rules library when both have it. Listhammer has recent tournament lists, Woehammer faction win rates, Goonhammer and others tactics articles: use them for meta and matchup questions, and say how recent the data is.${
   omnissiahReady()
-    ? "\n\nTournament data: for win rates, matchups and what lists are winning, use the aos_* tools first (daily data from Listhammer) and only search the web for what they don't cover. Say how many games a number rests on (few games is a hint, not a trend) and the date of the data. For why lists win or how a matchup plays, aos_articles has Tabletop Battles' tournament write-ups: quote a line at most and give the link."
+    ? "\n\nTournament data: for win rates, matchups and what lists are winning, use the aos_* tools first (daily data from Listhammer) and only search the web for what they don't cover. Say how many games a number rests on (few games is a hint, not a trend) and the date of the data. For why lists win or how a matchup plays, aos_articles has tournament write-ups from five sites: quote a line at most and give the link. To review or build a list, aos_compare_list (one of the player's saved lists, by name) and aos_winners_profile show what top tournament lists of the faction bring; Listhammer only keeps X-1 or better lists, so speak of what top lists choose, never of what loses. Before a game, aos_scouting. aos_trends for rising and falling armies, aos_player and aos_top_players for players, aos_region for Latin American events. Check aos_rules_updates when stats may predate a rules change."
     : ""
 }`;
 
@@ -647,11 +649,23 @@ const planSchema = {
   additionalProperties: false,
 };
 
+/** Tournament scouting for the plan (Omnissiah): how the opponent's army wins at events, and this matchup's record. */
+async function scoutingText(ctx: CoachContext): Promise<string | undefined> {
+  const mine = ctx.myList?.faction || ctx.game?.myFaction;
+  const theirs = ctx.opponentList?.faction || ctx.game?.opponentFaction;
+  if (!mine || !theirs) return undefined;
+  const sc = await omnissiahGet<Record<string, unknown>>("/scouting", { faction: baseFaction(mine), opponent: baseFaction(theirs) });
+  if (!sc) return undefined;
+  return `Tournament scouting (Omnissiah, from Listhammer's top lists and every tournament game; ${String(sc.window ?? "")}). Use it in theirThreats and the plan where it helps, with its numbers (say how many games a matchup record rests on, and its 95% range): ${JSON.stringify(sc)}`;
+}
+
 export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {}): Promise<Omit<GamePlan, "basis">> {
   await checkBudget();
   const started = Date.now();
   const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game)), ...(await tablePhoto(ctx.game))];
   content.push({ type: "text", text: stateText(ctx) });
+  const scouting = await scoutingText(ctx);
+  if (scouting) content.push({ type: "text", text: scouting });
   const s = ctx.game?.state;
   content.push({
     type: "text",
@@ -738,6 +752,38 @@ export async function battleReport(ctx: CoachContext, photoPaths: string[]): Pro
     .map((b) => b.text)
     .join("");
   const out = JSON.parse(text) as { title: string; story: string };
+  return { title: out.title.trim(), story: out.story.trim() };
+}
+
+// ---------- the week's meta, for the club feed ----------
+
+const CHRONICLE_SYSTEM = `${THORGRIM}
+
+Each Monday you write the club a short chronicle of the Age of Sigmar tournament meta, from the data you are given (Omnissiah: Listhammer's tournament tables and lists, and AoS articles and news). It is read on phones in the club feed.
+- What matters this week: armies rising or falling (with their numbers and how many games they rest on; a change on few games is a rumour, say so), what the top lists are doing, any rules change in the news, and one article worth reading, named with its site.
+- Facts only from the data. Never invent a number, a result, a list or an article. If the data is thin, say the week was quiet.
+- Your voice, but brief: 120-220 words, short paragraphs separated by a blank line, plain text, no lists or markdown. End with one line for the club's own games.
+- title: at most 8 words.`;
+
+/** The week's meta chronicle (title and story) in one language, from Omnissiah's data. */
+export async function metaChronicle(data: unknown, lang: Lang): Promise<{ title: string; story: string }> {
+  const response = await anthropic()
+    .beta.messages.stream({
+      model: REPORT_MODEL,
+      max_tokens: 4000,
+      system: `${CHRONICLE_SYSTEM}\n\nWrite in ${lang === "es" ? "Spanish (Latin American)" : "English"}. Keep army, unit and article names as they are.`,
+      messages: [{ role: "user", content: [{ type: "text", text: `<data>\n${JSON.stringify(data)}\n</data>\nWrite this week's chronicle.` }] }],
+      output_config: { effort: "low", format: { type: "json_schema", schema: reportSchema } },
+    })
+    .finalMessage();
+  await recordUsage(response.usage, HAIKU_PRICE);
+  if (response.stop_reason !== "end_turn") throw new Error(`Meta chronicle: ${response.stop_reason}`);
+  const out = JSON.parse(
+    response.content
+      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join(""),
+  ) as { title: string; story: string };
   return { title: out.title.trim(), story: out.story.trim() };
 }
 

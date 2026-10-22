@@ -1058,6 +1058,7 @@ export const ES_PHRASES: Record<string, string> = {
   "Wrong app password.": "Contraseña de la app incorrecta.",
   "Not found": "No encontrado",
   "Reference & tools": "Referencia y herramientas",
+  "Meta chronicle": "Crónica del meta",
   "Score the turn below, then end it": "Puntúa el turno abajo y luego termínalo",
   "Something went wrong": "Algo salió mal",
   "Your games are saved. Reload to carry on.": "Tus partidas están guardadas. Recarga para seguir.",

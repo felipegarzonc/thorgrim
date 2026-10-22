@@ -5816,3 +5816,11 @@ button:active:not(:disabled),
   text-align: center;
   padding: 2rem 1.2rem;
 }
+
+/* Thorgrim's weekly meta chronicle in the club feed. */
+.post.chronicle {
+  border-left: 3px solid var(--brass);
+}
+.chronicle-seal {
+  color: var(--brass);
+}
