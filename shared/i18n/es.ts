@@ -981,6 +981,8 @@ export const ES_PHRASES: Record<string, string> = {
   "Open BCP ↗": "Abrir BCP ↗",
   "Copy the result": "Copiar el resultado",
   "Battle tactics:": "Tácticas de batalla:",
+  "They become members when they open their invite and create their account. Manage invites in your Profile.":
+    "Serán miembros cuando abran su invitación y creen su cuenta. Gestiona las invitaciones en tu Perfil.",
   // ---------- badges ----------
   "Nail-biter": "Final de infarto",
   "Dead even": "Igualadísimo",
@@ -1143,6 +1145,8 @@ export const ES_PATTERNS: [RegExp, string][] = [
   [/^No confirmed results in (.+) yet$/, "Aún no hay resultados confirmados en $1"],
   [/^(.+) \(now\)$/, "$1 (actual)"],
   [/^Season (\d+)$/, "Temporada $1"],
+  [/^Invited, not joined yet \((\d+)\)$/, "Invitados, aún sin entrar ($1)"],
+  [/^Invite valid until (.+)$/, "Invitación válida hasta el $1"],
   [/^Access requests \((\d+)\)$/, "Solicitudes de acceso ($1)"],
   [/^Answered in the last month \((\d+)\)$/, "Respondidas en el último mes ($1)"],
   [/^Decline (.+)'s request\?$/, "¿Rechazar la solicitud de $1?"],

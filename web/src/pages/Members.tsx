@@ -7,7 +7,7 @@ import type { FeedPostView } from "../../../shared/types.ts";
 import { api, withKey } from "../api.ts";
 import { moment } from "../analytics.tsx";
 import { shrinkPhoto } from "../media.tsx";
-import { Avatar, FactionPicker, Icon, Sheet, useLoad, useMeta } from "../ui.tsx";
+import { Avatar, FactionPicker, Icon, Sheet, useLoad, useMeta, useRefreshOnReturn } from "../ui.tsx";
 import { Carousel } from "./Club.tsx";
 import { Skeleton } from "../motion.tsx";
 
@@ -161,8 +161,12 @@ function ChallengeSheet({ member, onClose }: { member: ClubMember; onClose: () =
 }
 
 export function MembersList() {
-  const [members] = useLoad<ClubMember[]>("/club/members");
-  const [ladder] = useLoad<{ me: string; results: ClubResult[] }>("/club/ladder");
+  const meta = useMeta();
+  const [members, reloadMembers] = useLoad<ClubMember[]>("/club/members");
+  const [ladder, reloadLadder] = useLoad<{ me: string; results: ClubResult[] }>("/club/ladder");
+  // Admins also see who is invited and hasn't joined yet.
+  const [invites, reloadInvites] = useLoad<{ id: string; note: string; expiresAt: string }[]>(meta?.user?.isAdmin ? "/admin/invites" : null);
+  useRefreshOnReturn(reloadMembers, reloadLadder, reloadInvites);
   if (!members) return <Skeleton />;
   const table = ladder ? standings(ladder.results) : [];
   const sorted = [...members].sort((a, b) => a.name.localeCompare(b.name));
@@ -184,15 +188,32 @@ export function MembersList() {
         );
       })}
     </div>
+    {invites && invites.length > 0 && (
+      <section>
+        <h2 className="section-title">Invited, not joined yet ({invites.length})</h2>
+        <div className="card rivals">
+          {invites.map((i) => (
+            <div key={i.id} className="rival">
+              <span className="grow">
+                {i.note || "Invite"}
+                <small className="muted">Invite valid until {new Date(i.expiresAt).toLocaleDateString()}</small>
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="small muted">They become members when they open their invite and create their account. Manage invites in your Profile.</p>
+      </section>
+    )}
     </div>
   );
 }
 
 export function MemberPage({ id }: { id: string }) {
   const meta = useMeta();
-  const [members] = useLoad<ClubMember[]>("/club/members");
-  const [ladder] = useLoad<{ me: string; results: ClubResult[] }>("/club/ladder");
-  const [posts] = useLoad<FeedPostView[]>("/feed");
+  const [members, reloadMembers] = useLoad<ClubMember[]>("/club/members");
+  const [ladder, reloadLadder] = useLoad<{ me: string; results: ClubResult[] }>("/club/ladder");
+  const [posts, reloadPosts] = useLoad<FeedPostView[]>("/feed");
+  useRefreshOnReturn(reloadMembers, reloadLadder, reloadPosts);
   const [challenging, setChallenging] = useState(false);
   const [showcase] = useLoad<ShowcaseArmy[]>(`/club/members/${id}/showcase`);
   if (!members || !ladder) return <Skeleton />;

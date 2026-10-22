@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { accessKey, api, signOut } from "../api.ts";
-import { Card, Icon, Seg, useLoad, useMeta } from "../ui.tsx";
+import { Card, Icon, Seg, useLoad, useMeta, useRefreshOnReturn } from "../ui.tsx";
 import { langSetting, setLangSetting } from "../i18n.ts";
 import { shareText, shareUrl } from "../links.ts";
 import { Setup } from "./Auth.tsx";
@@ -257,6 +257,7 @@ function PlayersAdmin({ selfId }: { selfId: string }) {
   const [players, reloadPlayers] = useLoad<Player[]>("/admin/users");
   const [invites, reloadInvites] = useLoad<Invite[]>("/admin/invites");
   const [settings, reloadSettings] = useLoad<{ defaultLimitUsd: number }>("/admin/settings");
+  useRefreshOnReturn(reloadPlayers, reloadInvites);
   const [note, setNote] = useState("");
   const [role, setRole] = useState<"player" | "admin">("player");
   const [link, setLink] = useState<{ url: string; note: string }>();
@@ -451,6 +452,7 @@ interface AccessRequest {
 /** Private beta: people who asked for access from the landing page. Approve sends them an invite by email. */
 function AccessRequests() {
   const [data, reload] = useLoad<{ requests: AccessRequest[]; mail: boolean }>("/admin/access-requests");
+  useRefreshOnReturn(reload);
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
   // An approval whose email couldn't go out: the admin sends the link.

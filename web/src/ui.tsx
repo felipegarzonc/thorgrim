@@ -35,6 +35,19 @@ export function useLoad<T>(path: string | null, deps: unknown[] = []): [T | unde
   return [data, () => setTick((t) => t + 1), error];
 }
 
+/** Load again whenever the player comes back to the app (another tab, the phone unlocked): lists stay current. */
+export function useRefreshOnReturn(...reloads: (() => void)[]) {
+  useEffect(() => {
+    const again = () => document.visibilityState === "visible" && reloads.forEach((r) => r());
+    document.addEventListener("visibilitychange", again);
+    window.addEventListener("focus", again);
+    return () => {
+      document.removeEventListener("visibilitychange", again);
+      window.removeEventListener("focus", again);
+    };
+  }, []);
+}
+
 export function Card({ title, children, actions, className }: { title?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string }) {
   return (
     <section className={`card ${className ?? ""}`}>
