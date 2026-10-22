@@ -147,3 +147,29 @@ describe("army showcase", () => {
     expect(await runAs(ben, () => sc.deleteArmy(army.id))).toEqual([]);
   });
 });
+
+describe("access requests (private beta)", () => {
+  it("a visitor asks, the admin hears of it and approves: an invite link", async () => {
+    const ac = await import("./access.ts");
+    const notices = await import("./notices.ts");
+    const accounts = await import("./accounts.ts");
+    await expect(ac.requestAccess({ name: "Leo", email: "nope" }, "1.1.1.1")).rejects.toThrow(/email/);
+    await ac.requestAccess({ name: "Leo", email: "Leo@Example.com", club: "Dragon Club", lang: "es" }, "1.1.1.1");
+    await ac.requestAccess({ name: "Leo again", email: "leo@example.com" }, "1.1.1.1"); // already pending: no second one
+    await ac.requestAccess({ name: "Bot", email: "bot@example.com", website: "spam.example" }, "1.1.1.1"); // the hidden field
+    await new Promise((r) => setTimeout(r, 50));
+    expect((await runAs(ana, () => notices.myNotices())).some((n) => n.text.includes("New access request: Leo (Dragon Club)"))).toBe(true);
+
+    const list = await runAs(ana, () => ac.listRequests());
+    expect(list.map((r) => `${r.email} ${r.status} ${r.lang}`)).toEqual(["leo@example.com pending es"]);
+    const out = await runAs(ana, () => ac.approve(list[0].id, "https://thorgrim.test"));
+    expect(out.request).toMatchObject({ status: "approved", emailed: false });
+    expect(out.link).toMatch(/^https:\/\/thorgrim\.test\/#\/join\/[\w-]+$/);
+    expect(out.email.subject).toBe("Tu acceso a Thorgrim está listo");
+    expect(await accounts.findInvite(out.link.split("/").pop()!)).toMatchObject({ note: "Leo · Dragon Club", role: "player" });
+    await expect(runAs(ana, () => ac.approve(list[0].id, "https://thorgrim.test"))).rejects.toThrow(/already answered/);
+
+    for (let i = 0; i < 5; i++) await ac.requestAccess({ name: "Spam", email: `s${i}@example.com` }, "2.2.2.2").catch(() => undefined);
+    await expect(ac.requestAccess({ name: "Spam", email: "s9@example.com" }, "2.2.2.2")).rejects.toThrow(/Slow down/);
+  });
+});

@@ -53,6 +53,8 @@ import { Collection, newId } from "./store.ts";
 import { blankGame } from "./newGame.ts";
 import { rememberLang } from "./lang.ts";
 import { clubMembers } from "./members.ts";
+import { approve as approveRequest, decline as declineRequest, listRequests, requestAccess } from "./access.ts";
+import { mailReady } from "./mail.ts";
 import { addPhoto as addShowcasePhoto, deleteArmy, deletePhoto as deleteShowcasePhoto, readPhoto as readShowcasePhoto, saveArmy, showcaseOf } from "./showcase.ts";
 import { accept as acceptChallenge, challenge, decline as declineChallenge, myChallenges, withdraw as withdrawChallenge } from "./challenges.ts";
 import { createEvent, deleteEvent, editEvent, finishEvent, getEvent, joinEvent, leaveEvent, listEvents, pairRound, setTableResult, tableGame, unpairRound } from "./events.ts";
@@ -319,6 +321,11 @@ app.delete("/api/admin/invites/:id", requireAdmin, async (req, res) => {
   await saveInvites((await listInvites()).filter((i) => i.id !== param(req, "id")));
   res.json({ ok: true });
 });
+app.get("/api/admin/access-requests", requireAdmin, async (_req, res) => res.json({ requests: await listRequests(), mail: mailReady() }));
+app.post("/api/admin/access-requests/:id/approve", requireAdmin, async (req, res) =>
+  res.json(await approveRequest(param(req, "id"), process.env.APP_URL?.trim().replace(/\/$/, "") || `${req.protocol}://${req.get("host")}`)),
+);
+app.post("/api/admin/access-requests/:id/decline", requireAdmin, async (req, res) => res.json(await declineRequest(param(req, "id"))));
 app.get("/api/admin/settings", requireAdmin, async (_req, res) => res.json(await accountSettings()));
 app.put("/api/admin/settings", requireAdmin, async (req, res) => {
   const defaultLimitUsd = Math.max(0, Number(req.body.defaultLimitUsd) || 0);
@@ -805,6 +812,11 @@ app.post("/api/notices/read", async (_req, res) => {
   res.json({ ok: true });
 });
 // A battle report shared outside the club (no sign-in).
+// Private beta: a visitor asks for access (server/access.ts).
+app.post("/api/public/access-requests", async (req, res) => {
+  await requestAccess(req.body ?? {}, req.ip ?? "?");
+  res.json({ ok: true });
+});
 app.get("/api/public/reports/:token", async (req, res) => {
   const found = await publicPost(param(req, "token"));
   return found ? res.json(found.view) : res.status(404).json({ error: "This report isn't shared any more." });

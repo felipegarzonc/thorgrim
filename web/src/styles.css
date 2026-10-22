@@ -5239,3 +5239,119 @@ label.button {
   flex-direction: column;
   gap: 8px;
 }
+
+/* Request access (landing). */
+.lp-request {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  box-sizing: border-box;
+}
+.lp-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.lp-fields > label {
+  flex: 1 1 200px;
+}
+.lp-request label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.lp-request input,
+.lp-request textarea {
+  font: inherit;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-height: 48px;
+  box-sizing: border-box;
+}
+.lp-request input:focus-visible,
+.lp-request textarea:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 1px;
+}
+.lp-request button {
+  border: 0;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.lp-request button:disabled {
+  opacity: 0.7;
+}
+.lp-honey {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.lp-request-done {
+  flex-direction: row;
+  align-items: center;
+  border-color: var(--me-line);
+  background: var(--me-soft);
+}
+.lp-request-done p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Access requests (admin profile). */
+.access-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.access-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.access-item:last-child {
+  border-bottom: 0;
+}
+.access-item small {
+  display: block;
+}
+.access-item.done {
+  align-items: center;
+}
+.access-msg {
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+.access-send {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--me-line);
+  background: var(--me-soft);
+}
+.access-send p {
+  margin: 0 0 8px;
+}
+.access-send .row,
+.access-item .row {
+  gap: 6px;
+  flex-wrap: wrap;
+}

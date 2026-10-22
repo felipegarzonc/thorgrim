@@ -2,7 +2,9 @@
 // #/welcome for anyone). Its buttons lead to sign-in; invite and join links
 // skip it.
 
-import type { MouseEvent, ReactNode } from "react";
+import { useState, type ChangeEvent, type FormEvent, type MouseEvent, type ReactNode } from "react";
+import { publicApi } from "../api.ts";
+import { currentLang } from "../i18n.ts";
 
 const SIGN_IN = "#/signin";
 
@@ -175,6 +177,63 @@ function ClubPost() {
   );
 }
 
+/** The private beta's door: a short form; an admin approves it and the invite goes out by email. */
+function RequestAccess() {
+  const [form, setForm] = useState({ name: "", email: "", club: "", message: "", website: "" });
+  const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
+  const [error, setError] = useState<string>();
+  const set = (k: keyof typeof form) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const send = async (e: FormEvent) => {
+    e.preventDefault();
+    setState("sending");
+    setError(undefined);
+    try {
+      await publicApi("/public/access-requests", { ...form, lang: currentLang() });
+      setState("sent");
+    } catch (err) {
+      setError((err as Error).message);
+      setState("idle");
+    }
+  };
+  if (state === "sent")
+    return (
+      <div className="lp-request lp-request-done" role="status">
+        <ThorgrimSeal size={40} />
+        <p>
+          <b>Request received.</b> Thorgrim will send word to {form.email} when your access is approved.
+        </p>
+      </div>
+    );
+  return (
+    <form className="lp-request" onSubmit={send}>
+      <div className="lp-fields">
+        <label>
+          <span>Your name</span>
+          <input value={form.name} onChange={set("name")} required maxLength={60} autoComplete="name" />
+        </label>
+        <label>
+          <span>Email</span>
+          <input type="email" value={form.email} onChange={set("email")} required maxLength={254} autoComplete="email" />
+        </label>
+      </div>
+      <label>
+        <span>Your club or gaming group (optional)</span>
+        <input value={form.club} onChange={set("club")} maxLength={80} />
+      </label>
+      <label>
+        <span>Anything you'd like to tell us (optional)</span>
+        <textarea rows={3} value={form.message} onChange={set("message")} maxLength={500} placeholder="e.g. We play every Thursday, about 10 of us." />
+      </label>
+      {/* Only bots fill this in. */}
+      <input className="lp-honey" tabIndex={-1} autoComplete="off" aria-hidden="true" value={form.website} onChange={set("website")} name="website" />
+      {error && <p className="error small">{error}</p>}
+      <button type="submit" className="lp-btn primary" disabled={state === "sending"}>
+        {state === "sending" ? "Sending…" : "Request access"}
+      </button>
+    </form>
+  );
+}
+
 export function Landing() {
   return (
     <div className="landing">
@@ -208,14 +267,14 @@ export function Landing() {
           </p>
           <Quote>Measure your charges twice, commander. I've seen more armies lost to a failed charge than to any daemon.</Quote>
           <div className="lp-actions">
-            <a href={SIGN_IN} className="lp-btn primary">
-              Start a game
+            <a href="#lp-request" className="lp-btn primary" onClick={jump}>
+              Request access
             </a>
             <a href="#lp-table" className="lp-btn outline" onClick={jump}>
               See how it works
             </a>
           </div>
-          <p className="lp-small">In English and Español · keeps working without signal at the table · invite-only for your club</p>
+          <p className="lp-small">Private beta · in English and Español · keeps working without signal at the table</p>
         </div>
         <div className="lp-hero-art">
           <PhoneRound />
@@ -388,16 +447,15 @@ export function Landing() {
         </div>
       </section>
 
-      <section className="lp-wrap lp-final">
+      <section id="lp-request" className="lp-wrap lp-final">
         <ThorgrimSeal size={56} />
         <h2>Gather your warband.</h2>
-        <p className="lp-lead">Thorgrim runs one club at a time. Ask your club's admin for an invite link, then sign in and start your first game.</p>
+        <p className="lp-lead">Thorgrim is in private beta. Ask for access: when it's approved, your invite arrives by email.</p>
         <Quote>The dice are waiting, commander. So am I.</Quote>
-        <div className="lp-actions center">
-          <a href={SIGN_IN} className="lp-btn primary">
-            Sign in
-          </a>
-        </div>
+        <RequestAccess />
+        <p className="lp-small">
+          Already have an account or an invite? <a href={SIGN_IN}>Sign in</a>
+        </p>
       </section>
 
       <footer className="lp-footer">

@@ -245,6 +245,7 @@ export function ProfilePage() {
         </Card>
       )}
 
+      {meta?.user?.isAdmin && me.accounts && <AccessRequests />}
       {meta?.user?.isAdmin && me.accounts && <PlayersAdmin selfId={me.user.id} />}
     </div>
   );
@@ -431,5 +432,117 @@ function PlayersAdmin({ selfId }: { selfId: string }) {
         </ul>
       </Card>
     </>
+  );
+}
+
+interface AccessRequest {
+  id: string;
+  name: string;
+  email: string;
+  club?: string;
+  message?: string;
+  createdAt: string;
+  status: "pending" | "approved" | "declined";
+  decidedAt?: string;
+  emailed?: boolean;
+}
+
+/** Private beta: people who asked for access from the landing page. Approve sends them an invite by email. */
+function AccessRequests() {
+  const [data, reload] = useLoad<{ requests: AccessRequest[]; mail: boolean }>("/admin/access-requests");
+  const [busy, setBusy] = useState<string>();
+  const [error, setError] = useState<string>();
+  // An approval whose email couldn't go out: the admin sends the link.
+  const [toSend, setToSend] = useState<{ request: AccessRequest; link: string; email: { subject: string; text: string } }>();
+  if (!data) return null;
+  const pending = data.requests.filter((r) => r.status === "pending");
+  const decided = data.requests.filter((r) => r.status !== "pending");
+  const act = async (r: AccessRequest, what: "approve" | "decline") => {
+    if (what === "decline" && !confirm(`Decline ${r.name}'s request?`)) return;
+    setBusy(r.id);
+    setError(undefined);
+    try {
+      const out = await api<{ request: AccessRequest; link: string; email: { subject: string; text: string } }>(`/admin/access-requests/${r.id}/${what}`, { method: "POST" });
+      if (what === "approve" && !out.request.emailed) setToSend(out);
+      reload();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+  return (
+    <Card title={pending.length ? `Access requests (${pending.length})` : "Access requests"}>
+      {!data.mail && (
+        <p className="small muted">
+          Invites aren't emailed automatically yet (email isn't set up), so after approving you send the link yourself: one tap opens your email with the message
+          written.
+        </p>
+      )}
+      {!pending.length && <p className="small muted">No requests waiting. People ask for access from the landing page.</p>}
+      <ul className="access-list">
+        {pending.map((r) => (
+          <li key={r.id} className="access-item">
+            <div className="grow">
+              <b>{r.name}</b>
+              <small className="muted">
+                {r.email}
+                {r.club ? ` · ${r.club}` : ""} · {new Date(r.createdAt).toLocaleDateString()}
+              </small>
+              {r.message && (
+                <p className="access-msg" translate="no">
+                  {r.message}
+                </p>
+              )}
+            </div>
+            <div className="row">
+              <button type="button" className="primary small" disabled={busy === r.id} onClick={() => act(r, "approve")}>
+                Approve
+              </button>
+              <button type="button" className="ghost small" disabled={busy === r.id} onClick={() => act(r, "decline")}>
+                Decline
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {toSend && (
+        <div className="access-send">
+          <p className="small">
+            <b>{toSend.request.name}</b> is approved. Send them their invite:
+          </p>
+          <div className="row">
+            <a
+              className="button primary small"
+              href={`mailto:${encodeURIComponent(toSend.request.email)}?subject=${encodeURIComponent(toSend.email.subject)}&body=${encodeURIComponent(toSend.email.text)}`}
+            >
+              Send by email
+            </a>
+            <button type="button" className="small" onClick={() => void navigator.clipboard?.writeText(toSend.link)}>
+              Copy link
+            </button>
+            <button type="button" className="ghost small" onClick={() => setToSend(undefined)}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <p className="error small">{error}</p>}
+      {decided.length > 0 && (
+        <details>
+          <summary className="small muted">Answered in the last month ({decided.length})</summary>
+          <ul className="access-list">
+            {decided.map((r) => (
+              <li key={r.id} className="access-item done">
+                <span className="grow">
+                  {r.name} <small className="muted">{r.email}</small>
+                </span>
+                <small className="muted">{r.status === "approved" ? (r.emailed ? "Approved · emailed" : "Approved") : "Declined"}</small>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </Card>
   );
 }
