@@ -6,6 +6,7 @@ import type { BattleDetail, FeedPost } from "../../../shared/types.ts";
 import { publicApi } from "../api.ts";
 import { PostBody } from "./Club.tsx";
 import { RequestAccess, ThorgrimSeal } from "./Landing.tsx";
+import { Skeleton } from "../motion.tsx";
 
 type PublicPost = Pick<FeedPost, "title" | "story" | "photos" | "sides" | "battleplan" | "points" | "date" | "badges" | "createdAt" | "updatedAt" | "result"> & {
   detail?: Pick<BattleDetail, "rounds" | "tactics">;
@@ -25,7 +26,7 @@ export function PublicReport({ token }: { token: string }) {
   return (
     <main className="public-report">
       {error && <p className="muted">{error}</p>}
-      {!post && !error && <p className="muted">Loading…</p>}
+      {!post && !error && <Skeleton />}
       {post && (
         <article className="card post single">
           <PostBody post={post} photoUrl={(n) => `/api/public/reports/${encodeURIComponent(token)}/photo/${n}?v=${encodeURIComponent(post.updatedAt ?? post.createdAt)}`} />

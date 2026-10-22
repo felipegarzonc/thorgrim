@@ -5437,3 +5437,285 @@ label.button {
   justify-content: center;
   gap: 0.5rem;
 }
+
+/* ---------- motion (web/src/motion.tsx) ---------- */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes bump {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.18);
+    color: var(--brass);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes gain-up {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px) scale(0.8);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -6px) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -46px) scale(1);
+  }
+}
+@keyframes stamp {
+  0% {
+    transform: scale(1.9) rotate(-14deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.9) rotate(3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+    letter-spacing: 0.5em;
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+  }
+}
+@keyframes spark {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(0.3);
+    opacity: 0;
+  }
+}
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.45) rotate(-8deg);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: -200px 0;
+  }
+  to {
+    background-position: 200px 0;
+  }
+}
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--army, var(--brass)), 0 0 18px -6px var(--army, var(--brass));
+  }
+  50% {
+    box-shadow: 0 0 0 1px var(--army, var(--brass)), 0 0 26px -2px var(--army, var(--brass));
+  }
+}
+
+/* Lists come in one after the other. */
+.rise > * {
+  animation: rise-in 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.rise > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+.rise > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+.rise > *:nth-child(4) {
+  animation-delay: 120ms;
+}
+.rise > *:nth-child(5) {
+  animation-delay: 160ms;
+}
+.rise > *:nth-child(n + 6) {
+  animation-delay: 200ms;
+}
+
+/* Buttons give under the finger. */
+button,
+.button,
+.lp-btn,
+.quick,
+.react {
+  transition:
+    transform 0.12s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+button:active:not(:disabled),
+.button:active,
+.lp-btn:active,
+.quick:active {
+  transform: scale(0.96);
+}
+
+/* Numbers that change pulse; points scored float up. */
+.count-up {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+}
+.count-up.bump {
+  animation: bump 0.5s ease;
+}
+.score-vp {
+  position: relative;
+}
+.gain {
+  position: absolute;
+  left: 50%;
+  top: -0.2rem;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: var(--brass);
+  pointer-events: none;
+  animation: gain-up 1.25s ease-out forwards;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+/* The player whose turn it is glows in their army's colour. */
+.score-card {
+  transition:
+    border-color 0.35s ease,
+    background-color 0.35s ease,
+    transform 0.35s ease;
+}
+.score-card.active {
+  animation: glow 3s ease-in-out infinite;
+}
+.turn-in {
+  animation: slide-in 0.35s ease both;
+}
+.phase-chips button {
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease,
+    transform 0.25s ease;
+}
+.phase-chips button.current {
+  transform: scale(1.06);
+}
+
+/* A battle tactic step is stamped like a seal. */
+.seal.stamp {
+  animation: stamp 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.2);
+}
+
+/* Victory. */
+.victory-title {
+  position: relative;
+}
+.victory-title.reveal {
+  animation: reveal 0.9s ease both;
+}
+.sparks {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.sparks i {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brass);
+  box-shadow: 0 0 8px var(--brass);
+  animation: spark 1.1s ease-out var(--d) both;
+}
+
+/* Club reactions pop. */
+.react-pop,
+.react-ico {
+  display: inline-flex;
+}
+.react-pop {
+  animation: pop 0.45s ease;
+}
+
+/* Shapes while a screen loads. */
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.sk {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--panel-2) 0, var(--panel-3) 50%, var(--panel-2) 100%) no-repeat;
+  background-size: 400px 100%;
+  background-color: var(--panel-2);
+  animation: shimmer 1.3s linear infinite;
+}
+.sk-title {
+  height: 18px;
+  width: 60%;
+}
+.sk-line {
+  width: 92%;
+}
+.sk-line.short {
+  width: 45%;
+}
+
+/* The phone asked for less motion: everything stays still. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

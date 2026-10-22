@@ -7,6 +7,7 @@ import type { ArmyList, Game } from "../../../shared/types.ts";
 import { sideInfo } from "../gameView.tsx";
 import { Avatar, useLoad } from "../ui.tsx";
 import { Stats, WinRateChart } from "./Home.tsx";
+import { Skeleton } from "../motion.tsx";
 
 const pct = (r: Record3) => `${Math.round((r.won / r.played) * 100)}%`;
 const wdl = (r: Record3) => `${r.won}-${r.drawn}-${r.lost}`;
@@ -14,7 +15,7 @@ const wdl = (r: Record3) => `${r.won}-${r.drawn}-${r.lost}`;
 export function StatsPage() {
   const [games] = useLoad<Game[]>("/games");
   const [lists] = useLoad<ArmyList[]>("/lists");
-  if (!games) return <p className="muted">Loading…</p>;
+  if (!games) return <Skeleton />;
   const finished = games.filter((g) => result(g)).sort((a, b) => (a.date ?? a.createdAt).localeCompare(b.date ?? b.createdAt));
   if (!finished.length) return <p className="muted">Finish a game to see your stats here.</p>;
   const s = playerStats(finished, (g, side) => sideInfo(g, lists, side).faction);
@@ -23,7 +24,7 @@ export function StatsPage() {
   const worst = s.tactics.length > 1 ? s.tactics[s.tactics.length - 1] : undefined;
 
   return (
-    <div className="stack stats-page">
+    <div className="stack stats-page rise">
       {finished.length >= 2 && (
         <section className="card">
           <WinRateChart games={finished} lists={lists} />

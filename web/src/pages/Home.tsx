@@ -8,6 +8,7 @@ import { Avatar, Icon, useLoad, useMeta } from "../ui.tsx";
 import { gamePhotoUrl } from "./report.tsx";
 import { Challenges } from "./Members.tsx";
 import { moment } from "../analytics.tsx";
+import { Skeleton } from "../motion.tsx";
 
 export async function newGame() {
   const g = await api<Game>("/games", { method: "POST", json: {} });
@@ -22,7 +23,7 @@ export function HomePage({ unread = 0 }: { unread?: number }) {
   const [games] = useLoad<Game[]>("/games");
   const [lists] = useLoad<ArmyList[]>("/lists");
   const [posts] = useLoad<FeedPostView[]>("/feed");
-  if (!games) return <p className="muted">Loading…</p>;
+  if (!games) return <Skeleton />;
 
   const live = games.filter((g) => !g.finished).sort(byDate).reverse()[0];
   const finished = games.filter((g) => g.finished).sort(byDate);
@@ -31,7 +32,7 @@ export function HomePage({ unread = 0 }: { unread?: number }) {
   const post = posts?.[0];
 
   return (
-    <div className="stack home">
+    <div className="stack home rise">
       <div className="page-head home-head">
         <a className="me-link" href="#/profile" aria-label="Your profile">
           <span className="avatar me-avatar">{(meta?.user?.name || "T").slice(0, 1).toUpperCase()}</span>

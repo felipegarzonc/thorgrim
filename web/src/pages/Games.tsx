@@ -41,7 +41,7 @@ export function GamesPage() {
     .sort((a, b) => (b.date ?? b.createdAt).localeCompare(a.date ?? a.createdAt) || b.createdAt.localeCompare(a.createdAt));
 
   return (
-    <div className="stack">
+    <div className="stack rise">
       <div className="page-head">
         <h1 className="grow">Games</h1>
         {!!games?.length && (

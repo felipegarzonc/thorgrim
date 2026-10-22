@@ -13,6 +13,7 @@ import { Story } from "./report.tsx";
 import { shareUrl } from "../links.ts";
 import { drawReportCard } from "../reportCard.ts";
 import { moment } from "../analytics.tsx";
+import { buzz, Skeleton } from "../motion.tsx";
 import { EventPage, EventsList } from "./Events.tsx";
 import { MemberPage, MembersList } from "./Members.tsx";
 
@@ -173,6 +174,7 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string>();
+  const [popped, setPopped] = useState<string>();
   const call = async (fn: () => Promise<FeedPostView | null>) => {
     setBusy(true);
     setMsg(undefined);
@@ -233,9 +235,15 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
               aria-label={`${look.label}${r.count ? `, ${r.count}` : ""}`}
               title={look.label}
               disabled={busy}
-              onClick={() => call(() => api<FeedPostView>(`/feed/${post.id}/react`, { method: "POST", json: { emoji: r.emoji } }))}
+              onClick={() => {
+                buzz(14);
+                setPopped(r.mine ? undefined : `${r.emoji}-${Date.now()}`);
+                void call(() => api<FeedPostView>(`/feed/${post.id}/react`, { method: "POST", json: { emoji: r.emoji } }));
+              }}
             >
-              <Icon name={look.icon} />
+              <span key={popped?.startsWith(r.emoji) ? popped : r.emoji} className={popped?.startsWith(r.emoji) ? "react-pop" : "react-ico"}>
+                <Icon name={look.icon} />
+              </span>
               {r.count > 0 && <span>{r.count}</span>}
             </button>
           );
@@ -360,7 +368,7 @@ function Ladder() {
   const meta = useMeta();
   const [data, reload] = useLoad<{ me: string; results: ClubResult[]; seasons: Season[] }>("/club/ladder");
   const [pick, setPick] = useState<string>();
-  if (!data) return <p className="muted">Loading…</p>;
+  if (!data) return <Skeleton />;
   const ranges = seasonRanges(data.seasons ?? []);
   const season = pick === "all" ? undefined : (ranges.find((s) => s.id === pick) ?? ranges[0]);
   const results = season ? inSeason(data.results, season) : data.results;
@@ -535,7 +543,7 @@ function Activity() {
     if (!notices?.some((n) => !n.read)) return;
     void api("/notices/read", { method: "POST" }).then(() => window.dispatchEvent(new Event(CLUB_SEEN)));
   }, [notices]);
-  if (!notices) return <p className="muted">Loading…</p>;
+  if (!notices) return <Skeleton />;
   if (!notices.length) return <p className="muted">Nothing yet. Comments on your posts, reports of your games and opponents joining your games show up here.</p>;
   return (
     <ul className="notices">
@@ -632,7 +640,7 @@ function ClubHome({ tab, postId, unreadNotices }: { tab: ClubTab; postId?: strin
             </div>
           )}
           {error && <p className="error">{error}</p>}
-          {!posts && !error && <p className="muted">Loading…</p>}
+          {!posts && !error && <Skeleton />}
           {postId && posts && (
             <a className="small" href="#/club">
               ← The whole feed
@@ -645,9 +653,11 @@ function ClubHome({ tab, postId, unreadNotices }: { tab: ClubTab; postId?: strin
               <p className="muted">When a game ends, open its Results: add photos of the battle, let Thorgrim write the story, and post it here for the club.</p>
             </section>
           )}
-          {shown?.map((p) => (
-            <PostCard key={p.id} post={p} single={!!postId} changed={changed(p.id)} />
-          ))}
+          <div className="stack rise">
+            {shown?.map((p) => (
+              <PostCard key={p.id} post={p} single={!!postId} changed={changed(p.id)} />
+            ))}
+          </div>
         </>
       )}
     </div>

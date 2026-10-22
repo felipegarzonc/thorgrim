@@ -9,6 +9,7 @@ import { api } from "../api.ts";
 import { moment } from "../analytics.tsx";
 import { bcpUrl } from "../../../shared/bcp.ts";
 import { Avatar, FactionPicker, Icon, Seg, Sheet, useLoad, useMeta } from "../ui.tsx";
+import { Skeleton } from "../motion.tsx";
 
 export interface EventView extends ClubEvent {
   results: Record<string, TableResult & { confirmed: boolean }>;
@@ -26,11 +27,11 @@ export function EventsList() {
   const [creating, setCreating] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
   return (
-    <div className="stack">
+    <div className="stack rise">
       <button type="button" className="primary wide" onClick={() => setCreating(true)}>
         <Icon name="plus" /> Organise a club night or tournament
       </button>
-      {!events && <p className="muted">Loading…</p>}
+      {!events && <Skeleton />}
       {events && !events.length && (
         <section className="card empty">
           <h2>No events yet</h2>
@@ -195,7 +196,7 @@ export function EventPage({ id }: { id: string }) {
   const [scoring, setScoring] = useState<{ round: number; table: number }>();
   const e = event ?? loaded;
   if (loadError) return <p className="muted">{loadError}</p>;
-  if (!e) return <p className="muted">Loading…</p>;
+  if (!e) return <Skeleton />;
 
   const name = (pid: string | null) => e.players.find((p) => p.id === pid)?.name ?? "?";
   const faction = (pid?: string | null) => e.players.find((p) => p.id === pid)?.faction;

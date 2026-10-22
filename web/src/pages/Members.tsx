@@ -9,6 +9,7 @@ import { moment } from "../analytics.tsx";
 import { shrinkPhoto } from "../media.tsx";
 import { Avatar, FactionPicker, Icon, Sheet, useLoad, useMeta } from "../ui.tsx";
 import { Carousel } from "./Club.tsx";
+import { Skeleton } from "../motion.tsx";
 
 export interface ClubMember {
   id: string;
@@ -162,7 +163,7 @@ function ChallengeSheet({ member, onClose }: { member: ClubMember; onClose: () =
 export function MembersList() {
   const [members] = useLoad<ClubMember[]>("/club/members");
   const [ladder] = useLoad<{ me: string; results: ClubResult[] }>("/club/ladder");
-  if (!members) return <p className="muted">Loading…</p>;
+  if (!members) return <Skeleton />;
   const table = ladder ? standings(ladder.results) : [];
   const sorted = [...members].sort((a, b) => a.name.localeCompare(b.name));
   return (
@@ -194,7 +195,7 @@ export function MemberPage({ id }: { id: string }) {
   const [posts] = useLoad<FeedPostView[]>("/feed");
   const [challenging, setChallenging] = useState(false);
   const [showcase] = useLoad<ShowcaseArmy[]>(`/club/members/${id}/showcase`);
-  if (!members || !ladder) return <p className="muted">Loading…</p>;
+  if (!members || !ladder) return <Skeleton />;
   const member = members.find((m) => m.id === id);
   if (!member) return <p className="muted">That member isn't in the club any more.</p>;
   const isMe = id === meta?.user?.id;

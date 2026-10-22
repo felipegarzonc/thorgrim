@@ -23,6 +23,7 @@ import { WarscrollCard } from "./Lists.tsx";
 import { BattleReportCard, ReviewCard } from "./report.tsx";
 import { shareText, shareUrl } from "../links.ts";
 import { moment } from "../analytics.tsx";
+import { buzz, CountUp, Gain, Sparks } from "../motion.tsx";
 import { BCP_HOME, bcpUrl } from "../../../shared/bcp.ts";
 import { translate } from "../../../shared/i18n/index.ts";
 import { currentLang } from "../i18n.ts";
@@ -1587,7 +1588,7 @@ function Scoreboard({ game, names, factions, isLive }: { game: Game; names: Reco
       <div className="mini-score" aria-hidden="true">
         {(["me", "opponent"] as const).map((side) => (
           <span key={side} className={`mini-side ${isLive && s.activePlayer === side ? "on" : ""}`} style={{ ["--army" as string]: armyColor(factions[side]) }}>
-            <b>{names[side]}</b> <span className="mini-vp">{s.vp[side]}</span> <small>{s.cp[side]} CP</small>
+            <b>{names[side]}</b> <CountUp value={s.vp[side]} className="mini-vp" /> <small>{s.cp[side]} CP</small>
           </span>
         ))}
         {isLive && <span className="mini-phase">{s.phase}</span>}
@@ -1609,7 +1610,10 @@ function Scoreboard({ game, names, factions, isLive }: { game: Game; names: Reco
             </div>
             {isLive && <span className={`turn-tag ${active ? "on" : ""}`}>{active ? (side === "me" ? "YOUR TURN" : "THEIR TURN") : "WAITING"}</span>}
             <div className="score-vp">
-              <span className="big-score">{s.vp[side]}</span>
+              <span className="big-score">
+                <CountUp value={s.vp[side]} />
+              </span>
+              <Gain value={s.vp[side]} />
               <small>VP</small>
             </div>
             <div className="pips" role="img" aria-label={`${cp} command points`}>
@@ -1637,10 +1641,16 @@ function Scoreboard({ game, names, factions, isLive }: { game: Game; names: Reco
 /** A battle tactic card's three steps as seals: done, next, later. */
 function TacticSeals({ done, next }: { done: Set<TacticStep>; next?: TacticStep }) {
   const steps: TacticStep[] = ["affray", "strike", "domination"];
+  // Seals done since this was first shown get stamped.
+  const seen = useRef(new Set(done));
+  const fresh = steps.filter((st) => done.has(st) && !seen.current.has(st));
+  useEffect(() => {
+    seen.current = new Set(done);
+  });
   return (
     <span className="seals" role="img" aria-label={steps.map((st) => `${cap(st)} ${done.has(st) ? "done" : st === next ? "next" : "open"}`).join(", ")}>
       {steps.map((st) => (
-        <span key={st} className={`seal ${done.has(st) ? "done" : st === next ? "next" : ""}`}>
+        <span key={`${st}-${done.has(st)}`} className={`seal ${done.has(st) ? "done" : st === next ? "next" : ""} ${fresh.includes(st) ? "stamp" : ""}`}>
           {st[0].toUpperCase()}
         </span>
       ))}
@@ -1682,6 +1692,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
   }, [key, meta?.coachReady]);
 
   const next = () => {
+    buzz(8);
     if (phaseIndex < PLAY_PHASES.length - 1) return update({ phase: PLAY_PHASES[phaseIndex + 1] });
     if (turnNo === 1) return update({ activePlayer: other(active), phase: "Start of Turn" }, `${names[other(active)]}'s turn.`);
     go(n < BATTLE_ROUNDS ? `round-${n + 1}` : "results");
@@ -1698,7 +1709,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
 
   return (
     <section className={`turn-card ${active}`} style={{ ["--army" as string]: props.color }}>
-      <div className="turn-head">
+      <div className="turn-head turn-in" key={`${n}:${active}`}>
         <span className="turn-label">
           Turn {turnNo} · <b>{active === "me" ? "Your turn" : `${names.opponent}'s turn`}</b>
         </span>
@@ -1984,12 +1995,13 @@ function SideBlock({
               <input
                 type="checkbox"
                 checked={on}
-                onChange={(e) =>
-                  setSr(
+                onChange={(e) => {
+                  buzz(e.target.checked ? 18 : 8);
+                  void setSr(
                     { scored: e.target.checked ? [...sr.scored, l.label] : sr.scored.filter((x) => x !== l.label) },
                     e.target.checked ? `${who} scored "${l.label}" (+${l.vp}).` : undefined,
-                  )
-                }
+                  );
+                }}
               />
               <span className="grow">
                 {l.label}
@@ -2041,7 +2053,11 @@ function SideBlock({
                   type="button"
                   className="score-btn"
                   disabled={!step || blocked || laterDone}
-                  onClick={() => step && setSr({ tactics: [...sr.tactics, { card: t.card, step }] }, `${who} completed ${cap(step)} of ${t.card} (+${TACTIC_VP}).`)}
+                  onClick={() => {
+                    if (!step) return;
+                    buzz(24);
+                    void setSr({ tactics: [...sr.tactics, { card: t.card, step }] }, `${who} completed ${cap(step)} of ${t.card} (+${TACTIC_VP}).`);
+                  }}
                 >
                   +{TACTIC_VP}pts
                 </button>
@@ -2221,16 +2237,19 @@ function ResultsStep({
           <Icon name="flag" />
           <span />
         </div>
-        <h1 className={`victory-title ${r ?? ""}`}>{status}</h1>
+        <h1 className={`victory-title reveal ${r ?? ""}`} key={status}>
+          {status}
+          {r === "win" && <Sparks />}
+        </h1>
         <div className="victory-score">
           <span className="right">
             <b>{me.name}</b>
             <small style={{ color: armyColor(me.faction) }}>{me.base}</small>
           </span>
           <span className="big-score">
-            {s.vp.me}
+            <CountUp value={s.vp.me} from={0} ms={900} />
             <span className="score-dot">·</span>
-            {s.vp.opponent}
+            <CountUp value={s.vp.opponent} from={0} ms={900} />
           </span>
           <span>
             <b>{opp.name}</b>

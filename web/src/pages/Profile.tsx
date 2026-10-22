@@ -7,6 +7,7 @@ import { Card, Icon, Seg, useLoad, useMeta } from "../ui.tsx";
 import { langSetting, setLangSetting } from "../i18n.ts";
 import { shareText, shareUrl } from "../links.ts";
 import { Setup } from "./Auth.tsx";
+import { Skeleton } from "../motion.tsx";
 
 interface Usage {
   month: string;
@@ -152,7 +153,7 @@ export function ProfilePage() {
   const [pw, setPw] = useState("");
   const [msg, setMsg] = useState<string>();
   const [error, setError] = useState<string>();
-  if (!me) return <p className="muted">Loading…</p>;
+  if (!me) return <Skeleton />;
 
   // Signed in with the app password and no admin account yet: offer to create it.
   if (setupStatus?.setupNeeded && accessKey()) return <Setup appPassword={accessKey()} />;
