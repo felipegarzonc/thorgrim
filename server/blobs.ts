@@ -157,8 +157,3 @@ export function blobs(): BlobStore {
   }
   return store;
 }
-
-/** For tests. */
-export function setBlobStore(s: BlobStore | null) {
-  store = s;
-}

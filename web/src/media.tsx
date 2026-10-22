@@ -18,8 +18,6 @@ type RecognitionCtor = new () => Recognition;
 const SpeechRecognition = (window as unknown as { SpeechRecognition?: RecognitionCtor; webkitSpeechRecognition?: RecognitionCtor }).SpeechRecognition ??
   (window as unknown as { webkitSpeechRecognition?: RecognitionCtor }).webkitSpeechRecognition;
 
-export const canDictate = !!SpeechRecognition;
-
 /**
  * Microphone button: tap, speak, and the words are added to the text.
  * Uses the phone's language; the coach understands Spanish or English.

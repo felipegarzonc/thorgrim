@@ -10,7 +10,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import express, { type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
 import { castChance, chargeChance, damageBySave, expectedDamage, simulate, type AttackProfile, type TargetProfile } from "../engine/dice.ts";
-import { diff, type Op } from "../shared/patch.ts";
+import type { Op } from "../shared/patch.ts";
 import type { ArmyList, Game, GameState, LibraryDoc } from "../shared/types.ts";
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
@@ -45,7 +45,7 @@ import {
 } from "./accounts.ts";
 import { currentUser, LOCAL_USER, runAs, userPrefix, type UserCtx } from "./context.ts";
 import { jobs, startJob } from "./jobs.ts";
-import { addDocument, deleteDocument, docPath, finishUpload, getPages, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
+import { addDocument, deleteDocument, docPath, finishUpload, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
 import { bothConfirmed, changeGame, confirmResult, forgetShares, gameLists, joinGame, ladderSides, leaveGame, myGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
 import { forgetResult, ladder, syncResult } from "./ladder.ts";
@@ -393,10 +393,6 @@ app.get("/api/lists/:id", async (req, res) => {
   const l = await lists.get(param(req, "id"));
   return l ? res.json(await refreshList(l)) : res.status(404).json({ error: "Not found" });
 });
-app.get("/api/lists/:id/rules", async (req, res) => {
-  const l = await lists.get(param(req, "id"));
-  return l ? res.json(listRules(l)) : res.status(404).json({ error: "Not found" });
-});
 app.post("/api/lists/parse", (req, res) => res.json(parseList(String(req.body.text ?? ""), req.body.faction)));
 app.post("/api/lists", async (req, res) => {
   const body = req.body as Partial<ArmyList>;
@@ -487,7 +483,6 @@ app.post("/api/library/text", requireDeveloper, async (req, res) => {
   res.json(doc);
 });
 app.get("/api/library/search", async (req, res) => res.json(await searchLibrary(String(req.query.q ?? ""), 10)));
-app.get("/api/library/:id/pages", async (req, res) => res.json(await getPages(param(req, "id"))));
 app.get("/api/library/:id/file", async (req, res) => {
   const doc = await libraryDocs.get(param(req, "id"));
   if (!doc) return res.status(404).end();
@@ -498,7 +493,6 @@ app.get("/api/library/:id/file", async (req, res) => {
   res.type(doc.mime).send(data);
 });
 app.delete("/api/library/:id", requireDeveloper, async (req, res) => {
-  const doc = await libraryDocs.get(param(req, "id"));
   await deleteDocument(param(req, "id"));
   res.json({ ok: true });
 });
@@ -586,15 +580,6 @@ app.post("/api/games", async (req, res) => {
 app.patch("/api/games/:id", async (req, res) => {
   const o = await openOr404(req, res);
   if (o) res.json(viewGame(await change(o, opsFrom(req.body))));
-});
-// The whole game (older pages): saved as the edits it makes.
-app.put("/api/games/:id", async (req, res) => {
-  const o = await openOr404(req, res);
-  if (o) res.json(viewGame(await change(o, diff(viewGame(o), { ...viewGame(o), ...(req.body as Partial<Game>) }))));
-});
-app.post("/api/games/:id/log", async (req, res) => {
-  const o = await openOr404(req, res);
-  if (o) res.json(viewGame(await change(o, [{ path: ["log"], push: { at: new Date().toISOString(), text: String(req.body.text ?? "") } }])));
 });
 // Playing together: the creator makes a join link, opponents with an account open it.
 app.post("/api/games/:id/share", async (req, res) => {

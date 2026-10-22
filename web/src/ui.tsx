@@ -35,21 +35,6 @@ export function useLoad<T>(path: string | null, deps: unknown[] = []): [T | unde
   return [data, () => setTick((t) => t + 1), error];
 }
 
-export function Stepper({ label, value, onChange, min = 0 }: { label: string; value: number; onChange: (v: number) => void; min?: number }) {
-  return (
-    <div className="stepper">
-      <span className="stepper-label">{label}</span>
-      <button type="button" onClick={() => onChange(Math.max(min, value - 1))} aria-label={`decrease ${label}`}>
-        −
-      </button>
-      <span className="stepper-value">{value}</span>
-      <button type="button" onClick={() => onChange(value + 1)} aria-label={`increase ${label}`}>
-        +
-      </button>
-    </div>
-  );
-}
-
 export function Card({ title, children, actions, className }: { title?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string }) {
   return (
     <section className={`card ${className ?? ""}`}>
