@@ -19,6 +19,7 @@ import { drawResult, shareImage, type ShareRow } from "../shareImage.ts";
 import { WarscrollCard } from "./Lists.tsx";
 import { BattleReportCard } from "./report.tsx";
 import { VpLines } from "../vpChart.tsx";
+import { ScoreSheet } from "../scoreSheet.tsx";
 import { doubleTurns, gameBadges, reportSides, runningScore } from "../../../shared/report.ts";
 
 type Step = string;
@@ -1890,36 +1891,6 @@ function ResultsStep({
     setConclusion(c);
     if (game.finished) void mutate((g) => ({ ...g, finished: { conclusion: c, at: g.finished!.at } }));
   };
-  const cells = (values: (number | null)[]) =>
-    Array.from({ length: BATTLE_ROUNDS }, (_, i) => (
-      <span key={i} className="cell">
-        {values[i] === null || values[i] === undefined ? "-" : values[i]}
-      </span>
-    ));
-  const sideTable = (side: Side, name: string) => {
-    const tactics = (side === "me" ? s.tactics : s.opponentTactics) ?? [];
-    const obj = rounds.map((rec, i) => (rec.first ? sideRoundVp({ ...rec[side], tactics: [] }, game.battleplan, i + 1) : null));
-    return (
-      <div className="res-side">
-        <h2>{name}</h2>
-        <div className="res-row">
-          <span className="grow">Objectives</span>
-          <span className="cells">{cells(obj)}</span>
-          <span className="res-total">{obj.reduce<number>((a, b) => a + (b ?? 0), 0)}</span>
-        </div>
-        {tactics.map((t) => {
-          const per = rounds.map((rec) => (rec[side].tactics.some((x) => x.card === t.card) ? TACTIC_VP : rec.first ? 0 : null));
-          return (
-            <div key={t.card} className="res-row">
-              <span className="grow">{t.card}</span>
-              <span className="cells">{cells(per)}</span>
-              <span className="res-total">{tacticSteps(rounds, side, t.card).size * TACTIC_VP}/15</span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
   const summary = `${me.name} ${s.vp.me} - ${s.vp.opponent} ${opp.name} · ${status} · ${game.battleplan || "Age of Sigmar"}`;
 
   // The image is drawn ahead of time, so tapping Share opens the share sheet straight away (iPhone needs that).
@@ -2019,35 +1990,16 @@ function ResultsStep({
           </select>
         </span>
       </label>
-      <article className="card result-card">
-        <div className="game-card-body">
-          <div className="gc-side">
-            <span className="muted gc-date">{gameDate(game)}</span>
-            <b className="gc-name">{me.name}</b>
-            <span className="gc-faction">{me.base}</span>
-            {me.sub && <small className="muted">{me.sub}</small>}
-          </div>
-          <div className="gc-score">
-            <span className="big-score">
-              {s.vp.me}-{s.vp.opponent}
-            </span>
-            <span className={`gc-status ${r}`}>{status}</span>
-          </div>
-          <div className="gc-side right">
-            <span className="muted gc-date">&nbsp;</span>
-            <b className="gc-name">{opp.name}</b>
-            <span className="gc-faction">{opp.base}</span>
-            {opp.sub && <small className="muted">{opp.sub}</small>}
-          </div>
-        </div>
-        {sideTable("me", me.name)}
-        {sideTable("opponent", opp.name)}
-        <p className="res-foot">
-          Age of Sigmar 4e · Pitched Battles 2026-27 · {game.battleplan || "battleplan not set"} · {game.points ?? 2000}pts
-          <br />
-          Tracked with Thorgrim
-        </p>
-      </article>
+      <ScoreSheet
+        date={gameDate(game)}
+        status={status}
+        tone={r ?? ""}
+        sides={[
+          { name: me.name, base: me.base, sub: me.sub, vp: s.vp.me, rows: shareRows("me") },
+          { name: opp.name, base: opp.base, sub: opp.sub, vp: s.vp.opponent, rows: shareRows("opponent") },
+        ]}
+        footer={`Age of Sigmar 4e · Pitched Battles 2026-27 · ${game.battleplan || "battleplan not set"} · ${game.points ?? 2000}pts`}
+      />
       <div className="two-buttons">
         <button type="button" className="primary" disabled={!image} onClick={share}>
           <Icon name="share" /> {image ? "Share image" : "Preparing…"}

@@ -2,11 +2,13 @@
 // with the link, no sign-in. Only the story, photos and score.
 
 import { useEffect, useState } from "react";
-import type { FeedPost } from "../../../shared/types.ts";
+import type { BattleDetail, FeedPost } from "../../../shared/types.ts";
 import { publicApi } from "../api.ts";
 import { PostBody } from "./Club.tsx";
 
-type PublicPost = Pick<FeedPost, "title" | "story" | "photos" | "sides" | "battleplan" | "points" | "date" | "badges" | "createdAt" | "updatedAt">;
+type PublicPost = Pick<FeedPost, "title" | "story" | "photos" | "sides" | "battleplan" | "points" | "date" | "badges" | "createdAt" | "updatedAt" | "result"> & {
+  detail?: Pick<BattleDetail, "rounds" | "tactics">;
+};
 
 export function PublicReport({ token }: { token: string }) {
   const [post, setPost] = useState<PublicPost>();

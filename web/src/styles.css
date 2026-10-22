@@ -4115,111 +4115,6 @@ button.sync-badge.error {
   border-bottom: 0;
 }
 
-/* ---------- full battle (club post) ---------- */
-.full-battle-toggle {
-  min-height: 46px;
-}
-.full-battle {
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-}
-.full-battle h3 {
-  margin: 0 0 0.4rem;
-}
-.full-battle .vp-chart {
-  background: var(--panel-2);
-}
-.fb-rounds {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.fb-round {
-  border-radius: 12px;
-  background: var(--panel-2);
-  padding: 0.55rem 0.75rem;
-}
-.fb-round-head {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.3rem;
-}
-.fb-side {
-  display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
-  gap: 0.5rem;
-  align-items: baseline;
-  padding: 0.15rem 0;
-  font-size: 0.85rem;
-}
-.fb-who {
-  color: var(--army);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fb-what {
-  color: var(--muted);
-}
-.fb-vp {
-  font-family: var(--display);
-}
-.fb-tactic {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-height: 44px;
-  border-bottom: 1px solid var(--line);
-}
-.fb-armies {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.8rem;
-}
-.fb-armies ul {
-  list-style: none;
-  margin: 0.3rem 0 0;
-  padding: 0;
-  font-size: 0.85rem;
-}
-.fb-armies li {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0;
-}
-.fb-armies li.fallen span {
-  text-decoration: line-through;
-  color: var(--muted);
-}
-.fb-armies li .ico {
-  width: 0.95rem;
-  height: 0.95rem;
-  color: var(--bad);
-  flex: none;
-}
-.fb-log summary {
-  cursor: pointer;
-  color: var(--brass);
-  font-weight: 600;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-}
-.fb-log ol {
-  margin: 0;
-  padding-left: 1.2rem;
-  font-size: 0.85rem;
-  color: var(--muted);
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
 /* ---------- new version notice ---------- */
 .update-bar {
   position: fixed;
@@ -4236,4 +4131,51 @@ button.sync-badge.error {
   font-weight: 600;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
   white-space: nowrap;
+}
+
+/* ---------- club post: the score sheet as the card's picture ---------- */
+.post .result-card {
+  margin: 0 -1.1rem;
+  border-radius: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+.post .result-card .game-card-body {
+  padding: 0.9rem 1rem 0.6rem;
+}
+.post .result-card .big-score {
+  font-size: 2.4rem;
+}
+.post .res-side {
+  padding: 0.35rem 1rem;
+}
+.post .res-side h2 {
+  font-size: 1.05rem;
+}
+.post .res-row .grow {
+  font-size: 0.85rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.post .cells {
+  grid-template-columns: repeat(5, 1.6rem);
+  flex: none;
+}
+.post .res-total {
+  width: 2.6rem;
+  flex: none;
+}
+.post .res-foot {
+  margin: 0.4rem 1rem 0;
+  font-size: 0.75rem;
+}
+.post .post-photos {
+  margin-top: 0.2rem;
+}
+.res-row .grow {
+  min-width: 0;
 }

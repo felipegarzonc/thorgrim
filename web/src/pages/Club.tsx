@@ -3,12 +3,12 @@
 // opponents joining). Members only.
 
 import { useEffect, useState } from "react";
-import type { FeedPost, FeedPostView, Notice } from "../../../shared/types.ts";
+import type { BattleDetail, FeedPost, FeedPostView, Notice } from "../../../shared/types.ts";
 import { api, withKey } from "../api.ts";
 import { baseFaction } from "../../../shared/season.ts";
 import { armyStats, headToHead, standings, type ClubResult } from "../../../shared/ladder.ts";
 import { armyColor, Avatar, Icon, Seg, useLoad, useMeta, type IconName } from "../ui.tsx";
-import { VpLines } from "../vpChart.tsx";
+import { rowsFromDetail, ScoreSheet, type SheetSide } from "../scoreSheet.tsx";
 import { Story } from "./report.tsx";
 
 /** Reactions keep their emoji keys on the server; the page shows them as themed icons. */
@@ -23,7 +23,9 @@ const REACTION_LOOK: Record<string, { icon: IconName; label: string }> = {
 /** Tells the bottom bar to re-count what's unread. */
 export const CLUB_SEEN = "thorgrim-club-seen";
 
-type PostLike = Pick<FeedPost, "title" | "story" | "photos" | "sides" | "battleplan" | "points" | "date" | "badges" | "createdAt">;
+type PostLike = Pick<FeedPost, "title" | "story" | "photos" | "sides" | "battleplan" | "points" | "date" | "badges" | "createdAt" | "result"> & {
+  detail?: Pick<BattleDetail, "rounds" | "tactics">;
+};
 
 const when = (iso: string) => {
   const mins = Math.round((Date.now() - Date.parse(iso)) / 60000);
@@ -33,12 +35,51 @@ const when = (iso: string) => {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: mins > 300 * 24 * 60 ? "numeric" : undefined });
 };
 
-/** The report itself, photo first: photos, title, the score in both armies' colours, highlights and story. Also used on the public page. */
+/**
+ * The report itself, like an activity card: the score sheet, the battle
+ * photos, then the title, highlights and story. Also used on the public page.
+ */
 export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; photoUrl: (n: number) => string; short?: boolean; onMore?: () => void }) {
   const [a, b] = post.sides;
   const paras = post.story.split(/\n\s*\n/).filter((p) => p.trim()).length;
+  const side = (x: (typeof post.sides)[number], rows: SheetSide["rows"]): SheetSide => ({
+    name: x.name,
+    base: x.faction ? baseFaction(x.faction) : "Unknown faction",
+    sub: x.faction?.includes(" - ") ? x.faction.split(" - ").slice(1).join(" - ") : undefined,
+    vp: x.vp,
+    rows,
+  });
+  const status = post.result === "win" ? "VICTORY" : post.result === "loss" ? "DEFEAT" : post.result === "draw" ? "DRAW" : "";
   return (
     <>
+      {a && b && post.detail ? (
+        <ScoreSheet
+          date={post.date ? new Date(`${post.date}T12:00:00`).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) : ""}
+          status={status}
+          tone={post.result ?? ""}
+          sides={[side(a, rowsFromDetail(post.detail, "me")), side(b, rowsFromDetail(post.detail, "opponent"))]}
+          footer={["Age of Sigmar 4e · Pitched Battles 2026-27", post.battleplan, post.points && `${post.points}pts`].filter(Boolean).join(" · ")}
+        />
+      ) : (
+        a &&
+        b && (
+          <div className="post-score">
+            <div className="post-score-row">
+              <span>
+                <b>{a.name}</b>
+                <small style={{ color: armyColor(a.faction) }}>{a.faction ? baseFaction(a.faction) : ""}</small>
+              </span>
+              <span className="post-vp">
+                {a.vp}–{b.vp}
+              </span>
+              <span className="right">
+                <b>{b.name}</b>
+                <small style={{ color: armyColor(b.faction) }}>{b.faction ? baseFaction(b.faction) : ""}</small>
+              </span>
+            </div>
+          </div>
+        )
+      )}
       {post.photos > 0 && (
         <div className="post-photos" aria-label="Battle photos">
           {Array.from({ length: post.photos }, (_, n) => (
@@ -49,27 +90,6 @@ export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; ph
         </div>
       )}
       <h2 className="post-title">{post.title}</h2>
-      {a && b && (
-        <div className="post-score">
-          <div className="post-score-row">
-            <span>
-              <b>{a.name}</b>
-              <small style={{ color: armyColor(a.faction) }}>{a.faction ? baseFaction(a.faction) : ""}</small>
-            </span>
-            <span className="post-vp">
-              {a.vp}–{b.vp}
-            </span>
-            <span className="right">
-              <b>{b.name}</b>
-              <small style={{ color: armyColor(b.faction) }}>{b.faction ? baseFaction(b.faction) : ""}</small>
-            </span>
-          </div>
-          <div className="score-bar" aria-hidden="true">
-            <span style={{ flex: Math.max(a.vp, 1), background: armyColor(a.faction) }} />
-            <span style={{ flex: Math.max(b.vp, 1), background: armyColor(b.faction) }} />
-          </div>
-        </div>
-      )}
       {!!post.badges.length && (
         <div className="post-badges">
           {post.badges.map((x) => (
@@ -79,7 +99,6 @@ export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; ph
           ))}
         </div>
       )}
-      <p className="small muted post-meta">{[post.battleplan, post.points && `${post.points}pts`, post.date].filter(Boolean).join(" · ")}</p>
       <Story text={post.story} short={short} />
       {short && paras > 2 && (
         <button type="button" className="ghost small read-more" onClick={onMore}>
@@ -90,105 +109,9 @@ export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; ph
   );
 }
 
-/** The whole battle behind a post: the score round by round, tactics, both armies and the log. */
-function FullBattle({ post }: { post: FeedPostView }) {
-  const d = post.detail!;
-  const [a, b] = post.sides;
-  const names = { me: a.name, opponent: b.name };
-  const colors = { me: armyColor(a.faction), opponent: armyColor(b.faction) };
-  const sides = ["me", "opponent"] as const;
-  return (
-    <div className="full-battle">
-      {d.totals.length > 0 && <VpLines totals={d.totals} doubles={d.doubleTurns} names={names} colors={colors} />}
-
-      <section>
-        <h3>Round by round</h3>
-        <div className="fb-rounds">
-          {d.rounds.map((r) => (
-            <div key={r.round} className="fb-round">
-              <div className="fb-round-head">
-                <b>Round {r.round}</b>
-                <small className="muted">
-                  {r.priority ? `${names[r.priority]} won priority · ` : ""}
-                  {r.first ? `${names[r.first]} went first` : ""}
-                  {d.doubleTurns.some((x) => x.round === r.round) ? " · double turn" : ""}
-                </small>
-              </div>
-              {sides.map((side) => (
-                <div key={side} className="fb-side" style={{ ["--army" as string]: colors[side] }}>
-                  <span className="fb-who">{names[side]}</span>
-                  <span className="fb-what">{[...r[side].scored, ...r[side].tactics].join(" · ") || "—"}</span>
-                  <b className="fb-vp">+{r[side].vp}</b>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {sides.some((side) => d.tactics[side].length) && (
-        <section>
-          <h3>Battle tactics</h3>
-          {sides.map((side) =>
-            d.tactics[side].map((t) => (
-              <div key={`${side}-${t.card}`} className="fb-tactic">
-                <span className="grow">
-                  {t.card}
-                  <small className="muted"> · {names[side]}</small>
-                </span>
-                <span className="seals">
-                  {["affray", "strike", "domination"].map((st) => (
-                    <span key={st} className={`seal ${t.done.includes(st) ? "done" : ""}`}>
-                      {st[0].toUpperCase()}
-                    </span>
-                  ))}
-                </span>
-              </div>
-            )),
-          )}
-        </section>
-      )}
-
-      {sides.some((side) => d.armies[side].length) && (
-        <section>
-          <h3>The armies</h3>
-          <div className="fb-armies">
-            {sides.map((side) => (
-              <div key={side}>
-                <b style={{ color: colors[side] }}>{names[side]}</b>
-                <ul>
-                  {d.armies[side].map((u, i) => (
-                    <li key={i} className={u.destroyed ? "fallen" : ""}>
-                      {u.destroyed && <Icon name="skull" />}
-                      <span>{u.name}</span>
-                      {!u.destroyed && u.damage > 0 && <small className="muted"> · {u.damage} dmg</small>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {d.log.length > 0 && (
-        <details className="fb-log">
-          <summary>Game log ({d.log.length})</summary>
-          <ol>
-            {d.log.map((l, i) => (
-              <li key={i}>{l}</li>
-            ))}
-          </ol>
-        </details>
-      )}
-    </div>
-  );
-}
-
 function PostCard({ post, single, changed }: { post: FeedPostView; single?: boolean; changed: (p: FeedPostView | null) => void }) {
   const meta = useMeta();
   const [open, setOpen] = useState(!!single);
-  const [full, setFull] = useState(false);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string>();
@@ -224,13 +147,6 @@ function PostCard({ post, single, changed }: { post: FeedPostView; single?: bool
         </span>
       </header>
       <PostBody post={post} photoUrl={(n) => withKey(`/api/feed/${post.id}/photo/${n}?v=${encodeURIComponent(post.updatedAt ?? post.createdAt)}`)} short={!open} onMore={() => setOpen(true)} />
-
-      {post.detail && (
-        <button type="button" className="outline wide full-battle-toggle" aria-expanded={full} onClick={() => setFull(!full)}>
-          <Icon name={full ? "close" : "swords"} /> {full ? "Hide the full battle" : "See the full battle"}
-        </button>
-      )}
-      {full && post.detail && <FullBattle post={post} />}
 
       <div className="post-actions">
         {post.reactions.map((r) => {

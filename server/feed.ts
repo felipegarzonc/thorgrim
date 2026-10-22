@@ -308,6 +308,8 @@ export async function publicPost(token: string) {
   const link = /^[a-f0-9]{32}$/.test(token) ? await shareLinks.get(token) : undefined;
   const p = link && (await posts.get(link.postId));
   if (!p || p.shareToken !== token) return undefined;
-  const { title, story, photos, sides, battleplan, points, date, badges, createdAt, updatedAt } = p;
-  return { post: p, view: { title, story, photos, sides, battleplan, points, date, badges, createdAt, updatedAt } };
+  const { title, story, photos, sides, battleplan, points, date, badges, createdAt, updatedAt, result } = p;
+  // The score sheet goes out too; the game log and army lists stay in the club.
+  const detail = p.detail && { rounds: p.detail.rounds, tactics: p.detail.tactics };
+  return { post: p, view: { title, story, photos, sides, battleplan, points, date, badges, createdAt, updatedAt, result, detail } };
 }
