@@ -16,6 +16,8 @@ export interface ClubEvent {
   points: number;
   /** Rounds planned (tournaments). */
   rounds?: number;
+  /** Its page on Best Coast Pairings, when it runs there too (shared/bcp.ts). */
+  bcpUrl?: string;
   organiser: { id: string; name: string };
   createdAt: string;
   players: { id: string; name: string; faction?: string }[];

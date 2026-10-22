@@ -5382,3 +5382,58 @@ label.button {
 .public-join .lp-request {
   margin-top: 0.4rem;
 }
+
+/* Best Coast Pairings. */
+.bcp-setup {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.6rem 0.8rem;
+  background: var(--panel);
+}
+.bcp-setup .toggle-row small {
+  display: block;
+  color: var(--muted);
+}
+.bcp-setup .stack {
+  margin-top: 0.6rem;
+}
+.bcp-link {
+  display: inline-flex;
+  margin-top: 0.4rem;
+}
+.bcp-result h2 {
+  margin-top: 0;
+}
+.bcp-score {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1.2rem;
+  margin: 0.6rem 0;
+}
+.bcp-score span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.bcp-score small {
+  color: var(--muted);
+}
+.bcp-score b {
+  font-family: var(--display);
+  font-size: 2.6rem;
+  line-height: 1;
+}
+.bcp-dash {
+  font-family: var(--display);
+  font-size: 2rem;
+  color: var(--muted);
+}
+.bcp-detail {
+  text-align: center;
+  margin: 0 0 0.6rem;
+}
+.bcp-result .row {
+  justify-content: center;
+  gap: 0.5rem;
+}

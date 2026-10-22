@@ -6,6 +6,7 @@
 
 import { eventStandings, pairNextRound, type ClubEvent, type EventTable, type TableResult } from "../shared/events.ts";
 import type { ClubResult } from "../shared/ladder.ts";
+import { bcpUrl } from "../shared/bcp.ts";
 import { waitUntil } from "@vercel/functions";
 import { currentUser } from "./context.ts";
 import { forgetResult, listResults, saveEventResult } from "./ladder.ts";
@@ -113,6 +114,7 @@ export async function createEvent(b: Partial<ClubEvent>): Promise<EventView> {
     notes: clean(b.notes, 1000) || undefined,
     points: Number(b.points) > 0 ? Math.min(5000, Math.round(Number(b.points))) : 2000,
     rounds: b.kind === "tournament" ? Math.max(1, Math.min(8, Math.round(Number(b.rounds) || 3))) : undefined,
+    bcpUrl: bcpUrl(b.bcpUrl),
     organiser: { id: u.id, name: u.name || "The organiser" },
     createdAt: new Date().toISOString(),
     players: [],
@@ -136,6 +138,7 @@ export async function editEvent(id: string, b: Partial<ClubEvent>): Promise<Even
   if (b.time !== undefined) next.time = clean(b.time, 5) || undefined;
   if (b.place !== undefined) next.place = clean(b.place, 120) || undefined;
   if (b.notes !== undefined) next.notes = clean(b.notes, 1000) || undefined;
+  if (b.bcpUrl !== undefined) next.bcpUrl = bcpUrl(b.bcpUrl);
   if (b.points !== undefined && Number(b.points) > 0) next.points = Math.min(5000, Math.round(Number(b.points)));
   if (b.rounds !== undefined && e.kind === "tournament") next.rounds = Math.max(e.pairings.length || 1, Math.min(8, Math.round(Number(b.rounds) || 3)));
   return view(await events.save(next));
@@ -217,7 +220,8 @@ export async function tableGame(id: string, round: number, table: number): Promi
   if (!a || !b) throw new FeedError("Both players need an account to play this game in the app. The organiser can enter the result instead.");
   const faction = (pid: string) => e.players.find((p) => p.id === pid)?.faction;
   const game = blankGame({ date: e.date, points: e.points, myFaction: faction(a.id), opponentFaction: faction(b.id) });
-  const saved = await createSharedGame(a, b, { ...game, event: { id: e.id, name: e.name, round, table: table + 1 } });
+  const bcp = e.bcpUrl ? { bcp: { event: e.name, round, table: table + 1, url: e.bcpUrl } } : {};
+  const saved = await createSharedGame(a, b, { ...game, ...bcp, event: { id: e.id, name: e.name, round, table: table + 1 } });
   const pairings = e.pairings.map((r) => (r.round === round ? { ...r, tables: r.tables.map((x, i) => (i === table ? { ...x, gameId: saved.id } : x)) } : r));
   await events.save({ ...e, pairings });
   await notify([u === a.id ? b.id : a.id], `Your ${e.name} game (round ${round}) is ready: open it from Games.`, `#/games/${saved.id}`);

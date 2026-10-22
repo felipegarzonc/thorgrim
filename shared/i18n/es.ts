@@ -966,6 +966,21 @@ export const ES_PHRASES: Record<string, string> = {
   "Thorgrim scores Age of Sigmar games on your phone, plans every turn with you and tells each battle as a legend for your club. It's in private beta: ask for access and your invite arrives by email.":
     "Thorgrim puntúa tus partidas de Age of Sigmar en el móvil, planea cada turno contigo y cuenta cada batalla como una leyenda para tu club. Está en beta privada: solicita acceso y te llegará la invitación por email.",
   "Already a member?": "¿Ya eres miembro?",
+  // ---------- Best Coast Pairings ----------
+  "Best Coast Pairings link (optional)": "Enlace de Best Coast Pairings (opcional)",
+  "That isn't a Best Coast Pairings link.": "Eso no es un enlace de Best Coast Pairings.",
+  "View on Best Coast Pairings ↗": "Ver en Best Coast Pairings ↗",
+  "Best Coast Pairings tournament": "Torneo de Best Coast Pairings",
+  "Score it here; at the end, the result is ready to enter in BCP.": "Puntúalo aquí; al terminar, el resultado queda listo para apuntarlo en BCP.",
+  "e.g. Iberian Masters": "p. ej. Iberian Masters",
+  Table: "Mesa",
+  "BCP link (optional)": "Enlace de BCP (opcional)",
+  "Enter the result in BCP": "Apunta el resultado en BCP",
+  "Best Coast Pairings is where the tournament keeps its standings: enter this there (both players usually confirm it in the BCP app).":
+    "Best Coast Pairings es donde el torneo lleva la clasificación: apúntalo allí (normalmente los dos jugadores lo confirmáis en la app de BCP).",
+  "Open BCP ↗": "Abrir BCP ↗",
+  "Copy the result": "Copiar el resultado",
+  "Battle tactics:": "Tácticas de batalla:",
   // ---------- badges ----------
   "Nail-biter": "Final de infarto",
   "Dead even": "Igualadísimo",
@@ -1119,6 +1134,10 @@ export const ES_PATTERNS: [RegExp, string][] = [
   [/^Players \((\d+)\)$/, "Jugadores ($1)"],
   [/^Waiting for (\d+) results? of round (\d+)\.$/, "Faltan $1 resultado(s) de la ronda $2."],
   [/^T(\d+)$/, "M$1"],
+  [/^BCP · (.+) · Round (\d+) · Table (\d+)$/, "BCP · {1} · Ronda $2 · Mesa $3"],
+  [/^BCP · (.+) · Round (\d+)$/, "BCP · {1} · Ronda $2"],
+  [/^BCP · (.+) · Table (\d+)$/, "BCP · {1} · Mesa $2"],
+  [/^BCP · (.+)$/, "BCP · {1}"],
   [/^· (\d+) byes?$/, "· $1 descanso(s)"],
   [/^([A-Za-zÀ-ÿ].*) VP$/, "PV de $1"],
   [/^No confirmed results in (.+) yet$/, "Aún no hay resultados confirmados en $1"],

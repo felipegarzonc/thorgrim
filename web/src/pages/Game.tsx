@@ -23,6 +23,9 @@ import { WarscrollCard } from "./Lists.tsx";
 import { BattleReportCard, ReviewCard } from "./report.tsx";
 import { shareText, shareUrl } from "../links.ts";
 import { moment } from "../analytics.tsx";
+import { BCP_HOME, bcpUrl } from "../../../shared/bcp.ts";
+import { translate } from "../../../shared/i18n/index.ts";
+import { currentLang } from "../i18n.ts";
 import { VpLines } from "../vpChart.tsx";
 import { ScoreSheet } from "../scoreSheet.tsx";
 import { doubleTurns, gameBadges, reportSides, runningScore } from "../../../shared/report.ts";
@@ -272,6 +275,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
       </header>
 
       <div className="step-body">
+        {game.bcp && (current === "players" || current === "results" || current.startsWith("round-")) && <BcpBanner bcp={game.bcp} />}
         {game.event && (current === "players" || current === "results") && (
           <a className="event-banner" href={`#/club/event/${game.event.id}`}>
             <Icon name="trophy" /> {game.event.name} · Round {game.event.round} · Table {game.event.table}
@@ -783,6 +787,8 @@ function SetupStep({ game, mutate }: { game: Game; mutate: Mutate }) {
         </span>
       </label>
 
+      <BcpSetup game={game} mutate={mutate} />
+
       <h3>Mission pack</h3>
       <div className="card list-card">
         <div className="list-item">
@@ -816,6 +822,141 @@ function SetupStep({ game, mutate }: { game: Game; mutate: Mutate }) {
         {isPlayer ? "Leave game" : "Delete game"}
       </button>
     </div>
+  );
+}
+
+/** A Best Coast Pairings tournament game: where it is played, and its BCP page for the result. */
+function BcpSetup({ game, mutate }: { game: Game; mutate: Mutate }) {
+  const bcp = game.bcp;
+  const [draft, setDraft] = useState({ event: bcp?.event ?? "", round: bcp?.round ? String(bcp.round) : "", table: bcp?.table ? String(bcp.table) : "", url: bcp?.url ?? "" });
+  const [error, setError] = useState<string>();
+  const save = (d = draft) => {
+    if (d.url.trim() && !bcpUrl(d.url)) return setError("That isn't a Best Coast Pairings link.");
+    setError(undefined);
+    const num = (v: string) => (Number(v) > 0 ? Math.round(Number(v)) : undefined);
+    void mutate((g) => ({ ...g, bcp: { event: d.event.trim(), round: num(d.round), table: num(d.table), url: bcpUrl(d.url) } }));
+  };
+  const field = (k: keyof typeof draft) => ({
+    value: draft[k],
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft((d) => ({ ...d, [k]: e.target.value })),
+    onBlur: () => save(),
+  });
+  return (
+    <section className="bcp-setup">
+      <label className="toggle-row">
+        <input
+          type="checkbox"
+          checked={!!bcp}
+          onChange={(e) => void mutate((g) => (e.target.checked ? { ...g, bcp: { event: draft.event.trim() } } : { ...g, bcp: undefined }))}
+        />
+        <span className="grow">
+          Best Coast Pairings tournament
+          <small>Score it here; at the end, the result is ready to enter in BCP.</small>
+        </span>
+      </label>
+      {bcp && (
+        <div className="stack">
+          <label className="field">
+            <span className="field-label">Tournament</span>
+            <span className="field-box">
+              <Icon name="trophy" />
+              <input {...field("event")} placeholder="e.g. Iberian Masters" maxLength={80} />
+            </span>
+          </label>
+          <div className="two-fields">
+            <label className="field">
+              <span className="field-label">Round</span>
+              <span className="field-box">
+                <input type="number" inputMode="numeric" min={1} {...field("round")} />
+              </span>
+            </label>
+            <label className="field">
+              <span className="field-label">Table</span>
+              <span className="field-box">
+                <input type="number" inputMode="numeric" min={1} {...field("table")} />
+              </span>
+            </label>
+          </div>
+          <label className="field">
+            <span className="field-label">BCP link (optional)</span>
+            <span className="field-box">
+              <Icon name="share" />
+              <input type="url" inputMode="url" {...field("url")} placeholder="https://www.bestcoastpairings.com/event/…" />
+            </span>
+          </label>
+          {error && <p className="error small">{error}</p>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** The tournament this game belongs to, with its BCP page. */
+function BcpBanner({ bcp }: { bcp: NonNullable<Game["bcp"]> }) {
+  const url = bcpUrl(bcp.url) ?? BCP_HOME;
+  return (
+    <a className="event-banner bcp-banner" href={url} target="_blank" rel="noreferrer">
+      <Icon name="trophy" />
+      <span className="grow">{[`BCP · ${bcp.event || "Tournament"}`, bcp.round && `Round ${bcp.round}`, bcp.table && `Table ${bcp.table}`].filter(Boolean).join(" · ")}</span>
+      <span aria-hidden="true">↗</span>
+    </a>
+  );
+}
+
+/** At the end of a BCP game: the result as BCP asks for it, to copy and enter there. */
+function BcpResult({ game, names }: { game: Game; names: Record<Side, string> }) {
+  const [copied, setCopied] = useState(false);
+  const s = game.state;
+  const rounds = s.rounds ?? [];
+  const tacticPts = (side: Side) => (((side === "me" ? s.tactics : s.opponentTactics) ?? []).reduce((n, t) => n + tacticSteps(rounds, side, t.card).size, 0) * TACTIC_VP);
+  const r = result(game);
+  const outcome = r === "win" ? "Victory" : r === "loss" ? "Defeat" : r === "draw" ? "Draw" : "";
+  const t = (x: string) => translate(x, currentLang());
+  const text = [
+    `${names.me} ${s.vp.me} – ${s.vp.opponent} ${names.opponent}${outcome ? ` (${t(outcome)})` : ""}`,
+    `${t("Battle tactics")}: ${tacticPts("me")} – ${tacticPts("opponent")}`,
+    game.battleplan && `${t("Battleplan")}: ${game.battleplan}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const url = bcpUrl(game.bcp?.url) ?? BCP_HOME;
+  return (
+    <section className="card bcp-result">
+      <h2>Enter the result in BCP</h2>
+      <p className="small muted">Best Coast Pairings is where the tournament keeps its standings: enter this there (both players usually confirm it in the BCP app).</p>
+      <div className="bcp-score">
+        <span>
+          <small>{names.me}</small>
+          <b>{s.vp.me}</b>
+        </span>
+        <span className="bcp-dash">–</span>
+        <span>
+          <small>{names.opponent}</small>
+          <b>{s.vp.opponent}</b>
+        </span>
+      </div>
+      <p className="small bcp-detail">
+        Battle tactics: {tacticPts("me")} – {tacticPts("opponent")}
+        {game.battleplan ? ` · ${game.battleplan}` : ""}
+      </p>
+      <div className="row">
+        <a className="button primary small" href={url} target="_blank" rel="noreferrer">
+          Open BCP ↗
+        </a>
+        <button
+          type="button"
+          className="small"
+          onClick={() =>
+            void navigator.clipboard?.writeText(text).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2500);
+            })
+          }
+        >
+          {copied ? "Copied" : "Copy the result"}
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -2116,6 +2257,7 @@ function ResultsStep({
           ))}
         </div>
       )}
+      {game.bcp && <BcpResult game={{ ...game, finished: { conclusion, at: "" } }} names={{ me: me.name, opponent: opp.name }} />}
       <LadderConfirm game={game} saved={saved} changed={serverChanged} names={{ me: me.name, opponent: opp.name }} />
       <label className="field">
         <span className="field-label">Game conclusion</span>

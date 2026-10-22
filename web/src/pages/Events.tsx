@@ -7,6 +7,7 @@ import type { ClubEvent, EventStanding, TableResult } from "../../../shared/even
 import { baseFaction } from "../../../shared/season.ts";
 import { api } from "../api.ts";
 import { moment } from "../analytics.tsx";
+import { bcpUrl } from "../../../shared/bcp.ts";
 import { Avatar, FactionPicker, Icon, Seg, Sheet, useLoad, useMeta } from "../ui.tsx";
 
 export interface EventView extends ClubEvent {
@@ -80,13 +81,15 @@ function EventForm({ event, onClose, onSaved }: { event?: EventView; onClose: ()
   const [points, setPoints] = useState(String(event?.points ?? 2000));
   const [rounds, setRounds] = useState(String(event?.rounds ?? 3));
   const [notes, setNotes] = useState(event?.notes ?? "");
+  const [bcp, setBcp] = useState(event?.bcpUrl ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const save = async () => {
     setBusy(true);
     setError(undefined);
     try {
-      const body = { kind, name, date, time, place, points: Number(points), rounds: Number(rounds), notes };
+      if (bcp.trim() && !bcpUrl(bcp)) throw new Error("That isn't a Best Coast Pairings link.");
+      const body = { kind, name, date, time, place, points: Number(points), rounds: Number(rounds), notes, bcpUrl: bcp };
       onSaved(await api<EventView>(event ? `/events/${event.id}` : "/events", { method: event ? "PATCH" : "POST", json: body }));
       if (!event) moment("Event created");
     } catch (e) {
@@ -159,6 +162,13 @@ function EventForm({ event, onClose, onSaved }: { event?: EventView; onClose: ()
             </label>
           )}
         </div>
+        <label className="field">
+          <span className="field-label">Best Coast Pairings link (optional)</span>
+          <span className="field-box">
+            <Icon name="share" />
+            <input type="url" inputMode="url" value={bcp} onChange={(e) => setBcp(e.target.value)} placeholder="https://www.bestcoastpairings.com/event/…" />
+          </span>
+        </label>
         <label className="field">
           <span className="field-label">Notes</span>
           <span className="field-box">
@@ -234,7 +244,16 @@ export function EventPage({ id }: { id: string }) {
           {e.points} pts · organised by {e.organiser.name}
           {e.finishedAt ? " · finished" : ""}
         </p>
-        {e.notes && <p className="event-notes">{e.notes}</p>}
+        {e.notes && (
+          <p className="event-notes" translate="no">
+            {e.notes}
+          </p>
+        )}
+        {bcpUrl(e.bcpUrl) && (
+          <a className="button outline small bcp-link" href={bcpUrl(e.bcpUrl)} target="_blank" rel="noreferrer">
+            View on Best Coast Pairings ↗
+          </a>
+        )}
         {!e.finishedAt &&
           (e.joined ? (
             <div className="row">

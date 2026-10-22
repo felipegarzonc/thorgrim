@@ -266,6 +266,8 @@ export interface Game {
   review?: GameReview;
   /** The result the players were last reminded to confirm (set by the server, server/cron.ts). */
   confirmReminder?: string;
+  /** A game of a Best Coast Pairings tournament: where it was, and the page to enter the result. */
+  bcp?: { event: string; round?: number; table?: number; url?: string };
   /** The club event this game is a table of (set by the server). */
   event?: { id: string; name: string; round: number; table: number };
 }
