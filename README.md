@@ -55,7 +55,7 @@ Accounts use Supabase Auth in the same Supabase project; nothing else to configu
 Players can't upload or remove books. Developers manage the library from the command line with the app password:
 
 ```bash
-export THORGRIM_URL=https://thorgrim.vercel.app APP_ACCESS_KEY=…   # the app password
+export THORGRIM_URL=https://thorgrim.co APP_ACCESS_KEY=…   # the app password
 npm run library -- list
 npm run library -- upload ./ghb-2026-27.pdf --title "General's Handbook 2026-27" --category season
 npm run library -- upload ./into-the-fire.jpg --title "Into the Fire" --category battleplan

@@ -2,7 +2,7 @@
 // Players can read and search the books in the app; adding, removing and
 // reading scanned pages is done here, with the app password.
 //
-//   THORGRIM_URL=https://thorgrim.vercel.app APP_ACCESS_KEY=… npx tsx scripts/library.ts list
+//   THORGRIM_URL=https://thorgrim.co APP_ACCESS_KEY=… npx tsx scripts/library.ts list
 //   … upload ./ghb-2026.pdf --title "General's Handbook 2026-27" --category season
 //   … upload ./into-the-fire.jpg --title "Into the Fire" --category battleplan
 //   … read <id>       (finish reading scanned pages)

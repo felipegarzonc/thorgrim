@@ -3,7 +3,7 @@
 // titled so games pick up their battleplan's card automatically. Claude then
 // reads each card so the coach can search them.
 //
-//   THORGRIM_URL=https://thorgrim.vercel.app APP_ACCESS_KEY=… npx tsx scripts/upload-battleplans.ts ./GHB_26-27_ENG.pdf
+//   THORGRIM_URL=https://thorgrim.co APP_ACCESS_KEY=… npx tsx scripts/upload-battleplans.ts ./GHB_26-27_ENG.pdf
 //   (add --no-read to skip reading the cards with Claude now)
 //
 // Cards already in the library (same title) are skipped, so it can be re-run.
