@@ -3805,12 +3805,14 @@ button.sync-badge.error {
 }
 .post-stats {
   display: flex;
+  justify-content: center;
   gap: 1.6rem;
-  margin: 0.2rem 0;
+  margin: 0.3rem 0;
 }
 .post-stats span {
   display: flex;
   flex-direction: column;
+  align-items: center;
 }
 .post-stats small {
   color: var(--muted);

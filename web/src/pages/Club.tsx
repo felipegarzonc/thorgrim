@@ -85,24 +85,6 @@ export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; ph
   return (
     <>
       <h2 className="post-title">{post.title}</h2>
-      <div className="post-lines">
-        {(post.battleplan || post.points) && (
-          <span>
-            <Icon name="map" /> {[post.battleplan, post.points && `${post.points} pts`].filter(Boolean).join(" · ")}
-          </span>
-        )}
-        {a && b && (
-          <span>
-            <Avatar faction={a.faction} size={1.15} /> {a.faction ? baseFaction(a.faction) : a.name} <span className="muted">vs</span> <Avatar faction={b.faction} size={1.15} />{" "}
-            {b.faction ? baseFaction(b.faction) : b.name}
-          </span>
-        )}
-        {!!post.badges.length && (
-          <span>
-            <Icon name="flag" /> {post.badges.join(" · ")}
-          </span>
-        )}
-      </div>
       {a && b && (
         <div className="post-stats">
           <span>
@@ -127,6 +109,24 @@ export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; ph
           )}
         </div>
       )}
+      <div className="post-lines">
+        {(post.battleplan || post.points) && (
+          <span>
+            <Icon name="map" /> {[post.battleplan, post.points && `${post.points} pts`].filter(Boolean).join(" · ")}
+          </span>
+        )}
+        {a && b && (
+          <span>
+            <Avatar faction={a.faction} size={1.15} /> {a.faction ? baseFaction(a.faction) : a.name} <span className="muted">vs</span> <Avatar faction={b.faction} size={1.15} />{" "}
+            {b.faction ? baseFaction(b.faction) : b.name}
+          </span>
+        )}
+        {!!post.badges.length && (
+          <span>
+            <Icon name="flag" /> {post.badges.join(" · ")}
+          </span>
+        )}
+      </div>
       {(post.detail || post.photos > 0) && (
         <Carousel
           slides={[
