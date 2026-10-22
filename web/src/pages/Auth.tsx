@@ -23,7 +23,8 @@ export function Shell({ title, sub, children }: { title: string; sub?: ReactNode
   return (
     <main className="login">
       <div className="card">
-        <span className="brand">Thorgrim</span>
+        <span className="brand wordmark">THORGRIM</span>
+        <span className="brand-sub">Age of Sigmar tracker &amp; coach</span>
         <h1>{title}</h1>
         {sub && <p className="muted small">{sub}</p>}
         {children}

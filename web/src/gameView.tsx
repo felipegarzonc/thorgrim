@@ -3,6 +3,8 @@
 import { baseFaction } from "../../shared/season.ts";
 import { result } from "../../shared/scoring.ts";
 import type { ArmyList, Game } from "../../shared/types.ts";
+import { gamePhotoUrl } from "./pages/report.tsx";
+import { Avatar } from "./ui.tsx";
 
 export type Side = "me" | "opponent";
 
@@ -36,10 +38,19 @@ export function GameCard({ game, lists, actions, link = true }: { game: Game; li
   const me = sideInfo(game, lists, "me");
   const opp = sideInfo(game, lists, "opponent");
   const status = statusOf(game);
+  const photo = game.report?.photos[0] ?? game.state.tablePhoto?.path;
   const body = (
+    <>
+    {photo && (
+      <div className="gc-photo">
+        <img src={gamePhotoUrl(game.id, photo)} alt="" loading="lazy" />
+        {game.report?.title && <span className="gc-photo-title">{game.report.title}</span>}
+      </div>
+    )}
     <div className="game-card-body">
       <div className="gc-side">
         <span className="muted gc-date">{gameDate(game)}</span>
+        <Avatar faction={me.faction} size={1.9} />
         <b className="gc-name">{me.name}</b>
         <span className="gc-faction">{me.base}</span>
         {me.sub && <small className="muted">{me.sub}</small>}
@@ -48,15 +59,17 @@ export function GameCard({ game, lists, actions, link = true }: { game: Game; li
         <span className="big-score">
           {game.state.vp.me}-{game.state.vp.opponent}
         </span>
-        <span className={`gc-status ${status.tone}`}>{status.label}</span>
+        <span className={`gc-status ${status.tone} ${status.label === "SETUP" ? "setup" : ""}`}>{status.label}</span>
       </div>
       <div className="gc-side right">
-        <span className="muted gc-date">Vs {opp.name}</span>
+        <span className="muted gc-date">{game.access?.role === "player" ? `Shared by ${game.access.ownerName || opp.name}` : game.access?.players.length ? "Shared game" : "\u00a0"}</span>
+        <Avatar faction={opp.faction} size={1.9} />
         <b className="gc-name">{opp.name}</b>
         <span className="gc-faction">{opp.base}</span>
         {opp.sub && <small className="muted">{opp.sub}</small>}
       </div>
     </div>
+    </>
   );
   return (
     <article className="game-card">

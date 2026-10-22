@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { listPoints, type ArmyList, type Unit } from "../../../shared/types.ts";
 import { api } from "../api.ts";
-import { Card, RulesText, useLoad, useMeta } from "../ui.tsx";
+import { Avatar, Card, RulesText, useLoad, useMeta } from "../ui.tsx";
 
 type Parsed = Pick<ArmyList, "faction" | "units" | "unmatched" | "tacticCards">;
 
@@ -10,12 +10,13 @@ export function ListsPage({ selectedId }: { selectedId?: string }) {
   const selected = lists?.find((l) => l.id === selectedId);
   return (
     <div className="stack">
-      {selected ? <ListView list={selected} onDeleted={reload} /> : <ListForm onSaved={reload} />}
+      {selected && <ListView list={selected} onDeleted={reload} />}
       <Card title="Saved lists">
         {!lists?.length && <p className="muted">No lists yet. Paste your list and your opponent's list above.</p>}
         <ul className="rows">
           {lists?.map((l) => (
-            <li key={l.id}>
+            <li key={l.id} className="list-entry">
+              <Avatar faction={l.faction} size={2} />
               <a href={`#/lists/${l.id}`}>
                 <strong>{l.name}</strong>
               </a>
@@ -27,6 +28,7 @@ export function ListsPage({ selectedId }: { selectedId?: string }) {
           ))}
         </ul>
       </Card>
+      {!selected && <ListForm onSaved={reload} />}
     </div>
   );
 }
