@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "omnissiah": {
+      "type": "http",
+      "url": "https://omnissiah.thorgrim.co/mcp",
+      "headers": {
+        "Authorization": "Bearer ${OMNISSIAH_KEY}"
+      }
+    }
+  }
+}
