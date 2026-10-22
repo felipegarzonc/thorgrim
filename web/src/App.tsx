@@ -29,7 +29,11 @@ const TABS: [string, string, IconName][] = [
 const TITLES: Record<string, string> = { lists: "Army lists", library: "Rules library", calc: "Calculator", ask: "Coach", stats: "Your stats" };
 
 function useHashRoute(): string[] {
-  const read = () => window.location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
+  // thorgrim.vercel.app/welcome (a link to share) opens the landing page too.
+  const read = () => {
+    const route = window.location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
+    return !route.length && window.location.pathname === "/welcome" ? ["welcome"] : route;
+  };
   const [route, setRoute] = useState(read);
   useEffect(() => {
     const on = () => setRoute(read());
