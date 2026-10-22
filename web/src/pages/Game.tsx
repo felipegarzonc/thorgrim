@@ -1538,6 +1538,14 @@ function RoundStep(props: {
         />
       ))}
 
+      {isLive && s.phase === PLAY_PHASES[PLAY_PHASES.length - 1] && <EndTurn game={game} n={n} update={update} names={names} go={go} />}
+
+      {(isLive || (game.battleplan && battleplanInfo(game.battleplan)?.map)) && (
+        <h2 className="reference-title">
+          <Icon name="rules" /> Reference & tools
+        </h2>
+      )}
+      <div className="reference">
       {game.battleplan && battleplanInfo(game.battleplan)?.map && (
         <details className="card collapsible">
           <summary>
@@ -1561,6 +1569,7 @@ function RoundStep(props: {
           <OddsCard game={game} armies={armies} units={units} />
         </div>
       )}
+      </div>
       {!rec?.first && n === liveRound && <p className="muted small">Pick who went first to start the turn tracker.</p>}
       {n === BATTLE_ROUNDS && liveRound === n && s.activePlayer !== s.firstThisRound && s.phase === "End of Turn" && (
         <button type="button" className="primary wide" onClick={() => go("results")}>
@@ -1660,7 +1669,7 @@ function TacticSeals({ done, next }: { done: Set<TacticStep>; next?: TacticStep 
 
 /** The live turn: phases, Thorgrim's plan for this phase, and what not to forget. */
 function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
-  const { game, n, mutate, update, saved, armies, units, names, go, openCoach } = props;
+  const { game, n, mutate, update, saved, armies, units, names, openCoach } = props;
   const meta = useMeta();
   const s = game.state;
   const active = s.activePlayer;
@@ -1691,20 +1700,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
     void fetchTips();
   }, [key, meta?.coachReady]);
 
-  const next = () => {
-    buzz(8);
-    if (phaseIndex < PLAY_PHASES.length - 1) return update({ phase: PLAY_PHASES[phaseIndex + 1] });
-    if (turnNo === 1) return update({ activePlayer: other(active), phase: "Start of Turn" }, `${names[other(active)]}'s turn.`);
-    go(n < BATTLE_ROUNDS ? `round-${n + 1}` : "results");
-  };
-  const nextLabel =
-    phaseIndex < PLAY_PHASES.length - 1
-      ? `Next: ${PLAY_PHASES[phaseIndex + 1]}`
-      : turnNo === 1
-        ? `End turn → ${active === "me" ? names.opponent : names.me}`
-        : n < BATTLE_ROUNDS
-          ? `End round → Round ${n + 1}`
-          : "End game → Results";
+  const lastPhase = phaseIndex === PLAY_PHASES.length - 1;
   const phaseTips = tips?.phases[s.phase] ?? [];
 
   return (
@@ -1796,10 +1792,34 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
 
       <PhaseChecklist game={game} armies={armies} units={units} update={update} />
 
-      <button type="button" className="primary wide" onClick={next}>
-        {nextLabel} <Icon name="right" />
-      </button>
+      {lastPhase ? (
+        <button type="button" className="score-below" onClick={() => document.getElementById("end-turn")?.scrollIntoView({ behavior: "smooth", block: "center" })}>
+          Score the turn below, then end it <Icon name="down" />
+        </button>
+      ) : (
+        <button type="button" className="primary wide" onClick={() => (buzz(8), update({ phase: PLAY_PHASES[phaseIndex + 1] }))}>
+          {`Next: ${PLAY_PHASES[phaseIndex + 1]}`} <Icon name="right" />
+        </button>
+      )}
     </section>
+  );
+}
+
+/** After the scoring: end the turn, the round or the game. */
+function EndTurn({ game, n, update, names, go }: Pick<Parameters<typeof RoundStep>[0], "game" | "n" | "update" | "names" | "go">) {
+  const s = game.state;
+  const active = s.activePlayer;
+  const turnNo = active === s.firstThisRound ? 1 : 2;
+  const end = () => {
+    buzz(8);
+    if (turnNo === 1) return update({ activePlayer: other(active), phase: "Start of Turn" }, `${names[other(active)]}'s turn.`);
+    go(n < BATTLE_ROUNDS ? `round-${n + 1}` : "results");
+  };
+  const label = turnNo === 1 ? `End turn → ${active === "me" ? names.opponent : names.me}` : n < BATTLE_ROUNDS ? `End round → Round ${n + 1}` : "End game → Results";
+  return (
+    <button id="end-turn" type="button" className="primary wide end-turn" onClick={end}>
+      {label} <Icon name="right" />
+    </button>
   );
 }
 

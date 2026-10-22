@@ -1057,6 +1057,8 @@ export const ES_PHRASES: Record<string, string> = {
   "Too many wrong passwords. Try again in 15 minutes.": "Demasiadas contraseñas incorrectas. Prueba otra vez en 15 minutos.",
   "Wrong app password.": "Contraseña de la app incorrecta.",
   "Not found": "No encontrado",
+  "Reference & tools": "Referencia y herramientas",
+  "Score the turn below, then end it": "Puntúa el turno abajo y luego termínalo",
   // Clubs
   "You're not in a club yet.": "Aún no estás en un club.",
   "Ask a club leader to add you. Your games, lists and Thorgrim work as always.": "Pídele a un líder de club que te añada. Tus partidas, listas y Thorgrim funcionan como siempre.",
