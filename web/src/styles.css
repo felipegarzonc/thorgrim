@@ -4114,3 +4114,108 @@ button.sync-badge.error {
 .ladder-row:last-of-type {
   border-bottom: 0;
 }
+
+/* ---------- full battle (club post) ---------- */
+.full-battle-toggle {
+  min-height: 46px;
+}
+.full-battle {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.full-battle h3 {
+  margin: 0 0 0.4rem;
+}
+.full-battle .vp-chart {
+  background: var(--panel-2);
+}
+.fb-rounds {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.fb-round {
+  border-radius: 12px;
+  background: var(--panel-2);
+  padding: 0.55rem 0.75rem;
+}
+.fb-round-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.3rem;
+}
+.fb-side {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.15rem 0;
+  font-size: 0.85rem;
+}
+.fb-who {
+  color: var(--army);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fb-what {
+  color: var(--muted);
+}
+.fb-vp {
+  font-family: var(--display);
+}
+.fb-tactic {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+  border-bottom: 1px solid var(--line);
+}
+.fb-armies {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+.fb-armies ul {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  font-size: 0.85rem;
+}
+.fb-armies li {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0;
+}
+.fb-armies li.fallen span {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.fb-armies li .ico {
+  width: 0.95rem;
+  height: 0.95rem;
+  color: var(--bad);
+  flex: none;
+}
+.fb-log summary {
+  cursor: pointer;
+  color: var(--brass);
+  font-weight: 600;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.fb-log ol {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}

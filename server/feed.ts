@@ -8,13 +8,13 @@
 // the report update it (syncPost).
 
 import crypto from "node:crypto";
-import { result } from "../shared/scoring.ts";
+import { result, sideRoundVp, tacticSteps } from "../shared/scoring.ts";
 import { flipGame } from "../shared/perspective.ts";
-import type { ArmyList, FeedPost, FeedPostView, Game } from "../shared/types.ts";
+import type { ArmyList, BattleDetail, FeedPost, FeedPostView, Game } from "../shared/types.ts";
 import { blobs } from "./blobs.ts";
 import { currentUser } from "./context.ts";
 import { noticesIn, notify, seenIn } from "./notices.ts";
-import { gameBadges, playerBadges, reportSides, type ReportSides } from "../shared/report.ts";
+import { doubleTurns, gameBadges, playerBadges, reportSides, runningScore, type ReportSides } from "../shared/report.ts";
 import { changeGame, gameLists, isGamePhoto, myGames, viewGame, type OpenGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
 
@@ -78,6 +78,14 @@ function playersOf(o: OpenGame): string[] {
   return [...new Set([...(ownerId ? [ownerId] : []), ...(o.game.share?.players.map((p) => p.id) ?? []), ...(o.role === "player" ? [me] : [])])];
 }
 
+/** The game's battle photos for its post: the report's, then the latest table photo (games from before table photos joined the report). */
+function battlePhotos(o: OpenGame): string[] {
+  const table = o.game.state.tablePhoto?.path;
+  const photos = [...(o.game.report?.photos ?? [])];
+  if (table && !photos.includes(table)) photos.push(table);
+  return photos.slice(0, MAX_PHOTOS);
+}
+
 /** The post keeps its own copies of the photos; copied again only when they changed. */
 async function copyPhotos(o: OpenGame, id: string, sources: string[], existing?: FeedPost): Promise<number> {
   if (existing && JSON.stringify(existing.photoSources ?? []) === JSON.stringify(sources)) return existing.photos;
@@ -106,6 +114,40 @@ function fromGame(game: Game, sides: ReportSides, playerBadgeList: string[]) {
     date: game.date,
     badges: [...gameBadges(game, sides), ...playerBadgeList],
     playerBadges: playerBadgeList,
+    detail: battleDetail(game, sides),
+  };
+}
+
+/** The battle laid out for "See the full battle", from the poster's side. */
+function battleDetail(game: Game, sides: ReportSides): BattleDetail {
+  const s = game.state;
+  const rounds = s.rounds ?? [];
+  const steps = (side: "me" | "opponent", card: string) => [...tacticSteps(rounds, side, card)];
+  const army = (side: "me" | "opponent") =>
+    (sides[side].list?.units ?? []).map((u) => ({ name: u.name, destroyed: !!s.units[`${side}:${u.key}`]?.destroyed, damage: s.units[`${side}:${u.key}`]?.damage ?? 0 }));
+  return {
+    attacker: s.attacker,
+    rounds: rounds.flatMap((r, i) =>
+      r.first
+        ? [
+            {
+              round: i + 1,
+              first: r.first,
+              ...(r.priority ? { priority: r.priority } : {}),
+              me: { vp: sideRoundVp(r.me, game.battleplan, i + 1), scored: r.me.scored, tactics: r.me.tactics.map((t) => `${t.card}: ${t.step}`) },
+              opponent: { vp: sideRoundVp(r.opponent, game.battleplan, i + 1), scored: r.opponent.scored, tactics: r.opponent.tactics.map((t) => `${t.card}: ${t.step}`) },
+            },
+          ]
+        : [],
+    ),
+    totals: runningScore(game),
+    doubleTurns: doubleTurns(game),
+    tactics: {
+      me: (s.tactics ?? []).map((t) => ({ card: t.card, done: steps("me", t.card) })),
+      opponent: (s.opponentTactics ?? []).map((t) => ({ card: t.card, done: steps("opponent", t.card) })),
+    },
+    armies: { me: army("me"), opponent: army("opponent") },
+    log: game.log.slice(-80).map((l) => l.text),
   };
 }
 
@@ -123,7 +165,7 @@ export async function publishReport(o: OpenGame): Promise<FeedPost> {
   const [myList, opponentList] = await gameLists(o);
   const sides = reportSides(game, myList, opponentList);
   const id = newId();
-  const photoSources = report.photos.slice(0, MAX_PHOTOS);
+  const photoSources = battlePhotos(o);
   const photos = await copyPhotos(o, id, photoSources);
   // Highlights about the poster ("First game with…", win streaks) are worked out once, from their own games.
   const history = await myGames();
@@ -169,7 +211,7 @@ export async function syncPost(o: OpenGame): Promise<FeedPost | undefined> {
   const game = authorIsOwner ? (stored as Game) : flipGame(stored as Game);
   let [mine, theirs] = await gameLists(o);
   if ((o.role === "owner") !== authorIsOwner) [mine, theirs] = [theirs, mine];
-  const photoSources = report.photos.slice(0, MAX_PHOTOS);
+  const photoSources = battlePhotos(o);
   const photos = await copyPhotos(o, existing.id, photoSources, existing);
   const next: FeedPost = {
     ...existing,

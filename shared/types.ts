@@ -301,10 +301,30 @@ export interface FeedPost {
   comments: { id: string; authorId: string; authorName: string; text: string; at: string }[];
   /** Secret for the public share link, when one was made. */
   shareToken?: string;
+  /** The whole battle, for "See the full battle" (members only; the poster's side is "me"). */
+  detail?: BattleDetail;
   /** Highlights about the poster, worked out when it was posted (kept when the post follows the game). */
   playerBadges?: string[];
   /** The report's photos the copies were made from (to copy again only when they change). */
   photoSources?: string[];
+}
+
+/** A finished game laid out for the club: round by round, tactics, both armies, the log. */
+export interface BattleDetail {
+  attacker: "me" | "opponent";
+  rounds: {
+    round: number;
+    first?: "me" | "opponent";
+    priority?: "me" | "opponent";
+    me: { vp: number; scored: string[]; tactics: string[] };
+    opponent: { vp: number; scored: string[]; tactics: string[] };
+  }[];
+  /** VP after each round. */
+  totals: { me: number; opponent: number }[];
+  doubleTurns: { round: number; side: "me" | "opponent" }[];
+  tactics: Record<"me" | "opponent", { card: string; done: string[] }[]>;
+  armies: Record<"me" | "opponent", { name: string; destroyed: boolean; damage: number }[]>;
+  log: string[];
 }
 
 /** A post as the signed-in member sees it. */

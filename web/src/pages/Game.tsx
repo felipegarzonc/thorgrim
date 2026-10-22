@@ -18,6 +18,7 @@ import { BattleplanCard } from "../battleplanView.tsx";
 import { drawResult, shareImage, type ShareRow } from "../shareImage.ts";
 import { WarscrollCard } from "./Lists.tsx";
 import { BattleReportCard } from "./report.tsx";
+import { VpLines } from "../vpChart.tsx";
 import { doubleTurns, gameBadges, reportSides, runningScore } from "../../../shared/report.ts";
 
 type Step = string;
@@ -994,7 +995,15 @@ function WhatHappened(props: {
         setBusy("Sending the photo…");
         const body = await shrinkPhoto(photo);
         const { path } = await api<{ path: string }>(`/games/${game.id}/photo`, { method: "POST", body, headers: { "content-type": "image/jpeg" } });
-        await mutate((g) => ({ ...g, state: { ...g.state, tablePhoto: { path, at: new Date().toISOString(), round: n, phase: g.state.phase } } }), "Photo of the table.");
+        // The latest photo is the coach's view of the table; every photo also joins the game's battle photos (report and club post).
+        await mutate(
+          (g) => ({
+            ...g,
+            state: { ...g.state, tablePhoto: { path, at: new Date().toISOString(), round: n, phase: g.state.phase } },
+            report: { ...(g.report ?? { title: "", story: "", tone: "saga" as const, photos: [] }), photos: [...(g.report?.photos ?? []), path].slice(-8) },
+          }),
+          "Photo of the table.",
+        );
         setPhoto(null);
       }
       if (note) update({}, `What happened: ${note}`);
@@ -1842,63 +1851,9 @@ function LadderConfirm({ game, saved, changed, names }: { game: Game; saved: () 
   );
 }
 
-/** Each side's VP round by round: a comeback shows as the lines crossing; double turns are marked. */
+/** Each side's VP round by round (see vpChart.tsx). */
 function VpChart({ game, names, colors }: { game: Game; names: Record<Side, string>; colors: Record<Side, string> }) {
-  const totals = runningScore(game);
-  const doubles = doubleTurns(game);
-  const W = 330;
-  const H = 170;
-  const top = Math.max(30, Math.ceil(Math.max(...totals.flatMap((t) => [t.me, t.opponent])) / 10) * 10);
-  const x = (i: number) => 34 + (i * (W - 50)) / (BATTLE_ROUNDS - 1);
-  const y = (v: number) => 140 - (v / top) * 120;
-  const line = (side: Side) => totals.map((t, i) => `${x(i)},${y(t[side])}`).join(" ");
-  const last = totals[totals.length - 1];
-  const summary = `${names.me} ${totals.map((t) => t.me).join(", ")}; ${names.opponent} ${totals.map((t) => t.opponent).join(", ")}`;
-  return (
-    <section className="card vp-chart" aria-label="Victory points round by round">
-      <div className="vp-chart-head">
-        <span className="grow">The battle</span>
-        <span className="legend">
-          <i style={{ background: colors.me }} />
-          {names.me}
-        </span>
-        <span className="legend">
-          <i style={{ background: colors.opponent }} />
-          {names.opponent}
-        </span>
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Score after each round: ${summary}`}>
-        {[0, top / 2, top].map((v) => (
-          <g key={v}>
-            <line x1="30" x2={W - 10} y1={y(v)} y2={y(v)} className="grid" />
-            <text x="0" y={y(v) + 4} className="axis">
-              {v}
-            </text>
-          </g>
-        ))}
-        {Array.from({ length: BATTLE_ROUNDS }, (_, i) => (
-          <text key={i} x={x(i) - 7} y={H - 6} className="axis">
-            R{i + 1}
-          </text>
-        ))}
-        {(["opponent", "me"] as const).map((side) => (
-          <polyline key={side} points={line(side)} fill="none" stroke={colors[side]} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
-        ))}
-        {last &&
-          (["me", "opponent"] as const).map((side) => <circle key={side} cx={x(totals.length - 1)} cy={y(last[side])} r="5" fill={colors[side]} />)}
-        {doubles.map((d) =>
-          totals[d.round - 1] ? (
-            <g key={d.round}>
-              <circle cx={x(d.round - 1)} cy={y(totals[d.round - 1][d.side])} r="9" fill="none" stroke="var(--brass)" strokeWidth="1.5" />
-              <text x={Math.min(x(d.round - 1) + 12, W - 80)} y={y(totals[d.round - 1][d.side]) + 22} className="axis brass">
-                DOUBLE TURN
-              </text>
-            </g>
-          ) : null,
-        )}
-      </svg>
-    </section>
-  );
+  return <VpLines totals={runningScore(game)} doubles={doubleTurns(game)} names={names} colors={colors} />;
 }
 
 const CONCLUSIONS = [

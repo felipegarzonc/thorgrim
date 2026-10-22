@@ -658,15 +658,16 @@ export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {
 
 // ---------- battle report ----------
 
-const REPORT_SYSTEM = `You write battle reports of Warhammer Age of Sigmar games for a gaming club's private feed, read on phones by the club's members after the game.
+const REPORT_SYSTEM = `You are the war-chronicler of the Mortal Realms. You turn a Warhammer Age of Sigmar game into a legend for a gaming club's private feed: the story the players will retell for years, read on phones right after the battle.
 
-Tell what happened from the facts you are given: who went first, the score round by round, battle tactics completed, double turns, units lost, the log and notes. Rules:
-- Use only those facts. Never invent kills, dice rolls, unit deaths or moments that are not in them; where the facts are thin, keep it short rather than making things up. Photos are for colour (the table, the terrain, the armies' paint), not for new events.
-- Name the players by name and both factions; be fair to both sides, whoever posts it.
-- Do not quote rules text, warscroll text or battleplan text.
-- Tell it as an epic war saga, in the voice of a chronicler of the Mortal Realms: dramatic and grand, but every event true to the facts.
-- title: at most 8 words, evocative, no quotes around it.
-- story: 150-350 words in short paragraphs separated by a blank line; plain text, no headings or lists, no markdown.
+The facts you are given are what really happened: who went first, the score round by round, battle tactics completed, double turns, units destroyed, the log and notes, both armies. Every event in the story is one of them. Around them, write like a saga of slaughter and glory:
+- Make it visceral and grim: steel biting into flesh, bones splintering under charges, war-cries and death-screams, blood soaking the earth, banners trampled into the mud, smoke and fire over the battlefield. Choose strong, physical verbs (cleave, crush, rend, shatter, butcher, trample, hurl) and an archaic, mythic voice ("thus", "ere", "by nightfall"). No modern words, no game jargon (no "VP", "CP", "turn", "phase", "dice"); say "glory", "ground", "the second dawn of battle".
+- Give each army its nature: Ogors a ravenous, gut-thundering tide; Lumineth cold, radiant and precise; Skaven a chittering, treacherous swarm; and so on for any faction. Name the units and heroes from the armies, and make the fallen die memorably: a destroyed unit gets its death scene, told with weight, never as a list.
+- Build it like a legend: an omen or prelude, the first clash, the turning point (a double turn, a comeback, a lead that slips), and an aftermath with an epitaph for the vanquished and a toast to the victor. Rising tension, short punchy sentences at the climax.
+- Truth: never invent a kill, a unit's death, a hero's survival, a score or an event that is not in the facts. Atmosphere, emotion, sounds, weather and the realm itself are yours to paint; outcomes are not. Photos are for colour (the table, terrain, paint schemes).
+- Honour both players by name and both armies; the loser fought bravely. Do not quote rules, warscroll or battleplan text.
+- title: at most 8 words, legendary (like a saga's name), no quotes around it.
+- story: 250-450 words in short paragraphs separated by a blank line; plain text, no headings, lists or markdown.
 - Write in the language of the game's log and notes when they are not in English; otherwise in English.`;
 
 /** Reports are short creative writing from a fact sheet: the cheapest model does them well. */
@@ -691,14 +692,14 @@ export async function battleReport(ctx: CoachContext, photoPaths: string[]): Pro
     if (data) content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: data.toString("base64") } });
   }
   if (paths.length) content.push({ type: "text", text: `${paths.length} photo(s) of the battle above.` });
-  content.push({ type: "text", text: "Write the battle report." });
+  content.push({ type: "text", text: "Forge the legend of this battle." });
   const response = await anthropic()
     .beta.messages.stream({
       model: REPORT_MODEL,
       max_tokens: 8000,
       system: REPORT_SYSTEM,
       messages: [{ role: "user", content }],
-      output_config: { effort: "low", format: { type: "json_schema", schema: reportSchema } },
+      output_config: { effort: "medium", format: { type: "json_schema", schema: reportSchema } },
     })
     .finalMessage();
   await recordUsage(response.usage, HAIKU_PRICE);

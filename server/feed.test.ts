@@ -133,6 +133,10 @@ describe("club feed", () => {
     expect(post.sides.map((s) => `${s.name} ${s.vp}`)).toEqual(["Ana 30", "Ben 22"]);
     expect(post.result).toBe("win");
     expect(post.badges).toContain("Comeback win for Ana");
+    // The full battle travels with the post, from the poster's side.
+    expect(post.detail?.rounds.map((r) => `${r.round} ${r.first} +${r.me.vp}/+${r.opponent.vp}`)).toEqual(["1 opponent +2/+14", "2 me +19/+4", "3 me +14/+4"]);
+    expect(post.detail?.armies.me).toEqual([{ name: "Frostlord on Stonehorn", destroyed: true, damage: 0 }]);
+    expect(post.detail?.tactics.me[0]).toEqual({ card: "Smokescreen", done: ["affray"] });
     expect((await runAs(ana, () => feed.readPostPhoto(post.id, 0)))?.toString()).toBe("jpeg!");
     // The game remembers its post, for both players.
     expect((await runAs(ben, async () => sg.viewGame((await sg.openGame("g2"))!))).report?.postId).toBe(post.id);
