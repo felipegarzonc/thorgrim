@@ -15,7 +15,7 @@ type Mutate = (fn: (g: Game) => Game, log?: string) => Promise<void>;
 const MAX_PHOTOS = 8;
 const empty = (): BattleReport => ({ title: "", story: "", tone: "saga", photos: [] });
 
-export const gamePhotoUrl = (gameId: string, path: string) => withKey(`/api/games/${gameId}/photo?path=${encodeURIComponent(path)}`);
+export const gamePhotoUrl = (gameId: string, path: string) => withKey(`/api/games/${gameId}/photo?file=${encodeURIComponent(path)}`);
 
 /** Story paragraphs, split on blank lines. */
 export function Story({ text, short }: { text: string; short?: boolean }) {

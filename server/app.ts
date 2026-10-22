@@ -704,7 +704,8 @@ app.post("/api/games/:id/photo", express.raw({ type: "image/*", limit: "8mb" }),
   res.json({ path });
 });
 app.get("/api/games/:id/photo", async (req, res) => {
-  const p = String(req.query.path ?? "");
+  // "file", not "path": on Vercel the /api/:path* rewrite puts its own "path" into the query.
+  const p = String(req.query.file ?? req.query.path ?? "");
   const o = await openGame(param(req, "id"));
   if (!o || !p.startsWith(`${o.prefix}game-photos/${o.game.id}/`) || p.includes("..")) return res.status(400).end();
   const data = await blobs().read(p);
