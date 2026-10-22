@@ -168,11 +168,6 @@ export function App() {
           />
         )}
       </main>
-      {meta && tab !== "home" && (
-        <footer className="footer">
-          Army data: BSData {meta.commit} ({meta.builtAt.slice(0, 10)}). Rules text belongs to Games Workshop — personal use only.
-        </footer>
-      )}
       <nav className="bottom-nav" aria-label="Sections" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
         {tabs.map(([key, label, icon]) => (
           <a key={key} href={`#/${key}`} className={[tab === key ? "active" : "", key === "ask" ? "nav-coach" : ""].join(" ").trim()} aria-current={tab === key ? "page" : undefined}>
