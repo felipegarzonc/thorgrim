@@ -12,6 +12,7 @@ import { Join, Login } from "./pages/Auth.tsx";
 import { JoinGame } from "./pages/JoinGame.tsx";
 import { HomePage } from "./pages/Home.tsx";
 import { ProfilePage } from "./pages/Profile.tsx";
+import { StatsPage } from "./pages/Stats.tsx";
 import { Icon, MetaContext, type IconName, type Meta } from "./ui.tsx";
 
 // The coach sits in the middle, easiest to reach; Rules (developers only) goes last
@@ -24,7 +25,7 @@ const TABS: [string, string, IconName][] = [
   ["lists", "Lists", "lists"],
   ["library", "Rules", "rules"],
 ];
-const TITLES: Record<string, string> = { lists: "Army lists", library: "Rules library", calc: "Calculator", ask: "Coach" };
+const TITLES: Record<string, string> = { lists: "Army lists", library: "Rules library", calc: "Calculator", ask: "Coach", stats: "Your stats" };
 
 function useHashRoute(): string[] {
   const read = () => window.location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
@@ -142,6 +143,7 @@ export function App() {
         {tab === "library" && meta && !developer && <Redirect to="#/home" />}
         {tab === "calc" && <CalculatorPage />}
         {tab === "profile" && <ProfilePage />}
+        {tab === "stats" && <StatsPage />}
         {tab === "ask" && (
           <CoachChat
             convoId="general"

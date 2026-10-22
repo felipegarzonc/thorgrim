@@ -173,19 +173,17 @@ function Season({ games, lists }: { games: Game[]; lists?: ArmyList[] }) {
             <span key={i} className={r ?? ""} />
           ))}
         </div>
-        {games.length >= 2 && (
-          <details className="more-stats">
-            <summary>More stats</summary>
-            <WinRateChart games={games} lists={lists} />
-            <Stats games={games} />
-          </details>
+        {games.length >= 1 && (
+          <a className="more-stats-link" href="#/stats">
+            Your stats: armies, tactics, rivals <Icon name="right" />
+          </a>
         )}
       </div>
     </section>
   );
 }
 
-function WinRateChart({ games, lists }: { games: Game[]; lists?: ArmyList[] }) {
+export function WinRateChart({ games, lists }: { games: Game[]; lists?: ArmyList[] }) {
   const [hover, setHover] = useState<number | null>(null);
   let wins = 0;
   const points = games.map((g, i) => {
@@ -248,7 +246,7 @@ function WinRateChart({ games, lists }: { games: Game[]; lists?: ArmyList[] }) {
   );
 }
 
-function Stats({ games }: { games: Game[] }) {
+export function Stats({ games }: { games: Game[] }) {
   const results = games.map(result);
   const count = (r: string) => results.filter((x) => x === r).length;
   const wins = count("win");

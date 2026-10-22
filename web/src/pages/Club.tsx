@@ -25,6 +25,7 @@ export const CLUB_SEEN = "thorgrim-club-seen";
 
 type PostLike = Pick<FeedPost, "title" | "story" | "photos" | "sides" | "battleplan" | "points" | "date" | "badges" | "createdAt" | "result"> & {
   detail?: Pick<BattleDetail, "rounds" | "tactics">;
+  rivalry?: FeedPostView["rivalry"];
 };
 
 const when = (iso: string) => {
@@ -124,6 +125,12 @@ export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; ph
         {!!post.badges.length && (
           <span>
             <Icon name="flag" /> {post.badges.join(" · ")}
+          </span>
+        )}
+        {post.rivalry && a && b && (
+          <span>
+            <Icon name="swords" /> Rivalry: {a.name} {post.rivalry.won} · {b.name} {post.rivalry.lost}
+            {post.rivalry.drawn ? ` · ${post.rivalry.drawn} drawn` : ""}
           </span>
         )}
       </div>

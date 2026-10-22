@@ -339,6 +339,8 @@ export interface FeedPostView extends Omit<FeedPost, "reactions" | "shareToken" 
   mine: boolean;
   /** The share link's secret (the game's players only). */
   shareToken?: string;
+  /** The poster's confirmed club record against their opponent, when they met more than once. */
+  rivalry?: { won: number; drawn: number; lost: number };
 }
 
 /** Something that happened for this member (a comment, a report of their game...). */

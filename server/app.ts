@@ -11,7 +11,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import multer from "multer";
 import { castChance, chargeChance, damageBySave, expectedDamage, simulate, type AttackProfile, type TargetProfile } from "../engine/dice.ts";
 import type { Op } from "../shared/patch.ts";
-import type { ArmyList, Game, GameState, LibraryDoc } from "../shared/types.ts";
+import type { ArmyList, FeedPost, Game, GameState, LibraryDoc } from "../shared/types.ts";
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
 import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips, voiceScore } from "./coach.ts";
@@ -48,7 +48,7 @@ import { jobs, startJob } from "./jobs.ts";
 import { addDocument, deleteDocument, docPath, finishUpload, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
 import { bothConfirmed, changeGame, confirmResult, forgetShares, gameLists, joinGame, ladderSides, leaveGame, myGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
-import { forgetResult, ladder, syncResult } from "./ladder.ts";
+import { forgetResult, ladder, listResults, syncResult } from "./ladder.ts";
 import { Collection, newId } from "./store.ts";
 import { backgroundJobs, resumePendingTranscriptions, transcribeDocument, transcribeStep } from "./transcribe.ts";
 
@@ -727,13 +727,15 @@ app.get("/api/feed", async (_req, res) => res.json(await feed()));
 app.post("/api/feed", async (req, res) => {
   const o = await openGame(String(req.body?.gameId ?? ""));
   if (!o) return res.status(404).json({ error: "Game not found" });
-  res.json(postView(await publishReport(o)));
+  res.json(await viewPost(await publishReport(o)));
 });
 app.post("/api/feed/seen", async (_req, res) => {
   await markFeedSeen();
   res.json({ ok: true });
 });
-app.get("/api/feed/:id", async (req, res) => res.json(postView(await getPost(param(req, "id")))));
+// A post as the member sees it, with the rivalry between its players.
+const viewPost = async (p: FeedPost) => postView(p, await listResults());
+app.get("/api/feed/:id", async (req, res) => res.json(await viewPost(await getPost(param(req, "id")))));
 app.delete("/api/feed/:id", async (req, res) => {
   const post = await deletePost(param(req, "id"));
   // The game forgets its post, so its report can be posted again.
@@ -741,11 +743,11 @@ app.delete("/api/feed/:id", async (req, res) => {
   if (o?.game.report?.postId === post.id) await changeGame(o, [{ path: ["report", "postId"], del: true }]);
   res.json({ ok: true });
 });
-app.post("/api/feed/:id/react", async (req, res) => res.json(postView(await react(param(req, "id"), String(req.body?.emoji ?? "")))));
-app.post("/api/feed/:id/comments", async (req, res) => res.json(postView(await addComment(param(req, "id"), String(req.body?.text ?? "")))));
-app.delete("/api/feed/:id/comments/:commentId", async (req, res) => res.json(postView(await deleteComment(param(req, "id"), param(req, "commentId")))));
-app.post("/api/feed/:id/share", async (req, res) => res.json(postView(await sharePost(param(req, "id")))));
-app.delete("/api/feed/:id/share", async (req, res) => res.json(postView(await unsharePost(param(req, "id")))));
+app.post("/api/feed/:id/react", async (req, res) => res.json(await viewPost(await react(param(req, "id"), String(req.body?.emoji ?? "")))));
+app.post("/api/feed/:id/comments", async (req, res) => res.json(await viewPost(await addComment(param(req, "id"), String(req.body?.text ?? "")))));
+app.delete("/api/feed/:id/comments/:commentId", async (req, res) => res.json(await viewPost(await deleteComment(param(req, "id"), param(req, "commentId")))));
+app.post("/api/feed/:id/share", async (req, res) => res.json(await viewPost(await sharePost(param(req, "id")))));
+app.delete("/api/feed/:id/share", async (req, res) => res.json(await viewPost(await unsharePost(param(req, "id")))));
 app.get("/api/feed/:id/photo/:n", async (req, res) => {
   const data = await readPostPhoto(param(req, "id"), Number(param(req, "n")));
   return data ? res.type("image/jpeg").set("cache-control", "private, max-age=86400").send(data) : res.status(404).end();

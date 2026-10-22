@@ -17,6 +17,8 @@ import { noticesIn, notify, seenIn } from "./notices.ts";
 import { doubleTurns, gameBadges, playerBadges, reportSides, runningScore, type ReportSides } from "../shared/report.ts";
 import { changeGame, gameLists, isGamePhoto, myGames, viewGame, type OpenGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
+import { headToHead, type ClubResult } from "../shared/ladder.ts";
+import { listResults } from "./ladder.ts";
 
 const CLUB = "club/";
 const posts = new Collection<FeedPost>("posts", CLUB);
@@ -49,11 +51,15 @@ export const markFeedSeen = () => seenIn(currentUser().prefix).save({ id: "feed"
 
 const isPlayer = (p: FeedPost) => p.playerIds.includes(currentUser().id) || p.authorId === currentUser().id;
 
-export function postView(p: FeedPost): FeedPostView {
+/** With the club's confirmed results, the post says how the rivalry stands (the poster's side first). */
+export function postView(p: FeedPost, results?: ClubResult[]): FeedPostView {
   const me = currentUser();
   const { reactions, shareToken, playerIds: _players, photoSources: _sources, playerBadges: _pb, ...rest } = p;
+  const rival = p.playerIds.find((id) => id !== p.authorId);
+  const record = results && rival ? headToHead(results, p.authorId).find((h) => h.id === rival) : undefined;
   return {
     ...rest,
+    ...(record && record.won + record.drawn + record.lost > 1 ? { rivalry: { won: record.won, drawn: record.drawn, lost: record.lost } } : {}),
     reactions: REACTIONS.map((emoji) => ({ emoji, count: reactions[emoji]?.length ?? 0, mine: !!reactions[emoji]?.includes(me.id) })),
     canEdit: isPlayer(p) || me.isAdmin,
     mine: isPlayer(p),
@@ -62,7 +68,8 @@ export function postView(p: FeedPost): FeedPostView {
 }
 
 export async function feed(): Promise<FeedPostView[]> {
-  return (await posts.list()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(postView);
+  const [all, results] = await Promise.all([posts.list(), listResults()]);
+  return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((p) => postView(p, results));
 }
 
 export async function getPost(id: string): Promise<FeedPost> {

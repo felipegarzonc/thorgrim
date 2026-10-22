@@ -9,6 +9,7 @@ import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type
 import { applyOps, diff } from "../../../shared/patch.ts";
 import { clockTimes, formatClock, passClock, toggleClock } from "../../../shared/clock.ts";
 import { applyVoice, describeChange, type VoiceChange } from "../../../shared/voice.ts";
+import { rivalRecord } from "../../../shared/stats.ts";
 import { api, pendingJob, runJob, waitForJob, withKey } from "../api.ts";
 import { gameDate, sideInfo } from "../gameView.tsx";
 import { shrinkPhoto, VoiceButton } from "../media.tsx";
@@ -2058,6 +2059,9 @@ function ResultsStep({
   };
 
   const badges = gameBadges(game, reportSides(game, me.list, opp.list));
+  // All-time record against this opponent, this game included as it stands now.
+  const [allGames] = useLoad<Game[]>("/games");
+  const rivalry = allGames && opp.name && rivalRecord([...allGames.filter((x) => x.id !== game.id), { ...game, finished: { conclusion, at: "" } }], opp.name);
 
   return (
     <div className="stack">
@@ -2084,6 +2088,15 @@ function ResultsStep({
           </span>
         </div>
       </section>
+      {rivalry && rivalry.played > 1 && (
+        <a className="rivalry-line" href="#/stats">
+          <Icon name="swords" />
+          <span className="grow">
+            You vs {opp.name}, all time: <b>{rivalry.won}</b> won · <b>{rivalry.drawn}</b> drawn · <b>{rivalry.lost}</b> lost
+          </span>
+          <Icon name="right" />
+        </a>
+      )}
       {rounds.some((x) => x.first) && <VpChart game={game} names={{ me: me.name, opponent: opp.name }} colors={{ me: armyColor(me.faction), opponent: armyColor(opp.faction) }} />}
       {badges.length > 0 && (
         <div className="post-badges">
