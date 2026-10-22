@@ -4188,13 +4188,13 @@ button.sync-badge.error {
 }
 .post-media > * {
   flex: 0 0 auto;
-  height: 250px;
+  height: 272px;
   scroll-snap-align: start;
   border-radius: 12px;
   overflow: hidden;
 }
 .post-media img {
-  height: 250px;
+  height: 272px;
   width: auto;
   max-width: 78vw;
   object-fit: cover;
