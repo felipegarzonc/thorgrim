@@ -35,7 +35,11 @@ export function CoachChat(props: {
   useEffect(() => {
     api<Entry[]>(`/coach/${props.convoId}`).then(setEntries);
   }, [props.convoId]);
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth" }), [entries, busy]);
+  // Braces matter: newer Chrome returns a promise from scrollIntoView, and an
+  // effect that returns anything but a function breaks React on cleanup.
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: "smooth" });
+  }, [entries, busy]);
 
   const send = async (body: { question?: string; preset?: string }) => {
     setBusy(true);

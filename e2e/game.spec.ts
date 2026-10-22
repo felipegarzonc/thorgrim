@@ -87,3 +87,21 @@ test("the app in Spanish", async ({ page }) => {
   await page.goto("/#/club/events");
   await expect(page.getByRole("button", { name: /Organiza una noche de club o un torneo/ })).toBeVisible();
 });
+
+// Newer Chrome returns promises from scroll methods; asking used to blank the page.
+test("asking Thorgrim when scrolling returns a promise", async ({ page }) => {
+  await page.addInitScript(() => {
+    const scroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element, ...args: Parameters<typeof scroll>) {
+      scroll.apply(this, args);
+      return Promise.resolve() as unknown as void;
+    };
+  });
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/#/ask");
+  await page.getByRole("textbox").first().fill("How do Skaven play?");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(page.getByText("Test answer from the coach.").first()).toBeVisible();
+  expect(errors).toEqual([]);
+});

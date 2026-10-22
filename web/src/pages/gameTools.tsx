@@ -275,7 +275,9 @@ export function OddsCard({ game, armies, units }: { game: Game; armies: Record<S
   const [result, setResult] = useState<{ mean: number; sim: SimulationResult }>();
   const [open, setOpen] = useState(false);
 
-  useEffect(() => setRanged(s.phase === "Shooting"), [s.phase]);
+  useEffect(() => {
+    setRanged(s.phase === "Shooting");
+  }, [s.phase]);
   const attacker = all.find((g) => g.key === attackerKey) ?? all.find((g) => g.side === s.activePlayer);
   const target = all.find((g) => g.key === targetKey && g.side !== attacker?.side) ?? all.find((g) => g.side !== attacker?.side);
 
@@ -406,7 +408,9 @@ export function UnitsCard({ game, armies, units, update }: { game: Game; armies:
   const [view, setView] = useState<Side>(other(s.activePlayer));
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [showDead, setShowDead] = useState(false);
-  useEffect(() => setView(other(s.activePlayer)), [s.activePlayer]);
+  useEffect(() => {
+    setView(other(s.activePlayer));
+  }, [s.activePlayer]);
 
   const list = gameUnits(game, armies, units).filter((g) => g.side === view);
   const dead = list.filter((g) => g.destroyed);
