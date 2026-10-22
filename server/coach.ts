@@ -22,6 +22,7 @@ import { reportFacts, reportSides } from "../shared/report.ts";
 import { cleanChanges, voiceOptions, type VoiceChange } from "../shared/voice.ts";
 import { currentUser } from "./context.ts";
 import { langNote } from "./lang.ts";
+import { metaDescriptions, metaSchemas, omnissiahReady, runMetaTool, type MetaTool } from "./omnissiah.ts";
 import { Collection } from "./store.ts";
 
 type Msg = Anthropic.Beta.BetaMessageParam;
@@ -93,7 +94,11 @@ Answer style:
 - Explain the why in one sentence so the player learns the principle.
 - Use English.
 
-Web research: you can search and fetch a small set of community sites. Wahapedia (wahapedia.ru/aos4/...) has the core rules, the General's Handbook and faction pages: use it to check a rule when the player's library and the army data don't cover it, and cite the page URL. Prefer the rules library when both have it. Listhammer has recent tournament lists, Woehammer faction win rates, Goonhammer and others tactics articles: use them for meta and matchup questions, and say how recent the data is.`;
+Web research: you can search and fetch a small set of community sites. Wahapedia (wahapedia.ru/aos4/...) has the core rules, the General's Handbook and faction pages: use it to check a rule when the player's library and the army data don't cover it, and cite the page URL. Prefer the rules library when both have it. Listhammer has recent tournament lists, Woehammer faction win rates, Goonhammer and others tactics articles: use them for meta and matchup questions, and say how recent the data is.${
+  omnissiahReady()
+    ? "\n\nTournament data: for win rates, matchups and what lists are winning, use the aos_* tools first (daily data from Listhammer) and only search the web for what they don't cover. Say how many games a number rests on (few games is a hint, not a trend) and the date of the data."
+    : ""
+}`;
 
 // ---------- tools ----------
 
@@ -168,6 +173,15 @@ const TOOLS: Anthropic.Beta.BetaToolUnion[] = [
   { type: "web_search_20260209", name: "web_search", max_uses: 4, allowed_domains: RESEARCH_DOMAINS },
   { type: "web_fetch_20260209", name: "web_fetch", max_uses: 4, allowed_domains: RESEARCH_DOMAINS },
 ];
+// Tournament data from Omnissiah, when it's set up (server/omnissiah.ts).
+const metaTools = (): Anthropic.Beta.BetaTool[] =>
+  omnissiahReady()
+    ? (Object.keys(metaSchemas) as MetaTool[]).map((name) => ({
+        name,
+        description: metaDescriptions[name],
+        input_schema: z.toJSONSchema(metaSchemas[name]) as Anthropic.Beta.BetaTool.InputSchema,
+      }))
+    : [];
 // Haiku takes the basic web search and fetch tools (the 2026 versions with filtering are for Opus and Sonnet).
 const HAIKU_TOOLS: Anthropic.Beta.BetaToolUnion[] = [
   ...customTools,
@@ -196,6 +210,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 const pct = (p: number) => `${Math.round(p * 1000) / 10}%`;
 
 async function runTool(name: string, input: unknown): Promise<string> {
+  if (name in metaSchemas) return runMetaTool(name as MetaTool, input);
   if (!(name in toolSchemas)) throw new Error(`Unknown tool ${name}`);
   const parsed = toolSchemas[name as ToolName].safeParse(input);
   if (!parsed.success) throw new Error(`Invalid input: ${parsed.error.message}`);
@@ -443,7 +458,7 @@ export async function askCoach(
       model: coach.model,
       max_tokens: 16000,
       system: SYSTEM + langNote(),
-      tools: coach.haiku ? HAIKU_TOOLS : TOOLS,
+      tools: [...(coach.haiku ? HAIKU_TOOLS : TOOLS), ...metaTools()],
       messages,
       cache_control: { type: "ephemeral" },
       output_config: { effort: opts.effort ?? "medium" },
