@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, LOGIN_EVENT, mediaExpiry, setMediaToken } from "./api.ts";
 import { CalculatorPage } from "./pages/Calculator.tsx";
 import { CLUB_SEEN, ClubPage } from "./pages/Club.tsx";
@@ -44,6 +44,8 @@ export function App() {
   const [tab = "home", id, step] = route;
 
   const [needLogin, setNeedLogin] = useState(false);
+  const [newVersion, setNewVersion] = useState(false);
+  const loadedBuild = useRef<string>("");
   const [unread, setUnread] = useState({ notices: 0, posts: 0 });
 
   // What's new in the club, for the badge on its tab: checked now and then, and when a page says it was seen.
@@ -65,18 +67,25 @@ export function App() {
     api<Meta & { media?: string }>("/meta")
       .then((m) => {
         if (m.media) setMediaToken(m.media);
+        loadedBuild.current = m.builtAt;
         setMeta(m);
       })
       .catch((e: Error) => setError(e.message));
-    // A phone left open for a day: renew the photo pass before it runs out.
+    // A phone left open for a day: renew the photo pass before it runs out,
+    // and notice when a newer version of the app went live.
     const renew = () => {
-      if (document.visibilityState === "visible" && mediaExpiry() - Date.now() < 6 * 3600_000)
-        void api<{ media: string }>("/media-token").then((r) => setMediaToken(r.media)).catch(() => undefined);
+      if (document.visibilityState !== "visible") return;
+      if (mediaExpiry() - Date.now() < 6 * 3600_000) void api<{ media: string }>("/media-token").then((r) => setMediaToken(r.media)).catch(() => undefined);
+      void api<{ builtAt: string }>("/version")
+        .then((v) => setNewVersion(!!loadedBuild.current && v.builtAt !== loadedBuild.current))
+        .catch(() => undefined);
     };
     document.addEventListener("visibilitychange", renew);
+    const poll = setInterval(renew, 10 * 60_000);
     return () => {
       window.removeEventListener(LOGIN_EVENT, on);
       document.removeEventListener("visibilitychange", renew);
+      clearInterval(poll);
     };
   }, []);
 
@@ -91,15 +100,22 @@ export function App() {
   if (!meta && !error) return <main><p className="muted page-loading">Loading…</p></main>;
 
   // A game has its own top and bottom bars, like a scoresheet.
+  const update = newVersion && (
+    <button type="button" className="update-bar" onClick={() => window.location.reload()}>
+      A new version of Thorgrim is ready · <b>Reload</b>
+    </button>
+  );
   if (tab === "games" && id)
     return (
       <MetaContext.Provider value={meta}>
+        {update}
         <GamePage key={id} id={id} step={step} />
       </MetaContext.Provider>
     );
 
   return (
     <MetaContext.Provider value={meta}>
+      {update}
       <main>
         {error && <p className="error">Server error: {error}. Is the server running and `npm run data` done?</p>}
         {TITLES[tab] && (

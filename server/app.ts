@@ -331,6 +331,8 @@ const newestFirst = <T extends { createdAt: string }>(xs: T[]) => xs.sort((a, b)
 // ---------- army data ----------
 
 app.get("/api/media-token", (_req, res) => res.json({ media: mediaToken(currentUser().id) }));
+// Which build is live: open pages compare it with the one they loaded and offer a reload.
+app.get("/api/version", (_req, res) => res.json({ builtAt: gameData().builtAt }));
 app.get("/api/meta", (_req, res) => {
   const d = gameData();
   const u = currentUser();

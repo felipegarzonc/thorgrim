@@ -4219,3 +4219,21 @@ button.sync-badge.error {
   flex-direction: column;
   gap: 0.25rem;
 }
+
+/* ---------- new version notice ---------- */
+.update-bar {
+  position: fixed;
+  top: calc(0.5rem + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  min-height: 44px;
+  padding: 0 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--brass);
+  color: var(--me-ink);
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
