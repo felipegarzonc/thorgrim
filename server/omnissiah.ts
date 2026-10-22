@@ -20,6 +20,7 @@ export const metaSchemas = {
     includes: z.string().optional().describe("A unit, formation or word the list must mention"),
     limit: z.number().int().optional().describe("Up to 10 (default 5)"),
   }),
+  aos_articles: z.object({ query: z.string().describe("A faction, unit, formation or topic"), limit: z.number().int().optional() }),
 } as const;
 
 export type MetaTool = keyof typeof metaSchemas;
@@ -28,6 +29,8 @@ export const metaDescriptions: Record<MetaTool, string> = {
   aos_meta_overview: "Every faction's recent tournament record (win rate, games, players, top 4s, event wins, over-representation) and the events it comes from. Daily data from Listhammer.",
   aos_faction_meta: "One faction's tournament detail: recent and overall record, weekly trend, matchups against every faction (with going-first records), and the battle formations played.",
   aos_matchup: "How one faction does against another in recent tournaments, from both sides.",
+  aos_articles:
+    "Search Tabletop Battles (formerly Goonhammer) AoS articles: weekly competitive round-ups (top tournament games and why they were won), reviews, tactics. Gives titles, links, dates and short excerpts: link the article, don't retell it.",
   aos_tournament_lists: "Real tournament lists with their records, newest first. Filter by faction, minimum wins, date, or a unit the list must include. Use for list building and 'what is winning' questions.",
 };
 
@@ -68,6 +71,9 @@ export async function runMetaTool(name: MetaTool, input: unknown): Promise<strin
       break;
     case "aos_matchup":
       out = await get("/matchup", { a: args.faction, b: args.opponent });
+      break;
+    case "aos_articles":
+      out = await get("/articles", { q: args.query, limit: Math.min(Number(args.limit ?? 3), 5) });
       break;
     case "aos_tournament_lists":
       out = await get("/lists", { faction: args.faction, minWins: args.min_wins, since: args.since, includes: args.includes, limit: Math.min(Number(args.limit ?? 5), 10) });

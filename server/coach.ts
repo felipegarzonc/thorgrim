@@ -96,7 +96,7 @@ Answer style:
 
 Web research: you can search and fetch a small set of community sites. Wahapedia (wahapedia.ru/aos4/...) has the core rules, the General's Handbook and faction pages: use it to check a rule when the player's library and the army data don't cover it, and cite the page URL. Prefer the rules library when both have it. Listhammer has recent tournament lists, Woehammer faction win rates, Goonhammer and others tactics articles: use them for meta and matchup questions, and say how recent the data is.${
   omnissiahReady()
-    ? "\n\nTournament data: for win rates, matchups and what lists are winning, use the aos_* tools first (daily data from Listhammer) and only search the web for what they don't cover. Say how many games a number rests on (few games is a hint, not a trend) and the date of the data."
+    ? "\n\nTournament data: for win rates, matchups and what lists are winning, use the aos_* tools first (daily data from Listhammer) and only search the web for what they don't cover. Say how many games a number rests on (few games is a hint, not a trend) and the date of the data. For why lists win or how a matchup plays, aos_articles has Tabletop Battles' tournament write-ups: quote a line at most and give the link."
     : ""
 }`;
 
