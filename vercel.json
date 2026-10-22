@@ -42,5 +42,18 @@
         }
       ]
     }
+  ],
+  "redirects": [
+    {
+      "source": "/((?!api/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "thorgrim.vercel.app"
+        }
+      ],
+      "destination": "https://thorgrim.co/$1",
+      "permanent": true
+    }
   ]
 }
