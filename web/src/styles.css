@@ -4982,7 +4982,7 @@ label.button {
   gap: 28px;
   padding: 6px 0;
 }
-.lp-post-stats span {
+.lp-post-stats > span {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -6172,4 +6172,448 @@ button:active:not(:disabled),
 .wrapped-stat span {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+/* ---------- landing: motion ---------- */
+.lp-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  transition: background 0.3s ease, box-shadow 0.3s ease, backdrop-filter 0.3s ease;
+}
+.lp-nav.scrolled {
+  background: rgba(15, 17, 21, 0.82);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+.lp-hero {
+  position: relative;
+}
+.lp-hero::before {
+  content: "";
+  position: absolute;
+  right: 4%;
+  top: 18%;
+  width: 420px;
+  height: 420px;
+  max-width: 80vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(217, 174, 85, 0.18), rgba(217, 174, 85, 0) 70%);
+  pointer-events: none;
+  animation: lp-glow 6s ease-in-out infinite;
+}
+@keyframes lp-glow {
+  50% {
+    transform: scale(1.12);
+    opacity: 0.7;
+  }
+}
+.lp-embers {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.lp-embers i {
+  position: absolute;
+  bottom: -10px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #f0b45a;
+  box-shadow: 0 0 8px 2px rgba(240, 160, 70, 0.6);
+  opacity: 0;
+  animation: lp-ember linear infinite;
+}
+@keyframes lp-ember {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(var(--drift, 0), -520px) scale(0.3);
+    opacity: 0;
+  }
+}
+.lp-hero-copy,
+.lp-hero-art {
+  position: relative;
+}
+.lp-enter > * {
+  opacity: 0;
+  transform: translateY(18px);
+  animation: lp-rise 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+.lp-enter > *:nth-child(2) { animation-delay: 0.08s; }
+.lp-enter > *:nth-child(3) { animation-delay: 0.16s; }
+.lp-enter > *:nth-child(4) { animation-delay: 0.28s; }
+.lp-enter > *:nth-child(5) { animation-delay: 0.38s; }
+.lp-enter > *:nth-child(6) { animation-delay: 0.48s; }
+@keyframes lp-rise {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.lp-hero-art {
+  animation: lp-rise 1s 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  perspective: 1000px;
+}
+.lp-phone {
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 0.25s ease-out;
+  animation: lp-float 6s ease-in-out infinite;
+}
+@keyframes lp-float {
+  50% {
+    translate: 0 -10px;
+  }
+}
+.lp-ph-phases span {
+  transition: background 0.35s ease, color 0.35s ease;
+}
+.lp-ph-phases span.past {
+  color: var(--text);
+  opacity: 0.7;
+}
+.lp-ph-phases span.on {
+  animation: lp-pop 0.4s ease;
+}
+.lp-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  background: var(--brass);
+  animation: lp-blink 0.8s steps(2) infinite;
+}
+@keyframes lp-blink {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes lp-pop {
+  0% {
+    transform: scale(0.85);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+/* Reveals on scroll */
+.lp-reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition: opacity 0.7s ease var(--d, 0ms), transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) var(--d, 0ms);
+}
+.lp-reveal.lp-in {
+  opacity: 1;
+  transform: none;
+}
+.lp-feature .lp-icon path {
+  stroke-dasharray: 120;
+  stroke-dashoffset: 120;
+  transition: stroke-dashoffset 1.4s ease calc(var(--d, 0ms) + 250ms);
+}
+.lp-feature.lp-in .lp-icon path {
+  stroke-dashoffset: 0;
+}
+.lp-card {
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, opacity 0.7s ease var(--d, 0ms);
+}
+.lp-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--brass);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+.lp-btn.primary {
+  position: relative;
+  overflow: hidden;
+}
+.lp-btn.primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: lp-shine 5s ease-in-out 2s infinite;
+}
+@keyframes lp-shine {
+  0%,
+  70% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+/* Marquee */
+.lp-strip {
+  overflow: hidden;
+}
+.lp-marquee {
+  display: flex;
+  width: max-content;
+  animation: lp-marquee 40s linear infinite;
+}
+.lp-marquee .lp-strip-row {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  padding-left: 20px;
+  padding-right: 20px;
+}
+.lp-marquee .lp-strip-row span::before {
+  content: "✦";
+  color: var(--brass);
+  margin-right: 40px;
+}
+.lp-strip:hover .lp-marquee {
+  animation-play-state: paused;
+}
+@keyframes lp-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+/* The report fills in */
+.lp-post .lp-cells span {
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.3s ease var(--d), transform 0.3s ease var(--d);
+}
+.lp-post.lp-played .lp-cells span {
+  opacity: 1;
+  transform: none;
+}
+.lp-victory {
+  display: inline-block;
+}
+.lp-post.lp-played .lp-victory {
+  animation: lp-stamp 0.5s 1.4s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+@keyframes lp-stamp {
+  0% {
+    transform: scale(2.2) rotate(-8deg);
+    opacity: 0;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+/* Chat */
+.lp-pop {
+  animation: lp-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  opacity: 0;
+  transform: translateY(10px);
+}
+.lp-typing {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  width: max-content;
+}
+.lp-typing i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brass);
+  animation: lp-dot 1s ease-in-out infinite;
+}
+.lp-typing i:nth-child(2) { animation-delay: 0.15s; }
+.lp-typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes lp-dot {
+  50% {
+    transform: translateY(-4px);
+    opacity: 0.5;
+  }
+}
+.lp-chat {
+  min-height: 330px;
+}
+/* Glory demo */
+.lp-glory {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--panel);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 360px;
+  max-width: 100%;
+  box-sizing: border-box;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+}
+.lp-glory-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.lp-glory-head .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lp-glory-head small {
+  color: var(--muted);
+}
+.lp-level {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  color: #e3b453;
+  filter: drop-shadow(0 0 6px rgba(227, 180, 83, 0.5));
+}
+.lp-level svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+.lp-level b {
+  position: relative;
+  font-family: "Cinzel", serif;
+  font-size: 20px;
+  color: var(--text);
+}
+.lp-glory.lp-played .lp-level {
+  animation: lp-pop 0.6s 1.6s ease both;
+}
+.lp-xp {
+  display: block;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--line);
+  overflow: hidden;
+}
+.lp-xp span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #a8803a, var(--brass));
+  transition: width 1.6s cubic-bezier(0.2, 0.7, 0.2, 1) 0.2s;
+}
+.lp-glory.lp-played .lp-xp span {
+  width: 87%;
+}
+.lp-mission {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 14px;
+  transition: border-color 0.4s ease var(--d), background 0.4s ease var(--d);
+}
+.lp-mission span:nth-child(2) {
+  flex: 1;
+}
+.lp-mission small {
+  color: var(--brass);
+  opacity: 0;
+  transition: opacity 0.3s ease var(--d);
+}
+.lp-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--muted);
+  transition: background 0.3s ease var(--d), border-color 0.3s ease var(--d);
+}
+.lp-glory.lp-played .lp-mission {
+  border-color: var(--brass);
+  background: rgba(217, 174, 85, 0.08);
+}
+.lp-glory.lp-played .lp-mission small {
+  opacity: 1;
+}
+.lp-glory.lp-played .lp-check {
+  background: var(--brass);
+  border-color: var(--brass);
+}
+.lp-badges {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+.lp-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 13px;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.35s ease var(--d), transform 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) var(--d);
+}
+.lp-badge svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  fill: none;
+  stroke: var(--brass);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lp-glory.lp-played .lp-badge {
+  opacity: 1;
+  transform: none;
+}
+/* Seals draw themselves */
+.lp-seal path {
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: lp-draw 1.6s ease forwards;
+}
+@keyframes lp-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing *,
+  .landing *::before,
+  .landing *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .lp-reveal,
+  .lp-enter > *,
+  .lp-post .lp-cells span,
+  .lp-badge,
+  .lp-pop {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .lp-seal path {
+    stroke-dashoffset: 0;
+  }
+  .lp-xp span {
+    width: 87%;
+  }
+}
+/* On phones the nav wraps over several lines: keep it in the page, not stuck over it. */
+@media (max-width: 760px) {
+  .lp-nav {
+    position: static;
+  }
 }
