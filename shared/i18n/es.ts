@@ -1208,6 +1208,7 @@ export const ES_PHRASES: Record<string, string> = {
   Missed: "Fallaste",
   "Live now": "En vivo",
   "Hide points": "Ocultar puntos",
+  "No battle tactic cards picked yet.": "Aún no se han elegido cartas de táctica.",
   "Hold the line": "Aguanta",
   "Battle of the week?": "¿Batalla de la semana?",
   "Your battle of the week": "Tu batalla de la semana",

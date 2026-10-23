@@ -50,7 +50,7 @@ export function ScoreSheet({ date, status, tone, sides, footer }: { date: string
 }
 
 /** Each side's rows: objectives and battle tactics, round by round. */
-export function SheetRows({ sides }: { sides: Pick<SheetSide, "name" | "rows">[] }) {
+export function SheetRows({ sides }: { sides: (Pick<SheetSide, "name" | "rows"> & { note?: string })[] }) {
   return (
     <>
       {sides.map((side, i) => (
@@ -69,6 +69,7 @@ export function SheetRows({ sides }: { sides: Pick<SheetSide, "name" | "rows">[]
               <span className="res-total">{row.total}</span>
             </div>
           ))}
+          {side.note && <p className="muted small">{side.note}</p>}
         </div>
       ))}
     </>

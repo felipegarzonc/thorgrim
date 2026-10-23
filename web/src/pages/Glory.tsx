@@ -448,8 +448,12 @@ function LiveCard({ g, cheer, back }: { g: LiveGame; cheer: (kind: string) => vo
         <div className="live-sheet">
           <SheetRows
             sides={[
-              { name: g.ownerName, rows: rowsFromDetail(g.detail, "me") },
-              { name: g.opponentName, rows: rowsFromDetail(g.detail, "opponent") },
+              ...(["me", "opponent"] as const).map((side) => ({
+                name: names[side],
+                rows: rowsFromDetail(g.detail, side),
+                // Tactic rows come from the cards picked for that player: none picked, none shown.
+                note: g.detail.tactics[side].length ? undefined : "No battle tactic cards picked yet.",
+              })),
             ]}
           />
         </div>
