@@ -346,12 +346,17 @@ export function LiveGames() {
   const [games, setGames] = useState<LiveGame[]>();
   useEffect(() => {
     let on = true;
-    const load = () => void api<LiveGame[]>("/glory/live").then((g) => on && setGames(g)).catch(() => undefined);
+    // Only while the page is in front of someone: a phone in a pocket doesn't poll.
+    const load = () => {
+      if (document.visibilityState === "visible") void api<LiveGame[]>("/glory/live").then((g) => on && setGames(g)).catch(() => undefined);
+    };
     load();
     const t = setInterval(load, 30_000);
+    document.addEventListener("visibilitychange", load);
     return () => {
       on = false;
       clearInterval(t);
+      document.removeEventListener("visibilitychange", load);
     };
   }, []);
   if (!games?.length) return null;

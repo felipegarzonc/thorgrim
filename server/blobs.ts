@@ -23,6 +23,8 @@ export interface BlobStore {
   remove(p: string): Promise<void>;
   /** File names (not paths) directly inside a folder. */
   list(folder: string): Promise<string[]>;
+  /** The same, with when each file last changed (ms since epoch), without reading them. */
+  listTimes(folder: string): Promise<{ name: string; updatedAt: number }[]>;
   /** Lets the browser upload a large file directly (bypassing body limits). */
   uploadTarget(p: string, contentType: string, apiPath: string): Promise<UploadTarget>;
   /** A short-lived link to download a file, or null to stream it through the API. */
@@ -58,6 +60,10 @@ export class FileBlobStore implements BlobStore {
   async list(folder: string) {
     const d = this.full(folder);
     return fs.existsSync(d) ? fs.readdirSync(d).filter((n) => !n.endsWith(".tmp") && fs.statSync(path.join(d, n)).isFile()) : [];
+  }
+  async listTimes(folder: string) {
+    const d = this.full(folder);
+    return (await this.list(folder)).map((name) => ({ name, updatedAt: fs.statSync(path.join(d, name)).mtimeMs }));
   }
   async uploadTarget(_p: string, contentType: string, apiPath: string) {
     return { url: apiPath, viaApi: true, headers: { "content-type": contentType } };
@@ -117,16 +123,19 @@ export class SupabaseBlobStore implements BlobStore {
     if (error) throw new Error(`Supabase storage remove ${p}: ${error.message}`);
   }
   async list(folder: string) {
+    return (await this.listTimes(folder)).map((f) => f.name);
+  }
+  async listTimes(folder: string) {
     await this.ensureBucket();
-    const names: string[] = [];
+    const files: { name: string; updatedAt: number }[] = [];
     for (let offset = 0; ; offset += 1000) {
       const { data, error } = await this.files.list(safe(folder), { limit: 1000, offset });
       if (error) throw new Error(`Supabase storage list ${folder}: ${error.message}`);
       // Folders come back with a null id; keep files only.
-      names.push(...data.filter((o) => o.id).map((o) => o.name));
+      for (const o of data) if (o.id) files.push({ name: o.name, updatedAt: Date.parse(o.updated_at ?? o.created_at ?? "") || 0 });
       if (data.length < 1000) break;
     }
-    return names;
+    return files;
   }
   async uploadTarget(p: string, contentType: string) {
     await this.ensureBucket();

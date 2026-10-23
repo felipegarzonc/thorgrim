@@ -166,6 +166,9 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
       busy = true;
       saving.current = saving.current
         .then(async () => {
+          // A few bytes to ask if anything changed; the whole game only when it did.
+          const { version } = await api<{ version: number }>(`/games/${id}/version`);
+          if (!base.current || version === (base.current.version ?? 0)) return;
           const server = await api<Game>(`/games/${id}`);
           if (base.current && server.version !== base.current.version) adopt(server, base.current);
         })

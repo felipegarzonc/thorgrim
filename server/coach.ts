@@ -417,6 +417,87 @@ const tacticsLine = (ts: Game["state"]["tactics"]) =>
 
 const hash = (s: string) => crypto.createHash("sha256").update(s).digest("hex").slice(0, 16);
 
+// ---------- what each request costs ----------
+// A game asks Thorgrim many times, minutes apart (a plan, a tip each turn,
+// questions), always with the same fixed context: the dossier, the map
+// images, the table photo. That context is marked for the cache for an hour,
+// so later requests read it at a tenth of the price instead of paying for it
+// again. The rest of a request (game state, question) is cached the usual way.
+
+const HOUR_CACHE = { type: "ephemeral", ttl: "1h" } as const;
+
+/** Marks the last of these blocks (the fixed context) to be cached for an hour. */
+export function cacheContext(blocks: Block[]): Block[] {
+  const last = blocks[blocks.length - 1];
+  if (last && (last.type === "text" || last.type === "image")) return [...blocks.slice(0, -1), { ...last, cache_control: HOUR_CACHE }];
+  return blocks;
+}
+
+const hasCacheMark = (b: unknown) => !!b && typeof b === "object" && "cache_control" in b && !!(b as { cache_control?: unknown }).cache_control;
+
+/** Only the newest context mark counts: older ones (an earlier dossier) are dropped, so a request stays within the cache's limits. */
+export function keepLastContextMark(messages: Msg[]): Msg[] {
+  let found = false;
+  const out: Msg[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (typeof m.content === "string" || !m.content.some(hasCacheMark)) {
+      out.unshift(m);
+      continue;
+    }
+    const content = [...m.content].reverse().map((b) => {
+      if (!hasCacheMark(b)) return b;
+      if (!found) {
+        found = true;
+        return b;
+      }
+      const { cache_control: _c, ...rest } = b as Block & { cache_control?: unknown };
+      return rest as Block;
+    });
+    out.unshift({ ...m, content: content.reverse() });
+  }
+  return out;
+}
+
+const isToolResults = (m: Msg) => m.role === "user" && typeof m.content !== "string" && m.content.length > 0 && m.content.every((b) => b.type === "tool_result");
+const isContext = (b: Block) => b.type === "image" || (b.type === "text" && (b.text.startsWith("<dossier>") || b.text.startsWith("Updated dossier")));
+
+/**
+ * The conversation as it is kept between questions: what was asked and what
+ * Thorgrim answered, without the tool calls, search results and reasoning in
+ * between (every later question sends the whole history again). At most
+ * `keep` exchanges; when older ones go, `contextDropped` says the dossier and
+ * images went with them, so the next question sends them afresh.
+ */
+export function compactHistory(messages: Msg[], keep = 10): { messages: Msg[]; contextDropped: boolean } {
+  const turns: { ask: Msg; answer: string }[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+    if (m.role !== "user" || isToolResults(m)) continue;
+    // The turn's answer: the text of its last assistant message.
+    let answer = "";
+    for (let j = i + 1; j < messages.length && !(messages[j].role === "user" && !isToolResults(messages[j])); j++) {
+      const a = messages[j];
+      if (a.role === "assistant" && typeof a.content !== "string") {
+        const text = a.content
+          .filter((b): b is Anthropic.Beta.BetaTextBlockParam => b.type === "text")
+          .map((b) => b.text)
+          .join("\n")
+          .trim();
+        if (text) answer = text;
+      } else if (a.role === "assistant" && typeof a.content === "string" && a.content.trim()) answer = a.content;
+    }
+    turns.push({ ask: m, answer: answer || "(no answer)" });
+  }
+  const kept = turns.slice(-keep);
+  const dropped = turns.slice(0, turns.length - kept.length);
+  const contextDropped = dropped.some((t) => typeof t.ask.content !== "string" && t.ask.content.some(isContext));
+  return {
+    messages: kept.flatMap((t) => [t.ask, { role: "assistant" as const, content: [{ type: "text" as const, text: t.answer }] }]),
+    contextDropped,
+  };
+}
+
 // ---------- the loop ----------
 
 export async function askCoach(
@@ -429,7 +510,7 @@ export async function askCoach(
   const convo = (await conversations.get(convoId)) ?? { id: convoId, messages: [], transcript: [] };
 
   // Build this turn's user content: dossier/images only when new or changed.
-  const content: Block[] = [];
+  let content: Block[] = [];
   const dos = await dossier(ctx);
   const dosHash = hash(dos);
   if (dosHash !== convo.dossierHash) {
@@ -446,11 +527,13 @@ export async function askCoach(
     content.push(...(await tablePhoto(ctx.game)));
     convo.photoHash = photoHash;
   }
+  // The fixed context sent this turn is cached for an hour (see cacheContext).
+  if (content.length) content = cacheContext(content);
   const state = stateText(ctx);
   if (state) content.push({ type: "text", text: state });
   content.push({ type: "text", text: question });
 
-  const messages: Msg[] = [...convo.messages, { role: "user", content }];
+  const messages: Msg[] = keepLastContextMark([...convo.messages, { role: "user", content }]);
   const toolsUsed: string[] = [];
   let finalText = "";
 
@@ -505,7 +588,10 @@ export async function askCoach(
 
   const now = new Date().toISOString();
   const answer: TranscriptEntry = { role: "coach", text: finalText, tools: [...new Set(toolsUsed)], at: now };
-  convo.messages = messages;
+  // Keep what was said, not the tool calls in between (see compactHistory).
+  const compact = compactHistory(messages);
+  convo.messages = compact.messages;
+  if (compact.contextDropped) convo.dossierHash = convo.referencesHash = convo.photoHash = undefined;
   convo.transcript.push({ role: "user", text: question, at: now }, answer);
   await conversations.save(convo);
   return answer;
@@ -572,7 +658,7 @@ export interface TurnEvent {
 export async function turnTips(ctx: CoachContext, round: number, side: "me" | "opponent", event?: TurnEvent): Promise<TurnTips> {
   await checkBudget();
   const started = Date.now();
-  const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game)), ...(await tablePhoto(ctx.game))];
+  const content: Block[] = cacheContext([{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game)), ...(await tablePhoto(ctx.game))]);
   content.push({ type: "text", text: stateText(ctx) });
   const ask =
     side === "me"
@@ -662,7 +748,7 @@ async function scoutingText(ctx: CoachContext): Promise<string | undefined> {
 export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {}): Promise<Omit<GamePlan, "basis">> {
   await checkBudget();
   const started = Date.now();
-  const content: Block[] = [{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game)), ...(await tablePhoto(ctx.game))];
+  const content: Block[] = cacheContext([{ type: "text", text: await dossier(ctx) }, ...(await referenceImages(ctx.game)), ...(await tablePhoto(ctx.game))]);
   content.push({ type: "text", text: stateText(ctx) });
   const scouting = await scoutingText(ctx);
   if (scouting) content.push({ type: "text", text: scouting });

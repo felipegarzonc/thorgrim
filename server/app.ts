@@ -555,6 +555,11 @@ app.get("/api/games/:id", async (req, res) => {
   const o = await openOr404(req, res);
   if (o) res.json(viewGame(o));
 });
+// Just the version: a shared game's phones ask every few seconds, and fetch the game only when it changed.
+app.get("/api/games/:id/version", async (req, res) => {
+  const o = await openOr404(req, res);
+  if (o) res.json({ version: o.game.version ?? 0 });
+});
 // The game's two lists (and their rules), wherever each player keeps theirs.
 app.get("/api/games/:id/lists", async (req, res) => {
   const o = await openOr404(req, res);

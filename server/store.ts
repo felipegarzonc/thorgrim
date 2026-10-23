@@ -8,6 +8,15 @@ import crypto from "node:crypto";
 import { blobs } from "./blobs.ts";
 import { currentUser } from "./context.ts";
 
+/** When this server instance last wrote in each club's space ("club/", "clubs/<id>/"), for caches of club data. */
+const lastWrite = new Map<string, number>();
+const clubRoot = (folder: string) => folder.match(/^(club\/|clubs\/[a-z0-9-]+\/)/i)?.[1];
+export const lastClubWrite = (space: string) => lastWrite.get(space) ?? 0;
+const touch = (folder: string) => {
+  const root = clubRoot(folder);
+  if (root) lastWrite.set(root, Date.now());
+};
+
 export function newId() {
   return crypto.randomBytes(6).toString("hex");
 }
@@ -31,7 +40,17 @@ export class Collection<T extends { id: string }> {
   }
   async list(): Promise<T[]> {
     const folder = this.folder();
-    const names = (await blobs().list(folder)).filter((n) => n.endsWith(".json"));
+    return this.read(folder, (await blobs().list(folder)).filter((n) => n.endsWith(".json")));
+  }
+  /** Only the records changed since `since` (ms since epoch): the listing says when, so the others aren't downloaded. */
+  async listChangedSince(since: number): Promise<T[]> {
+    const folder = this.folder();
+    return this.read(
+      folder,
+      (await blobs().listTimes(folder)).filter((f) => f.name.endsWith(".json") && f.updatedAt >= since).map((f) => f.name),
+    );
+  }
+  private async read(folder: string, names: string[]): Promise<T[]> {
     const items = await Promise.all(names.map((n) => blobs().read(`${folder}/${n}`)));
     return items.filter((b): b is Buffer => Boolean(b)).map((b) => JSON.parse(b.toString("utf8")) as T);
   }
@@ -41,10 +60,12 @@ export class Collection<T extends { id: string }> {
     return b ? (JSON.parse(b.toString("utf8")) as T) : undefined;
   }
   async save(item: T): Promise<T> {
-    await blobs().write(this.file(item.id), JSON.stringify(item, null, 2), "application/json");
+    await blobs().write(this.file(item.id), JSON.stringify(item), "application/json");
+    touch(this.folder());
     return item;
   }
   async delete(id: string) {
     await blobs().remove(this.file(id));
+    touch(this.folder());
   }
 }

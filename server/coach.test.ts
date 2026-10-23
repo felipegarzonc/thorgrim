@@ -65,15 +65,22 @@ describe.skipIf(!hasData)("askCoach loop", () => {
     expect(calls[0].output_config).toEqual({ effort: "medium" });
     expect(calls[0].tools.map((t: any) => t.name)).toContain("damage_calc");
 
-    // A follow-up question appends to the stored history without editing it,
-    // and does not resend the unchanged dossier.
+    // The dossier (fixed context) is marked to be cached for an hour.
+    const dossierBlock = calls[0].messages[0].content.find((b: any) => b.type === "text" && b.text.startsWith("<dossier>"));
+    expect(dossierBlock.cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
+
+    // A follow-up question sends the first question as it was (so the cached
+    // dossier still matches) and its answer, but not the tool calls and
+    // results in between; nor the unchanged dossier again.
     replies.push({ stop_reason: "end_turn", content: [{ type: "text", text: "Second answer." }] });
     await askCoach("g1", {}, "And now?");
-    const prevMessages = calls[1].messages;
     const next = calls[2];
     expect(next.system).toBe(calls[0].system);
     expect(JSON.stringify(next.tools)).toBe(JSON.stringify(calls[0].tools));
-    expect(next.messages.slice(0, prevMessages.length)).toEqual(prevMessages);
+    expect(next.messages[0]).toEqual(calls[0].messages[0]);
+    expect(next.messages[1]).toEqual({ role: "assistant", content: [{ type: "text", text: "Go for it: 42% to make the charge." }] });
+    expect(next.messages).toHaveLength(3);
+    expect(JSON.stringify(next.messages)).not.toContain("tool_result");
     const lastUser = next.messages.at(-1).content;
     expect(lastUser.some((b: any) => b.type === "text" && b.text.includes("<dossier>"))).toBe(false);
 
@@ -185,5 +192,29 @@ describe.skipIf(!hasData)("re-planning", () => {
     await gamePlan({ game: game() }, { replan: true });
     const prompt = JSON.stringify(calls[before].messages[0].content);
     expect(prompt).toContain("battle round 3, 20-31 VP");
+  });
+});
+
+describe("conversation upkeep", () => {
+  it("keeps at most ten exchanges, and says when the context went with the old ones", async () => {
+    const { compactHistory, keepLastContextMark, cacheContext } = await import("./coach.ts");
+    const turn = (i: number, withContext = false): any[] => [
+      { role: "user", content: [...(withContext ? cacheContext([{ type: "text", text: "<dossier>lists</dossier>" }]) : []), { type: "text", text: `Q${i}` }] },
+      { role: "assistant", content: [{ type: "tool_use", id: `t${i}`, name: "charge_odds", input: {} }] },
+      { role: "user", content: [{ type: "tool_result", tool_use_id: `t${i}`, content: "42%" }] },
+      { role: "assistant", content: [{ type: "thinking", thinking: "hm", signature: "x" }, { type: "text", text: `A${i}`, citations: [{ type: "web_search_result_location" }] }] },
+    ];
+    const all = [...turn(0, true), ...Array.from({ length: 11 }, (_, i) => turn(i + 1)).flat()];
+    const { messages, contextDropped } = compactHistory(all);
+    expect(messages).toHaveLength(20);
+    expect(messages[0]).toMatchObject({ role: "user" });
+    expect(messages[1]).toEqual({ role: "assistant", content: [{ type: "text", text: "A2" }] });
+    expect(contextDropped).toBe(true);
+    expect(compactHistory(all.slice(0, 8)).contextDropped).toBe(false);
+
+    // Only the newest context mark is kept.
+    const marked = keepLastContextMark([turn(0, true)[0], { role: "assistant", content: [{ type: "text", text: "A" }] }, turn(1, true)[0]] as any);
+    expect(JSON.stringify(marked).match(/cache_control/g)).toHaveLength(1);
+    expect((marked[2].content as any)[0].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
   });
 });

@@ -1,20 +1,57 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, LOGIN_EVENT, mediaExpiry, setMediaToken } from "./api.ts";
-import { CalculatorPage } from "./pages/Calculator.tsx";
 import { CLUB_SEEN, ClubPage } from "./pages/Club.tsx";
-import { PublicReport } from "./pages/PublicReport.tsx";
-import { CoachChat } from "./pages/CoachChat.tsx";
-import { GamePage } from "./pages/Game.tsx";
-import { GamesPage } from "./pages/Games.tsx";
-import { LibraryPage } from "./pages/Library.tsx";
-import { ListsPage } from "./pages/Lists.tsx";
 import { Join, Login } from "./pages/Auth.tsx";
-import { JoinGame } from "./pages/JoinGame.tsx";
-import { Landing } from "./pages/Landing.tsx";
 import { HomePage } from "./pages/Home.tsx";
-import { ProfilePage } from "./pages/Profile.tsx";
-import { StatsPage } from "./pages/Stats.tsx";
 import { Icon, MetaContext, type IconName, type Meta } from "./ui.tsx";
+import { Skeleton } from "./motion.tsx";
+
+// Pages are downloaded when first opened, so the app starts with less to
+// load. Once it's up, the ones needed at the table (a game, Thorgrim, lists)
+// are fetched in the background: a game must open even without signal.
+const load = {
+  game: () => import("./pages/Game.tsx"),
+  coach: () => import("./pages/CoachChat.tsx"),
+  lists: () => import("./pages/Lists.tsx"),
+  games: () => import("./pages/Games.tsx"),
+  calc: () => import("./pages/Calculator.tsx"),
+  library: () => import("./pages/Library.tsx"),
+  profile: () => import("./pages/Profile.tsx"),
+  stats: () => import("./pages/Stats.tsx"),
+  report: () => import("./pages/PublicReport.tsx"),
+  joinGame: () => import("./pages/JoinGame.tsx"),
+  landing: () => import("./pages/Landing.tsx"),
+};
+const GamePage = lazy(() => load.game().then((m) => ({ default: m.GamePage })));
+const CoachChat = lazy(() => load.coach().then((m) => ({ default: m.CoachChat })));
+const ListsPage = lazy(() => load.lists().then((m) => ({ default: m.ListsPage })));
+const GamesPage = lazy(() => load.games().then((m) => ({ default: m.GamesPage })));
+const CalculatorPage = lazy(() => load.calc().then((m) => ({ default: m.CalculatorPage })));
+const LibraryPage = lazy(() => load.library().then((m) => ({ default: m.LibraryPage })));
+const ProfilePage = lazy(() => load.profile().then((m) => ({ default: m.ProfilePage })));
+const StatsPage = lazy(() => load.stats().then((m) => ({ default: m.StatsPage })));
+const PublicReport = lazy(() => load.report().then((m) => ({ default: m.PublicReport })));
+const JoinGame = lazy(() => load.joinGame().then((m) => ({ default: m.JoinGame })));
+const Landing = lazy(() => load.landing().then((m) => ({ default: m.Landing })));
+
+/** After the first screen: fetch what a player needs at the table, while the network is idle. */
+function prefetchForTheTable() {
+  const go = () => void Promise.all([load.game(), load.coach(), load.lists(), load.games()]).catch(() => undefined);
+  if ("requestIdleCallback" in window) window.requestIdleCallback(go, { timeout: 4000 });
+  else setTimeout(go, 1500);
+}
+
+const Wait = ({ children }: { children: ReactNode }) => (
+  <Suspense
+    fallback={
+      <main>
+        <Skeleton />
+      </main>
+    }
+  >
+    {children}
+  </Suspense>
+);
 
 // Thorgrim sits in the middle, easiest to reach; Rules (developers only) goes last
 // so players' five tabs keep their places.
@@ -75,6 +112,7 @@ export function App() {
         if (m.media) setMediaToken(m.media);
         loadedBuild.current = m.builtAt;
         setMeta(m);
+        prefetchForTheTable();
       })
       .catch((e: Error) => setError(e.message));
     // A phone left open for a day: renew the photo pass before it runs out,
@@ -99,12 +137,34 @@ export function App() {
   const developer = !!meta?.user?.developer;
   const tabs = TABS.filter(([key]) => key !== "library" || developer);
   if (tab === "join" && id) return <Join token={id} />;
-  if (tab === "r" && id) return <PublicReport token={id} />;
-  if (tab === "welcome") return <Landing />;
+  if (tab === "r" && id)
+    return (
+      <Wait>
+        <PublicReport token={id} />
+      </Wait>
+    );
+  if (tab === "welcome")
+    return (
+      <Wait>
+        <Landing />
+      </Wait>
+    );
   // Not signed in: the landing page first; its buttons (and game links) lead to sign-in.
-  if (needLogin) return tab === "signin" || tab === "play" ? <Login /> : <Landing />;
+  if (needLogin)
+    return tab === "signin" || tab === "play" ? (
+      <Login />
+    ) : (
+      <Wait>
+        <Landing />
+      </Wait>
+    );
   if (tab === "signin") return <Redirect to="#/home" />;
-  if (tab === "play" && id) return <JoinGame token={id} />;
+  if (tab === "play" && id)
+    return (
+      <Wait>
+        <JoinGame token={id} />
+      </Wait>
+    );
   // Pages wait for /meta: it brings the photo pass their images need.
   if (!meta && !error) return <main><p className="muted page-loading">Loading…</p></main>;
 
@@ -118,7 +178,9 @@ export function App() {
     return (
       <MetaContext.Provider value={meta}>
         {update}
-        <GamePage key={id} id={id} step={step} />
+        <Wait>
+          <GamePage key={id} id={id} step={step} />
+        </Wait>
       </MetaContext.Provider>
     );
 
@@ -143,6 +205,7 @@ export function App() {
             )}
           </p>
         )}
+        <Wait>
         {tab === "home" && <HomePage unread={unread.notices + unread.posts} />}
         {tab === "games" && <GamesPage />}
         {tab === "club" && <ClubPage postId={id} sub={step} unreadNotices={unread.notices} />}
@@ -167,6 +230,7 @@ export function App() {
             ]}
           />
         )}
+        </Wait>
       </main>
       <nav className="bottom-nav" aria-label="Sections" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>
         {tabs.map(([key, label, icon]) => (

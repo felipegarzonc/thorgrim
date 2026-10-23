@@ -41,7 +41,7 @@ import { listResults, listSeasons } from "./ladder.ts";
 import { clubMembers, findMember } from "./members.ts";
 import { notify } from "./notices.ts";
 import { allArmies } from "./showcase.ts";
-import { Collection } from "./store.ts";
+import { Collection, lastClubWrite } from "./store.ts";
 
 interface GloryRecord {
   /** The member's id. */
@@ -72,8 +72,28 @@ const lite = (p: FeedPost) => ({
   reactors: [...new Set(Object.values(p.reactions).flat())],
 });
 
-/** Everything the counting needs, for the current club. */
-export async function clubData(): Promise<ClubData> {
+/**
+ * Everything the counting needs, for the current club. Home, profiles and the
+ * ladder all ask for it, so each server instance keeps it for a few seconds,
+ * and drops it as soon as anything in the club is written (store.ts).
+ */
+const CACHE_MS = 15_000;
+const cache = new Map<string, { at: number; data: Promise<ClubData> }>();
+/** For work that runs elsewhere (the daily run): read the club afresh. */
+export const forgetClubData = () => cache.delete(clubSpace());
+
+export function clubData(): Promise<ClubData> {
+  const key = clubSpace();
+  const hit = cache.get(key);
+  // Fresh enough, and nothing written in the club since (on this instance).
+  if (hit && Date.now() - hit.at < CACHE_MS && lastClubWrite(key) < hit.at) return hit.data;
+  const data = loadClubData();
+  cache.set(key, { at: Date.now(), data });
+  data.catch(() => cache.delete(key));
+  return data;
+}
+
+async function loadClubData(): Promise<ClubData> {
   const [results, posts, armies, events, challenges, preds, bs] = await Promise.all([listResults(), allPosts(), allArmies(), listEvents(), allChallenges(), predictions().list(), ballots().list()]);
   return {
     results,
@@ -200,6 +220,7 @@ export async function gloryBoard(now = new Date()) {
 
 /** Every day: keep each member's progress, and tell them what's new. */
 export async function settleAll(now = new Date()) {
+  forgetClubData();
   const [members, data] = await Promise.all([clubMembers(), clubData()]);
   for (const m of members) await settle(data, m.id, now);
   return members.length;
@@ -365,7 +386,8 @@ export async function liveGames(now = new Date()) {
   const cheer = await cheers().list();
   const out = [];
   for (const m of members) {
-    for (const g of await new Collection<Game>("games", m.prefix).list()) {
+    // Only games touched in the last hours are downloaded (most of everyone's games aren't).
+    for (const g of await new Collection<Game>("games", m.prefix).listChangedSince(now.getTime() - LIVE_HOURS * 3_600_000 - 60_000)) {
       // Under way: something was logged (a game set up and never started isn't live).
       if (g.finished || !g.state || g.state.round < 1 || !g.log?.length) continue;
       const lastAt = g.log[g.log.length - 1].at;
