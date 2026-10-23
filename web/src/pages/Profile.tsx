@@ -8,6 +8,7 @@ import { langSetting, setLangSetting } from "../i18n.ts";
 import { shareText, shareUrl } from "../links.ts";
 import { Setup } from "./Auth.tsx";
 import { Skeleton } from "../motion.tsx";
+import { play, setSoundLevel, setSoundVolume, soundLevel, soundVolume, type SoundLevel } from "../sound.ts";
 
 interface Usage {
   month: string;
@@ -145,6 +146,59 @@ function PhoneNotifications() {
   );
 }
 
+/** Sounds on this phone: off, only what helps at the table and the big moments, or everything. */
+function SoundSettings() {
+  const [level, setLevel] = useState<SoundLevel>(soundLevel());
+  const [volume, setVolume] = useState(soundVolume());
+  return (
+    <Card title="Sounds">
+      <Seg
+        label="Sounds"
+        value={level}
+        options={[
+          ["off", "Off"],
+          ["important", "Important"],
+          ["all", "All"],
+        ]}
+        onChange={(l) => {
+          setSoundLevel(l);
+          setLevel(l);
+          if (l !== "off") play(l === "all" ? "tap" : "score");
+        }}
+      />
+      <p className="muted small">
+        {level === "off"
+          ? "No sounds on this phone (it still buzzes on Android)."
+          : level === "important"
+            ? "Points, turns, rounds, the clock, dictation, results, level ups and notices. The phone's silent switch mutes them."
+            : "Everything, also taps, votes, reactions and cheers."}
+      </p>
+      {level !== "off" && (
+        <div className="sound-row">
+          <label className="sound-volume">
+            Volume
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={volume}
+              onChange={(e) => {
+                setSoundVolume(Number(e.target.value));
+                setVolume(Number(e.target.value));
+              }}
+              onPointerUp={() => play("score")}
+            />
+          </label>
+          <button type="button" className="small" onClick={() => play("victory", { force: true })}>
+            Hear a victory
+          </button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function ProfilePage() {
   const meta = useMeta();
   const [me, reload] = useLoad<Me>("/me");
@@ -214,6 +268,7 @@ export function ProfilePage() {
           onChange={setLangSetting}
         />
       </Card>
+      <SoundSettings />
       <PhoneNotifications />
       <Card title="Thorgrim usage">
         <UsageBar spent={me.usage.costUsd} limit={me.usage.limitUsd} />

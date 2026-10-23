@@ -5,7 +5,8 @@
 
 import { useEffect, useState } from "react";
 import { api } from "../api.ts";
-import { buzz, CountUp, Skeleton, Sparks } from "../motion.tsx";
+import { CountUp, Skeleton, Sparks } from "../motion.tsx";
+import { feedback, feedbackOnce } from "../sound.ts";
 import { Avatar, Icon, useLoad, useMeta, type IconName } from "../ui.tsx";
 
 interface Achievement {
@@ -65,7 +66,11 @@ function XpBar({ level }: { level: Level }) {
 
 /** What's new since the member last looked: a small celebration. */
 function News({ news }: { news: NonNullable<Glory["news"]> }) {
-  if (!news.achievements.length && !news.missions && !news.level) return null;
+  const empty = !news.achievements.length && !news.missions && !news.level;
+  useEffect(() => {
+    if (!empty) feedbackOnce(`glory-${JSON.stringify(news)}`, news.level ? "levelUp" : news.achievements.length ? "achievement" : "mission");
+  }, [empty, news]);
+  if (empty) return null;
   return (
     <div className="glory-news card" role="status">
       <Sparks />
@@ -278,7 +283,7 @@ export function Predictions() {
   if (!shown || (!shown.upcoming.length && !shown.settled.length)) return null;
   const pick = async (p: PredictionView, side: "a" | "b") => {
     setError(undefined);
-    buzz(10);
+    feedback("tap");
     try {
       setData(await api(`/glory/predictions/${p.id}`, { method: "POST", json: { pick: side } }));
     } catch (e) {
@@ -361,7 +366,7 @@ export function LiveGames() {
   }, []);
   if (!games?.length) return null;
   const cheer = async (g: LiveGame, kind: string) => {
-    buzz(12);
+    feedback("cheer");
     setGames(await api<LiveGame[]>(`/glory/live/${g.ownerId}/${g.gameId}/cheer`, { method: "POST", json: { kind } }).catch(() => games));
   };
   return (
@@ -427,7 +432,7 @@ export function BattleVote({ postId, votes, onVotes }: { postId: string; votes: 
         aria-pressed={mine}
         onClick={async () => {
           setError(undefined);
-          buzz(10);
+          feedback("tap");
           try {
             onVotes(await api<Votes>("/glory/votes/battle", { method: "POST", json: { postId } }));
           } catch (e) {
@@ -454,7 +459,7 @@ export function ArmyVote({ memberId, armyId, votes, onVotes }: { memberId: strin
       className={`vote-button ${mine ? "on" : ""}`}
       aria-pressed={mine}
       onClick={async () => {
-        buzz(10);
+        feedback("tap");
         onVotes(await api<Votes>("/glory/votes/army", { method: "POST", json: { memberId, armyId } }).catch(() => votes));
       }}
     >

@@ -5,6 +5,7 @@ import { Join, Login } from "./pages/Auth.tsx";
 import { HomePage } from "./pages/Home.tsx";
 import { Icon, MetaContext, type IconName, type Meta } from "./ui.tsx";
 import { Skeleton } from "./motion.tsx";
+import { play } from "./sound.ts";
 
 // Pages are downloaded when first opened, so the app starts with less to
 // load. Once it's up, the ones needed at the table (a game, Thorgrim, lists)
@@ -94,7 +95,16 @@ export function App() {
   // What's new in the club, for the badge on its tab: checked now and then, and when a page says it was seen.
   useEffect(() => {
     if (!meta?.user || tab === "r") return;
-    const check = () => void api<typeof unread>("/club/unread").then(setUnread).catch(() => undefined);
+    // A soft bell when a notice comes in while the app is open (not for the first count).
+    let known: number | undefined;
+    const check = () =>
+      void api<typeof unread>("/club/unread")
+        .then((u) => {
+          if (known !== undefined && u.notices > known) play("notice");
+          known = u.notices;
+          setUnread(u);
+        })
+        .catch(() => undefined);
     check();
     const t = setInterval(() => !document.hidden && check(), 60_000);
     window.addEventListener(CLUB_SEEN, check);

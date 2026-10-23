@@ -5,6 +5,12 @@ import fs from "node:fs";
 import { expect, test } from "@playwright/test";
 
 test("score a game and post its report to the club", async ({ page }) => {
+  // The sounds the game plays (Web Audio runs; the cues are seen through their event).
+  await page.addInitScript(() => {
+    (window as unknown as { cues: string[] }).cues = [];
+    window.addEventListener("thorgrim-sound", (e) => (window as unknown as { cues: string[] }).cues.push((e as CustomEvent<string>).detail));
+  });
+  const cues = () => page.evaluate(() => (window as unknown as { cues: string[] }).cues);
   await page.goto("/#/home");
   await page.getByRole("button", { name: "New game" }).first().click();
 
@@ -34,10 +40,12 @@ test("score a game and post its report to the club", async ({ page }) => {
   await expect(page.locator(".chess-clock")).toContainText("Pause");
   await page.locator(".chess-clock").click();
   await expect(page.locator(".chess-clock")).toContainText("Resume");
+  expect(await cues()).toEqual(["score", "score", "clockStart", "clockPause"]);
 
   // Results, then finish the game.
   await page.goto(`${gameUrl}/results`);
   await expect(page.locator(".victory-title")).toHaveText("VICTORY");
+  await expect.poll(cues).toContain("victory");
   await page.getByRole("button", { name: "Finish game" }).click();
   await expect(page).toHaveURL(/#\/games$/);
 

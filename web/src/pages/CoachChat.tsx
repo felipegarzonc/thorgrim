@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../api.ts";
-import { VoiceButton } from "../media.tsx";
+import { SpeakButton, VoiceButton } from "../media.tsx";
+import { feedback } from "../sound.ts";
 import { Card, Markdown, useMeta } from "../ui.tsx";
 import { moment } from "../analytics.tsx";
 
@@ -53,6 +54,7 @@ export function CoachChat(props: {
       // Reload so the stored transcript (with preset prompts) is shown.
       const all = await api<Entry[]>(`/coach/${props.convoId}`);
       setEntries(all.length ? all : (e) => [...e, answer]);
+      feedback("coach");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -82,6 +84,7 @@ export function CoachChat(props: {
       <div className="chat">
         {entries.map((e, i) => (
           <div key={i} className={`bubble ${e.role}`} translate="no">
+            {e.role === "coach" && <SpeakButton text={e.text} />}
             {e.role === "coach" ? <Markdown text={e.text} /> : <p>{e.text.length > 400 ? `${e.text.slice(0, 400)}…` : e.text}</p>}
             {e.tools && e.tools.length > 0 && <p className="tools">used: {e.tools.join(", ")}</p>}
           </div>

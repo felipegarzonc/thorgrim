@@ -23,7 +23,8 @@ import { WarscrollCard } from "./Lists.tsx";
 import { BattleReportCard, ReviewCard } from "./report.tsx";
 import { shareText, shareUrl } from "../links.ts";
 import { moment } from "../analytics.tsx";
-import { buzz, CountUp, Gain, Sparks } from "../motion.tsx";
+import { CountUp, Gain, Sparks } from "../motion.tsx";
+import { feedback, feedbackOnce } from "../sound.ts";
 import { BCP_HOME, bcpUrl } from "../../../shared/bcp.ts";
 import { translate } from "../../../shared/i18n/index.ts";
 import { currentLang } from "../i18n.ts";
@@ -1376,7 +1377,7 @@ function PlanStep({ game, mutate, saved, go }: { game: Game; mutate: Mutate; sav
         </>
       )}
 
-      <button type="button" className="primary wide start-game" onClick={() => go("round-1")}>
+      <button type="button" className="primary wide start-game" onClick={() => (feedback("round"), go("round-1"))}>
         Start the game: Round 1 <Icon name="right" />
       </button>
     </div>
@@ -1722,7 +1723,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
         ))}
       </nav>
       {s.seizedInitiative === active && <p className="small warning">Seized the initiative: no battle tactics this turn.</p>}
-      <ChessClock state={s} names={names} toggle={() => mutate((g) => ({ ...g, state: toggleClock(g.state) }))} />
+      <ChessClock state={s} names={names} toggle={() => (feedback(s.clock?.since ? "clockPause" : "clockStart"), mutate((g) => ({ ...g, state: toggleClock(g.state) })))} />
 
       <div className="tips">
         <div className="tips-head">
@@ -1800,7 +1801,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
           Score the turn below, then end it <Icon name="down" />
         </button>
       ) : (
-        <button type="button" className="primary wide" onClick={() => (buzz(8), update({ phase: PLAY_PHASES[phaseIndex + 1] }))}>
+        <button type="button" className="primary wide" onClick={() => (feedback("phase"), update({ phase: PLAY_PHASES[phaseIndex + 1] }))}>
           {`Next: ${PLAY_PHASES[phaseIndex + 1]}`} <Icon name="right" />
         </button>
       )}
@@ -1814,7 +1815,7 @@ function EndTurn({ game, n, update, names, go }: Pick<Parameters<typeof RoundSte
   const active = s.activePlayer;
   const turnNo = active === s.firstThisRound ? 1 : 2;
   const end = () => {
-    buzz(8);
+    feedback(turnNo === 1 ? "turn" : n < BATTLE_ROUNDS ? "round" : "tap");
     if (turnNo === 1) return update({ activePlayer: other(active), phase: "Start of Turn" }, `${names[other(active)]}'s turn.`);
     go(n < BATTLE_ROUNDS ? `round-${n + 1}` : "results");
   };
@@ -1855,6 +1856,7 @@ function VoiceScore({ game, n, mutate, names, saved }: { game: Game; n: number; 
     if (!found) return;
     const lines = found.changes.map((c) => describeChange(c, names, game, n));
     setFound(undefined);
+    feedback("score");
     await mutate((g) => applyVoice(g, n, found.changes), `Scored by voice: ${lines.join("; ")}.`);
     moment("Scored by voice");
   };
@@ -2019,7 +2021,7 @@ function SideBlock({
                 type="checkbox"
                 checked={on}
                 onChange={(e) => {
-                  buzz(e.target.checked ? 18 : 8);
+                  feedback(e.target.checked ? "score" : "tap");
                   void setSr(
                     { scored: e.target.checked ? [...sr.scored, l.label] : sr.scored.filter((x) => x !== l.label) },
                     e.target.checked ? `${who} scored "${l.label}" (+${l.vp}).` : undefined,
@@ -2078,7 +2080,7 @@ function SideBlock({
                   disabled={!step || blocked || laterDone}
                   onClick={() => {
                     if (!step) return;
-                    buzz(24);
+                    feedback("tactic");
                     void setSr({ tactics: [...sr.tactics, { card: t.card, step }] }, `${who} completed ${cap(step)} of ${t.card} (+${TACTIC_VP}).`);
                   }}
                 >
@@ -2194,6 +2196,11 @@ function ResultsStep({
   const me = sideInfo(game, lists, "me");
   const opp = sideInfo(game, lists, "opponent");
   const status = r === "win" ? "VICTORY" : r === "loss" ? "DEFEAT" : "DRAW";
+  // Heard when the game reaches its result, not when an old game is opened.
+  useEffect(() => {
+    if (!game.finished) feedbackOnce(`result-${game.id}`, r === "win" ? "victory" : r === "loss" ? "defeat" : "draw");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const change = (c: typeof conclusion) => {
     setConclusion(c);

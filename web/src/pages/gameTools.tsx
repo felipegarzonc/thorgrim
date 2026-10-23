@@ -6,6 +6,7 @@ import type { AttackProfile, Crit, SimulationResult } from "../../../engine/dice
 import { CORE_COMMANDS, SEASON_ABILITIES, usableBy } from "../../../shared/season.ts";
 import type { Ability, ArmyList, FactionRule, Game, GameState, ListUnit, Phase, Unit } from "../../../shared/types.ts";
 import { api } from "../api.ts";
+import { SpeakButton } from "../media.tsx";
 import { Card, Icon, RulesText } from "../ui.tsx";
 
 export type Side = "me" | "opponent";
@@ -123,6 +124,7 @@ export function PhaseChecklist({ game, armies, units, update }: { game: Game; ar
             <span className={`who ${x.owner}`}>{x.owner === "me" ? "YOU" : "THEM"}</span>
           </summary>
           <div className="body">
+            <SpeakButton text={[x.ability.name, x.ability.declare && `Declare: ${x.ability.declare}`, x.ability.effect].filter(Boolean).join(". ")} lang="en" label="Read this rule aloud" />
             {x.ability.declare && <RulesText text={`*Declare:* ${x.ability.declare}`} />}
             <RulesText text={x.ability.effect} />
             {ONCE_PER_BATTLE.test(x.ability.timing ?? "") &&

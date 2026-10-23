@@ -6617,3 +6617,36 @@ button:active:not(:disabled),
     position: static;
   }
 }
+
+/* Thorgrim reads out loud: a small speaker in the corner of his answers and of rules. */
+button.speak {
+  float: right;
+  width: 36px;
+  min-height: 36px;
+  margin: -0.2rem -0.4rem 0.2rem 0.4rem;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+}
+button.speak.on {
+  color: var(--brass);
+  background: var(--brass-soft);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.sound-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  margin-top: 0.5rem;
+}
+.sound-volume {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1 1 12rem;
+}
+.sound-volume input {
+  flex: 1;
+  accent-color: var(--brass);
+}

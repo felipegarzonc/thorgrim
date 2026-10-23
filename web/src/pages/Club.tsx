@@ -13,7 +13,8 @@ import { Story } from "./report.tsx";
 import { shareUrl } from "../links.ts";
 import { drawReportCard } from "../reportCard.ts";
 import { moment } from "../analytics.tsx";
-import { buzz, Skeleton } from "../motion.tsx";
+import { Skeleton } from "../motion.tsx";
+import { feedback } from "../sound.ts";
 import { EventPage, EventsList } from "./Events.tsx";
 import { MemberPage, MembersList } from "./Members.tsx";
 import { BattleVote, Bounties, GloryBoard, isThisWeek, LastWinners, LiveGames, Predictions, WrappedPage, type Votes } from "./Glory.tsx";
@@ -249,7 +250,7 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
               title={look.label}
               disabled={busy}
               onClick={() => {
-                buzz(14);
+                feedback("tap");
                 setPopped(r.mine ? undefined : `${r.emoji}-${Date.now()}`);
                 void call(() => api<FeedPostView>(`/feed/${post.id}/react`, { method: "POST", json: { emoji: r.emoji } }));
               }}
