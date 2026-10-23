@@ -6095,6 +6095,22 @@ button:active:not(:disabled),
   font-family: var(--display, "Cinzel", serif);
   font-size: 1.5rem;
 }
+.live-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.live-fresh {
+  color: var(--good, #6fbf73);
+  white-space: nowrap;
+}
+.live-quiet {
+  color: var(--faint);
+  white-space: nowrap;
+}
+.live-game.quiet .live-vp {
+  opacity: 0.6;
+}
 .live-cheers {
   display: flex;
   flex-wrap: wrap;

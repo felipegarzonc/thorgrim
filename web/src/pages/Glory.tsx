@@ -339,6 +339,8 @@ interface LiveGame {
   battleplan: string;
   round: number;
   vp: { me: number; opponent: number };
+  /** When the players last changed anything. */
+  lastAt: string;
   cheers: Record<string, number>;
   /** How many members back each player, and whom you back. */
   backers: { me: number; opponent: number };
@@ -391,14 +393,23 @@ export function LiveGames() {
   );
 }
 
+/** Minutes without a change after which a live game reads as paused. */
+const QUIET_MINS = 30;
+
 function LiveCard({ g, cheer, back }: { g: LiveGame; cheer: (kind: string) => void; back: (side: "me" | "opponent") => void }) {
   const [sheet, setSheet] = useState(false);
   const names = { me: g.ownerName, opponent: g.opponentName };
   const total = g.backers.me + g.backers.opponent;
   const hasSheet = g.detail.rounds.length > 0;
+  // A game stays listed for hours after its last change; say when that was, and that it's quiet after a while.
+  const quietMins = Math.max(0, Math.round((Date.now() - Date.parse(g.lastAt)) / 60000));
+  const quiet = quietMins >= QUIET_MINS;
   return (
-    <div className="card live-game">
-      <small className="muted">{`Round ${g.round}${g.battleplan ? ` · ${g.battleplan}` : ""}`}</small>
+    <div className={`card live-game ${quiet ? "quiet" : ""}`}>
+      <div className="live-meta">
+        <small className="muted grow">{`Round ${g.round}${g.battleplan ? ` · ${g.battleplan}` : ""}`}</small>
+        <small className={quiet ? "live-quiet" : "live-fresh"}>{quietMins < 1 ? "Updated just now" : quiet ? `No changes for ${quietMins < 120 ? `${quietMins} min` : `${Math.round(quietMins / 60)} h`}` : `Updated ${quietMins} min ago`}</small>
+      </div>
       <div className="live-score">
         <span className="live-side">
           <Avatar faction={g.myFaction} size={1.6} />
