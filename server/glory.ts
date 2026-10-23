@@ -36,7 +36,7 @@ import { allChallenges } from "./challenges.ts";
 import { clubSpace } from "./clubs.ts";
 import { currentUser } from "./context.ts";
 import { listEvents } from "./events.ts";
-import { allPosts, FeedError } from "./feed.ts";
+import { allPosts, FeedError, scoreDetail } from "./feed.ts";
 import { listResults, listSeasons } from "./ladder.ts";
 import { clubMembers, findMember } from "./members.ts";
 import { notify } from "./notices.ts";
@@ -56,7 +56,9 @@ interface GloryRecord {
 const records = () => new Collection<GloryRecord>("glory", clubSpace());
 const predictions = () => new Collection<Prediction>("predictions", clubSpace());
 const ballots = () => new Collection<Ballot & { announced?: boolean }>("ballots", clubSpace());
-const cheers = () => new Collection<{ id: string; counts: Record<string, number>; last: Record<string, string> }>("cheers", clubSpace());
+type Side = "me" | "opponent";
+/** A live game's cheers: reaction counts, when each member last cheered, and whom each member backs. */
+const cheers = () => new Collection<{ id: string; counts: Record<string, number>; last: Record<string, string>; backers?: Record<string, Side> }>("cheers", clubSpace());
 
 const lite = (p: FeedPost) => ({
   id: p.id,
@@ -384,6 +386,7 @@ const LIVE_HOURS = 4;
 export async function liveGames(now = new Date()) {
   const members = await clubMembers();
   const cheer = await cheers().list();
+  const me = currentUser();
   const out = [];
   for (const m of members) {
     // Only games touched in the last hours are downloaded (most of everyone's games aren't).
@@ -403,11 +406,23 @@ export async function liveGames(now = new Date()) {
         round: g.state.round,
         vp: g.state.vp,
         lastAt,
-        cheers: cheer.find((c) => c.id === `${m.id}-${g.id}`)?.counts ?? {},
+        ...backing(cheer.find((c) => c.id === `${m.id}-${g.id}`), me.id),
+        // The score sheet, round by round, for the club to follow.
+        detail: scoreDetail(g),
       });
     }
   }
   return out.sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+}
+
+/** The reactions, and how many back each player (and whom you back). */
+function backing(c: { counts: Record<string, number>; backers?: Record<string, Side> } | undefined, memberId: string) {
+  const backers = Object.values(c?.backers ?? {});
+  return {
+    cheers: c?.counts ?? {},
+    backers: { me: backers.filter((s) => s === "me").length, opponent: backers.filter((s) => s === "opponent").length },
+    myBack: c?.backers?.[memberId] ?? null,
+  };
 }
 
 export const CHEERS = ["fire", "skull", "shield", "laugh"] as const;
@@ -434,6 +449,37 @@ export async function cheer(ownerId: string, gameId: string, kind: string, now =
   if (ownerId !== me.id) {
     const icon = CHEER_TEXT[kind as (typeof CHEERS)[number]];
     await notify([ownerId], (lang) => (lang === "es" ? `${me.name || "Un miembro"} te anima en tu partida ${icon.es}` : `${me.name || "A member"} cheers your game ${icon.en}`), `#/games/${gameId}`);
+  }
+  return liveGames(now);
+}
+
+/** Back one of the players of a live game (again on the same one: stop backing). The game's owner hears who backs whom. */
+export async function backSide(ownerId: string, gameId: string, side: string, now = new Date()) {
+  if (side !== "me" && side !== "opponent") throw new FeedError("Back one of the two players.");
+  const live = (await liveGames(now)).find((g) => g.ownerId === ownerId && g.gameId === gameId);
+  if (!live) throw new FeedError("That game isn't being played right now.");
+  const me = currentUser();
+  const id = `${ownerId}-${gameId}`;
+  const c = (await cheers().get(id)) ?? { id, counts: {}, last: {} };
+  const backers = { ...(c.backers ?? {}) };
+  const already = backers[me.id];
+  if (already === side) delete backers[me.id];
+  else backers[me.id] = side;
+  await cheers().save({ ...c, backers });
+  if (already !== side && ownerId !== me.id) {
+    const who = me.name || null;
+    await notify(
+      [ownerId],
+      (lang) =>
+        side === "me"
+          ? lang === "es"
+            ? `${who ?? "Un miembro"} te hace barra en tu partida 📣`
+            : `${who ?? "A member"} is backing you in your game 📣`
+          : lang === "es"
+            ? `${who ?? "Un miembro"} le hace barra a ${live.opponentName} en tu partida 📣`
+            : `${who ?? "A member"} is backing ${live.opponentName} in your game 📣`,
+      `#/games/${gameId}`,
+    );
   }
   return liveGames(now);
 }

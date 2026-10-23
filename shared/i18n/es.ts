@@ -1207,6 +1207,8 @@ export const ES_PHRASES: Record<string, string> = {
   "You called it ✓": "Acertaste ✓",
   Missed: "Fallaste",
   "Live now": "En vivo",
+  "Hide points": "Ocultar puntos",
+  "Hold the line": "Aguanta",
   "Battle of the week?": "¿Batalla de la semana?",
   "Your battle of the week": "Tu batalla de la semana",
   "Army of the month?": "¿Ejército del mes?",
@@ -1261,6 +1263,8 @@ export const ES_PHRASES: Record<string, string> = {
 
 /** Text with names and numbers in it. */
 export const ES_PATTERNS: [RegExp, string][] = [
+  [/^Back (.+)$/, "Barra a $1"],
+  [/^Backers: (\d+) for (.+), (\d+) for (.+)$/, "Barra: $1 para $2, $3 para $4"],
   [/^(\d+) XP · 60 to level 6$/, "$1 XP · 60 para el nivel 6"],
   [/^XP · 60 to level 6$/, "XP · 60 para el nivel 6"],
   [/^Achievement unlocked: (.+)$/, "Logro desbloqueado: {1}"],

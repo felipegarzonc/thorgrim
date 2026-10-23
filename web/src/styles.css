@@ -6097,7 +6097,78 @@ button:active:not(:disabled),
 }
 .live-cheers {
   display: flex;
-  gap: 0.3rem;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.live-cheers .sheet-toggle {
+  margin-left: auto;
+}
+/* Backing a player: two halves, the poster's colour and the opponent's. */
+.live-back {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+}
+.back-side {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 42px;
+  min-width: 0;
+  padding: 0.3rem 0.65rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+.back-side .ico {
+  flex: none;
+}
+.back-side .back-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.back-side .back-count {
+  font-weight: 700;
+}
+.back-side.me .ico {
+  color: var(--me);
+}
+.back-side.opponent .ico {
+  color: var(--opp);
+}
+.back-side.me.on {
+  background: var(--me-soft);
+  border-color: var(--me-line);
+}
+.back-side.opponent.on {
+  background: var(--opp-soft);
+  border-color: var(--opp-line);
+}
+.back-meter {
+  display: flex;
+  height: 5px;
+  border-radius: 99px;
+  overflow: hidden;
+  gap: 2px;
+}
+.back-meter span {
+  flex-basis: 0;
+  transition: flex-grow 0.4s ease;
+}
+.back-meter .me {
+  background: var(--me);
+}
+.back-meter .opponent {
+  background: var(--opp);
+}
+.live-sheet {
+  margin: 0.2rem -0.2rem 0;
 }
 .vote-button {
   align-self: flex-start;

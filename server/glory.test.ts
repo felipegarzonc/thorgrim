@@ -92,6 +92,38 @@ describe("glory in the club", async () => {
     expect(await runAs(cid, () => g.liveGames(new Date("2026-10-23T03:00:00Z")))).toEqual([]);
   });
 
+  it("lets the club back a player of a live game and follow its points", async () => {
+    const games = new Collection<Record<string, unknown> & { id: string }>("games", ben.prefix);
+    const round = (vp: number[], scored: string[]) => ({ first: "me", me: { scored, tactics: [{ card: "Siege of Ashes", step: "affray" }] }, opponent: { scored: [], tactics: [] }, vp });
+    await runAs(ben, () =>
+      games.save({
+        id: "live2",
+        name: "Game",
+        createdAt: "2026-10-22T16:00:00Z",
+        opponentName: "Dee",
+        battleplan: "Into the Fire",
+        state: { round: 1, vp: { me: 10, opponent: 0 }, rounds: [round([10, 0], ["Control at least 1 objective", "Control at least 2 objectives"])], tactics: [{ card: "Siege of Ashes" }], opponentTactics: [] },
+        log: [{ at: "2026-10-22T17:30:00Z", text: "Round 1" }],
+      }),
+    );
+    const before = (await runAs(cid, () => g.liveGames(NOW))).find((x) => x.gameId === "live2")!;
+    expect(before.backers).toEqual({ me: 0, opponent: 0 });
+    expect(before.myBack).toBeNull();
+    expect(before.detail.rounds[0].me.scored).toEqual(["Control at least 1 objective", "Control at least 2 objectives"]);
+    expect(before.detail.tactics.me[0].card).toBe("Siege of Ashes");
+
+    let after = (await runAs(cid, () => g.backSide("ben", "live2", "opponent", NOW))).find((x) => x.gameId === "live2")!;
+    expect(after.backers).toEqual({ me: 0, opponent: 1 });
+    expect(after.myBack).toBe("opponent");
+    expect((await runAs(ben, () => myNotices())).some((n) => /Cid is backing Dee/.test(n.text))).toBe(true);
+    // Switching sides moves the backer; the same side again stops backing.
+    after = (await runAs(cid, () => g.backSide("ben", "live2", "me", NOW))).find((x) => x.gameId === "live2")!;
+    expect(after.backers).toEqual({ me: 1, opponent: 0 });
+    after = (await runAs(cid, () => g.backSide("ben", "live2", "me", NOW))).find((x) => x.gameId === "live2")!;
+    expect(after.backers).toEqual({ me: 0, opponent: 0 });
+    await expect(runAs(cid, () => g.backSide("ben", "live2", "referee", NOW))).rejects.toThrow(/Back one of the two players/);
+  });
+
   it("wraps up a member's season", async () => {
     const w = await runAs(cid, () => g.seasonWrapped("ana", undefined, NOW));
     expect(w).toMatchObject({ season: { name: "All time" }, games: 1, wins: 1, title: "The Conqueror" });

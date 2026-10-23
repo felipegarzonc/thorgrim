@@ -4,7 +4,9 @@
 // wrap-up (#/club/wrapped/<member>).
 
 import { useEffect, useState } from "react";
+import type { BattleDetail } from "../../../shared/types.ts";
 import { api } from "../api.ts";
+import { rowsFromDetail, SheetRows } from "../scoreSheet.tsx";
 import { CountUp, Skeleton, Sparks } from "../motion.tsx";
 import { feedback, feedbackOnce } from "../sound.ts";
 import { Avatar, Icon, useLoad, useMeta, type IconName } from "../ui.tsx";
@@ -338,12 +340,17 @@ interface LiveGame {
   round: number;
   vp: { me: number; opponent: number };
   cheers: Record<string, number>;
+  /** How many members back each player, and whom you back. */
+  backers: { me: number; opponent: number };
+  myBack: "me" | "opponent" | null;
+  detail: Pick<BattleDetail, "rounds" | "tactics">;
 }
-const CHEER_ICONS: [string, string][] = [
-  ["fire", "🔥"],
-  ["skull", "💀"],
-  ["shield", "🛡️"],
-  ["laugh", "😂"],
+/** The same themed icons as the reactions on club posts. */
+const CHEER_LOOK: [string, IconName, string][] = [
+  ["fire", "flame", "Fire"],
+  ["skull", "skull", "Brutal"],
+  ["shield", "shield", "Hold the line"],
+  ["laugh", "laugh", "Ha!"],
 ];
 
 /** Games being played right now in the club, with cheers. */
@@ -365,42 +372,89 @@ export function LiveGames() {
     };
   }, []);
   if (!games?.length) return null;
-  const cheer = async (g: LiveGame, kind: string) => {
-    feedback("cheer");
-    setGames(await api<LiveGame[]>(`/glory/live/${g.ownerId}/${g.gameId}/cheer`, { method: "POST", json: { kind } }).catch(() => games));
-  };
+  const send = async (g: LiveGame, what: "cheer" | "back", json: Record<string, string>) =>
+    setGames(await api<LiveGame[]>(`/glory/live/${g.ownerId}/${g.gameId}/${what}`, { method: "POST", json }).catch(() => games));
   return (
     <section className="live">
       <h2 className="section-title">
         <span className="live-dot" /> Live now
       </h2>
       {games.map((g) => (
-        <div key={`${g.ownerId}-${g.gameId}`} className="card live-game">
-          <small className="muted">{`Round ${g.round}${g.battleplan ? ` · ${g.battleplan}` : ""}`}</small>
-          <div className="live-score">
-            <span className="live-side">
-              <Avatar faction={g.myFaction} size={1.6} />
-              <b translate="no">{g.ownerName}</b>
-            </span>
-            <b className="live-vp">
-              {g.vp.me}–{g.vp.opponent}
-            </b>
-            <span className="live-side right">
-              <b translate="no">{g.opponentName}</b>
-              <Avatar faction={g.opponentFaction} size={1.6} />
-            </span>
-          </div>
-          <div className="live-cheers">
-            {CHEER_ICONS.map(([kind, icon]) => (
-              <button key={kind} type="button" className="react" onClick={() => cheer(g, kind)} aria-label={`Cheer ${kind}`}>
-                <span aria-hidden="true">{icon}</span>
-                {g.cheers[kind] ? <span>{g.cheers[kind]}</span> : null}
-              </button>
-            ))}
-          </div>
-        </div>
+        <LiveCard
+          key={`${g.ownerId}-${g.gameId}`}
+          g={g}
+          cheer={(kind) => (feedback("cheer"), void send(g, "cheer", { kind }))}
+          back={(side) => (feedback("cheer"), void send(g, "back", { side }))}
+        />
       ))}
     </section>
+  );
+}
+
+function LiveCard({ g, cheer, back }: { g: LiveGame; cheer: (kind: string) => void; back: (side: "me" | "opponent") => void }) {
+  const [sheet, setSheet] = useState(false);
+  const names = { me: g.ownerName, opponent: g.opponentName };
+  const total = g.backers.me + g.backers.opponent;
+  const hasSheet = g.detail.rounds.length > 0;
+  return (
+    <div className="card live-game">
+      <small className="muted">{`Round ${g.round}${g.battleplan ? ` · ${g.battleplan}` : ""}`}</small>
+      <div className="live-score">
+        <span className="live-side">
+          <Avatar faction={g.myFaction} size={1.6} />
+          <b translate="no">{g.ownerName}</b>
+        </span>
+        <b className="live-vp">
+          {g.vp.me}–{g.vp.opponent}
+        </b>
+        <span className="live-side right">
+          <b translate="no">{g.opponentName}</b>
+          <Avatar faction={g.opponentFaction} size={1.6} />
+        </span>
+      </div>
+      {/* Whom the club backs: tap a side to back that player, again to stop. */}
+      <div className="live-back">
+        {(["me", "opponent"] as const).map((side) => (
+          <button key={side} type="button" className={`back-side ${side} ${g.myBack === side ? "on" : ""}`} aria-pressed={g.myBack === side} onClick={() => back(side)}>
+            <Icon name="flag" />
+            <span className="back-name">{`Back ${names[side]}`}</span>
+            <span className="back-count">{g.backers[side]}</span>
+          </button>
+        ))}
+      </div>
+      {total > 0 && (
+        <div className="back-meter" aria-label={`Backers: ${g.backers.me} for ${g.ownerName}, ${g.backers.opponent} for ${g.opponentName}`}>
+          <span className="me" style={{ flexGrow: g.backers.me }} />
+          <span className="opponent" style={{ flexGrow: g.backers.opponent }} />
+        </div>
+      )}
+      <div className="post-actions live-cheers">
+        {CHEER_LOOK.map(([kind, icon, label]) => (
+          <button key={kind} type="button" className="react" onClick={() => cheer(kind)} aria-label={`${label}${g.cheers[kind] ? `, ${g.cheers[kind]}` : ""}`} title={label}>
+            <span className="react-ico">
+              <Icon name={icon} />
+            </span>
+            {g.cheers[kind] ? <span>{g.cheers[kind]}</span> : null}
+          </button>
+        ))}
+        {hasSheet && (
+          <button type="button" className={`react sheet-toggle ${sheet ? "on" : ""}`} aria-expanded={sheet} onClick={() => setSheet((s) => !s)}>
+            <Icon name="log" />
+            <span>{sheet ? "Hide points" : "Points"}</span>
+          </button>
+        )}
+      </div>
+      {sheet && hasSheet && (
+        <div className="live-sheet">
+          <SheetRows
+            sides={[
+              { name: g.ownerName, rows: rowsFromDetail(g.detail, "me") },
+              { name: g.opponentName, rows: rowsFromDetail(g.detail, "opponent") },
+            ]}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

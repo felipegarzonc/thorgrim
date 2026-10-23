@@ -141,15 +141,12 @@ function fromGame(game: Game, sides: ReportSides, playerBadgeList: string[]) {
   };
 }
 
-/** The battle laid out for "See the full battle", from the poster's side. */
-function battleDetail(game: Game, sides: ReportSides): BattleDetail {
+/** Each side's points round by round and its battle tactics: the score sheet (also of a game being played). */
+export function scoreDetail(game: Game): Pick<BattleDetail, "rounds" | "tactics"> {
   const s = game.state;
   const rounds = s.rounds ?? [];
   const steps = (side: "me" | "opponent", card: string) => [...tacticSteps(rounds, side, card)];
-  const army = (side: "me" | "opponent") =>
-    (sides[side].list?.units ?? []).map((u) => ({ name: u.name, destroyed: !!s.units[`${side}:${u.key}`]?.destroyed, damage: s.units[`${side}:${u.key}`]?.damage ?? 0 }));
   return {
-    attacker: s.attacker,
     rounds: rounds.flatMap((r, i) =>
       r.first
         ? [
@@ -163,12 +160,23 @@ function battleDetail(game: Game, sides: ReportSides): BattleDetail {
           ]
         : [],
     ),
-    totals: runningScore(game),
-    doubleTurns: doubleTurns(game),
     tactics: {
       me: (s.tactics ?? []).map((t) => ({ card: t.card, done: steps("me", t.card) })),
       opponent: (s.opponentTactics ?? []).map((t) => ({ card: t.card, done: steps("opponent", t.card) })),
     },
+  };
+}
+
+/** The battle laid out for "See the full battle", from the poster's side. */
+function battleDetail(game: Game, sides: ReportSides): BattleDetail {
+  const s = game.state;
+  const army = (side: "me" | "opponent") =>
+    (sides[side].list?.units ?? []).map((u) => ({ name: u.name, destroyed: !!s.units[`${side}:${u.key}`]?.destroyed, damage: s.units[`${side}:${u.key}`]?.damage ?? 0 }));
+  return {
+    attacker: s.attacker,
+    ...scoreDetail(game),
+    totals: runningScore(game),
+    doubleTurns: doubleTurns(game),
     armies: { me: army("me"), opponent: army("opponent") },
     log: game.log.slice(-80).map((l) => l.text),
   };

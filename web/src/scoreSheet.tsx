@@ -39,6 +39,20 @@ export function ScoreSheet({ date, status, tone, sides, footer }: { date: string
           {b.sub && <small className="muted">{b.sub}</small>}
         </div>
       </div>
+      <SheetRows sides={sides} />
+      <p className="res-foot">
+        {footer}
+        <br />
+        Tracked with Thorgrim
+      </p>
+    </article>
+  );
+}
+
+/** Each side's rows: objectives and battle tactics, round by round. */
+export function SheetRows({ sides }: { sides: Pick<SheetSide, "name" | "rows">[] }) {
+  return (
+    <>
       {sides.map((side, i) => (
         <div key={i} className="res-side">
           <h2>{side.name}</h2>
@@ -57,12 +71,7 @@ export function ScoreSheet({ date, status, tone, sides, footer }: { date: string
           ))}
         </div>
       ))}
-      <p className="res-foot">
-        {footer}
-        <br />
-        Tracked with Thorgrim
-      </p>
-    </article>
+    </>
   );
 }
 
