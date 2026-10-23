@@ -6721,3 +6721,85 @@ button.speak.on {
   flex: 1;
   accent-color: var(--brass);
 }
+
+/* Linking games to club members (pages/GameLinks.tsx). */
+.link-offer,
+.link-past {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.link-offer {
+  border-color: var(--me-line);
+}
+.link-offer-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-weight: 600;
+}
+.link-offer-head .ico {
+  color: var(--brass);
+  flex: none;
+}
+.link-offer-games {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.link-offer-games li {
+  display: flex;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+.link-offer-games .grow {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.link-offer .row-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.link-past-head {
+  display: flex;
+  align-items: center;
+}
+.link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--line);
+}
+.invite-member .link-row {
+  border-top: 0;
+}
+.link-name {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+.link-name b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.link-row select {
+  flex: 1 1 9rem;
+  min-width: 0;
+  width: auto;
+}
+.ok-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--good, #6fbf73);
+}

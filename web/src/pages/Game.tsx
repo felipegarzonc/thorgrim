@@ -25,6 +25,7 @@ import { shareText, shareUrl } from "../links.ts";
 import { moment } from "../analytics.tsx";
 import { CountUp, Gain, Sparks } from "../motion.tsx";
 import { feedback, feedbackOnce } from "../sound.ts";
+import { InviteMember } from "./GameLinks.tsx";
 import { BCP_HOME, bcpUrl } from "../../../shared/bcp.ts";
 import { translate } from "../../../shared/i18n/index.ts";
 import { currentLang } from "../i18n.ts";
@@ -542,6 +543,7 @@ function ShareGame({ game, changed }: { game: Game; changed: (g: Game) => Promis
           </button>
         </>
       )}
+      {!players.length && <InviteMember game={game} />}
       {error && <p className="error small">{error}</p>}
     </div>
   );

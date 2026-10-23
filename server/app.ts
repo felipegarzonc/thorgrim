@@ -47,14 +47,14 @@ import { currentUser, LOCAL_USER, runAs, userPrefix, type UserCtx } from "./cont
 import { jobs, startJob } from "./jobs.ts";
 import { addDocument, deleteDocument, docPath, finishUpload, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
-import { bothConfirmed, changeGame, confirmResult, forgetShares, gameLists, joinGame, ladderSides, leaveGame, myGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
+import { acceptOffer, bothConfirmed, changeGame, confirmResult, declineOffer, forgetShares, gameLists, joinGame, ladderSides, leaveGame, myGames, myOffers, offerGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
 import { forgetResult, ladder, listResults, startSeason, syncResult } from "./ladder.ts";
 import { Collection, newId } from "./store.ts";
 import { blankGame } from "./newGame.ts";
 import { rememberLang } from "./lang.ts";
 import { omnissiahStatus } from "./omnissiah.ts";
 import { backSide, bounties, cheer, gloryBoard, listPredictions, liveGames, memberGlory, myGlory, predict, seasonWrapped, voteArmy, voteBattle, votes } from "./glory.ts";
-import { allAccounts, clubMembers } from "./members.ts";
+import { allAccounts, clubMembers, findMember } from "./members.ts";
 import { addMembers, clubFor, createClub, getClub, isLeader, isOwner, joinClub, myClubs, removeMember, renameClub, setLeader, type Club } from "./clubs.ts";
 import { approve as approveRequest, decline as declineRequest, listRequests, requestAccess } from "./access.ts";
 import { mailReady } from "./mail.ts";
@@ -551,6 +551,32 @@ const change = async (o: OpenGame, ops: Op[]) => {
 };
 
 app.get("/api/games", async (_req, res) => res.json(newestFirst(await myGames())));
+// Linking games to a club member: propose them, the member accepts (server/sharedGames.ts).
+app.get("/api/games/offers", async (_req, res) => res.json(await myOffers()));
+app.post("/api/games/offers", async (req, res) => {
+  const to = await findMember(String(req.body?.memberId ?? ""));
+  if (!to) return res.status(400).json({ error: "That player isn't in the club." });
+  try {
+    res.json(await offerGames(to, Array.isArray(req.body?.gameIds) ? req.body.gameIds.map(String) : []));
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+app.post("/api/games/offers/:id/accept", async (req, res) => {
+  let linked: OpenGame[];
+  try {
+    linked = await acceptOffer(param(req, "id"), Array.isArray(req.body?.gameIds) ? req.body.gameIds.map(String) : undefined);
+  } catch (e) {
+    return res.status(400).json({ error: (e as Error).message });
+  }
+  // Both players confirmed by now: finished games join the ladder.
+  for (const o of linked) if (o.game.finished) await syncResult(o).catch((e: Error) => console.error(`Ladder for linked game ${o.game.id} failed:`, e));
+  res.json({ linked: linked.length, ids: linked.map((o) => o.game.id) });
+});
+app.delete("/api/games/offers/:id", async (req, res) => {
+  await declineOffer(param(req, "id"));
+  res.json({ ok: true });
+});
 app.get("/api/games/:id", async (req, res) => {
   const o = await openOr404(req, res);
   if (o) res.json(viewGame(o));

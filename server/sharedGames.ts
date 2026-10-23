@@ -265,3 +265,122 @@ export async function remindConfirmations(spaces: string[], now = Date.now()): P
   }
   return n;
 }
+
+// ---------- linking games to a club member ----------
+//
+// Without a link: a member proposes games they recorded (one, or every game
+// against a name they typed) to the club member who was their opponent; that
+// member accepts in the app, and each game becomes shared like a joined one.
+// Proposing confirms the result of a finished game for the sender, accepting
+// for the other player, so linked past games count on the club ladder at once.
+
+/** Games a member proposes to link to the recipient. Kept in the recipient's space, one per sender. */
+export interface GameOffer {
+  id: string; // the sender's id
+  fromId: string;
+  fromName: string;
+  fromPrefix: string;
+  gameIds: string[];
+  createdAt: string;
+}
+const offersIn = (prefix: string) => new Collection<GameOffer>("game-offers", prefix);
+
+/** A game no member is linked to yet. */
+const linkable = (g: Game | undefined): g is Game => !!g && !g.share?.players.length;
+
+const confirmNow = (g: Game, id: string): Game["confirmations"] =>
+  g.finished ? { ...g.confirmations, [id]: { result: resultKey(g), at: new Date().toISOString() } } : g.confirmations;
+
+/** Propose some of the signed-in player's games to the member who was their opponent. */
+export async function offerGames(to: { id: string; name: string; prefix: string }, gameIds: string[]): Promise<{ offered: number }> {
+  const me = currentUser();
+  if (to.id === me.id) throw new Error("Pick your opponent, not yourself.");
+  const mine = gamesIn(me.prefix);
+  const games = (await Promise.all([...new Set(gameIds)].slice(0, 200).map((id) => mine.get(id)))).filter(linkable);
+  if (!games.length) throw new Error("None of these games can be linked: they're not yours, or another player is already in them.");
+  for (const g of games) {
+    const confirmations = confirmNow(g, me.id);
+    if (confirmations !== g.confirmations) await gamesIn(me.prefix).save({ ...g, confirmations, version: (g.version ?? 0) + 1 });
+  }
+  const offers = offersIn(to.prefix);
+  const had = await offers.get(me.id);
+  const ids = [...new Set([...(had?.gameIds ?? []), ...games.map((g) => g.id)])];
+  await offers.save({ id: me.id, fromId: me.id, fromName: me.name, fromPrefix: me.prefix, gameIds: ids, createdAt: new Date().toISOString() });
+  const who = me.name || null;
+  const one = games.length === 1 ? games[0] : undefined;
+  const against = one ? undefined : [...new Set(games.map((g) => g.opponentName?.trim()).filter(Boolean))];
+  await notify(
+    [to.id],
+    (lang) =>
+      lang === "es"
+        ? one
+          ? `${who ?? "Un miembro"} te propone asociar a tu cuenta su partida${one.battleplan ? ` (${one.battleplan})` : ""}. Acéptala en Partidas.`
+          : `${who ?? "Un miembro"} te propone asociar a tu cuenta ${games.length} partidas${against?.length === 1 ? ` que registró contra "${against[0]}"` : ""}. Acéptalas en Partidas.`
+        : one
+          ? `${who ?? "A member"} wants to link their game${one.battleplan ? ` (${one.battleplan})` : ""} to your account. Accept it in Games.`
+          : `${who ?? "A member"} wants to link ${games.length} games${against?.length === 1 ? ` they recorded against "${against[0]}"` : ""} to your account. Accept them in Games.`,
+    "#/games",
+  );
+  return { offered: games.length };
+}
+
+/** The proposals waiting for the signed-in player, with each game as they would see it (their side is "me"). */
+export async function myOffers() {
+  const me = currentUser();
+  const out = [];
+  for (const offer of await offersIn(me.prefix).list()) {
+    const games = (await Promise.all(offer.gameIds.map((id) => gamesIn(offer.fromPrefix).get(id)))).filter(linkable);
+    if (!games.length) {
+      await offersIn(me.prefix).delete(offer.id);
+      continue;
+    }
+    out.push({
+      id: offer.id,
+      fromName: offer.fromName,
+      createdAt: offer.createdAt,
+      games: games
+        .map((g) => {
+          const v = flipGame(g);
+          return { id: g.id, date: g.date ?? g.createdAt.slice(0, 10), battleplan: g.battleplan, recordedAs: g.opponentName ?? "", myFaction: v.myFaction ?? "", opponentFaction: v.opponentFaction ?? "", vp: v.state.vp, finished: !!g.finished };
+        })
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    });
+  }
+  return out;
+}
+
+/** Accept a proposal (all its games, or some): each becomes a game played together. Returns the linked games. */
+export async function acceptOffer(offerId: string, only?: string[]): Promise<OpenGame[]> {
+  const me = currentUser();
+  const offer = await offersIn(me.prefix).get(offerId);
+  if (!offer) throw new Error("That proposal isn't there any more.");
+  const linked: OpenGame[] = [];
+  for (const id of offer.gameIds) {
+    if (only && !only.includes(id)) continue;
+    const game = await gamesIn(offer.fromPrefix).get(id);
+    if (!linkable(game)) continue;
+    const share = { ownerName: game.myName || offer.fromName, ownerId: offer.fromId, ...game.share, players: [{ id: me.id, name: me.name, prefix: me.prefix }] };
+    const o: OpenGame = { game, prefix: offer.fromPrefix, role: "owner" };
+    const saved = await save(o, { ...game, share, opponentName: game.opponentName || me.name, confirmations: confirmNow(game, me.id) });
+    await linksIn(me.prefix).save({ id, ownerPrefix: offer.fromPrefix });
+    linked.push({ game: saved, prefix: offer.fromPrefix, role: "player" });
+  }
+  const rest = only ? offer.gameIds.filter((id) => !only.includes(id)) : [];
+  if (rest.length) await offersIn(me.prefix).save({ ...offer, gameIds: rest });
+  else await offersIn(me.prefix).delete(offer.id);
+  if (linked.length)
+    await notify(
+      [offer.fromId],
+      (lang) =>
+        lang === "es"
+          ? `${me.name || "Tu rival"} aceptó: ${linked.length === 1 ? "la partida quedó asociada" : `${linked.length} partidas quedaron asociadas`} a su cuenta.`
+          : `${me.name || "Your opponent"} accepted: ${linked.length === 1 ? "the game is linked" : `${linked.length} games are linked`} to their account.`,
+      linked.length === 1 ? `#/games/${linked[0].game.id}` : "#/games",
+    );
+  return linked;
+}
+
+/** Turn a proposal down. */
+export async function declineOffer(offerId: string) {
+  await offersIn(currentUser().prefix).delete(offerId);
+}

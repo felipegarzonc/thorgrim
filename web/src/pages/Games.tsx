@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { ArmyList, Game } from "../../../shared/types.ts";
 import { GameCard, sideInfo } from "../gameView.tsx";
 import { api } from "../api.ts";
-import { Icon, useLoad } from "../ui.tsx";
+import { Icon, useLoad, useMeta } from "../ui.tsx";
+import { LinkPastGames, linkableGroups, OfferInbox } from "./GameLinks.tsx";
 import { newGame } from "./Home.tsx";
 
 export function GamesPage() {
@@ -13,6 +14,9 @@ export function GamesPage() {
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const meta = useMeta();
+  const [linking, setLinking] = useState(false);
+  const canLink = !!meta?.accounts && !!games && linkableGroups(games).length > 0;
 
   const toggle = (id: string) => setPicked((cur) => {
     const next = new Set(cur);
@@ -44,6 +48,11 @@ export function GamesPage() {
     <div className="stack rise">
       <div className="page-head">
         <h1 className="grow">Games</h1>
+        {canLink && !selecting && (
+          <button type="button" className="small ghost accent" aria-pressed={linking} onClick={() => setLinking(!linking)}>
+            <Icon name="share" /> Link
+          </button>
+        )}
         {!!games?.length && (
           <button type="button" className="small ghost accent" aria-pressed={selecting} onClick={() => (setSelecting(!selecting), setPicked(new Set()))}>
             {selecting ? "Done" : "Select"}
@@ -53,6 +62,8 @@ export function GamesPage() {
           <Icon name="search" />
         </button>
       </div>
+      {meta?.accounts && <OfferInbox onAccepted={reload} />}
+      {linking && games && <LinkPastGames games={games} onClose={() => setLinking(false)} />}
       {selecting && (
         <div className="select-bar">
           <span className="grow">{picked.size ? `${picked.size} selected` : "Tap the games to delete"}</span>

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { applyOps, diff } from "../shared/patch.ts";
 import { flipGame } from "../shared/perspective.ts";
 import { emptyRound } from "../shared/scoring.ts";
@@ -10,6 +10,16 @@ import { runAs, type UserCtx } from "./context.ts";
 
 // Isolated storage for this test run.
 process.env.STORAGE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "aos-shared-test-"));
+// Accounts, so notices reach the players.
+vi.mock("./accounts.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./accounts.ts")>()),
+  accountsEnabled: () => true,
+  listAccounts: async () => [
+    { id: "ana", email: "a@example.com", name: "Ana", role: "admin", owner: true },
+    { id: "ben", email: "b@example.com", name: "Ben", role: "player" },
+    { id: "cid", email: "c@example.com", name: "Cid", role: "player" },
+  ],
+}));
 
 const ana: UserCtx = { id: "ana", name: "Ana", isAdmin: true, prefix: "" };
 const ben: UserCtx = { id: "ben", name: "Ben", isAdmin: false, prefix: "users/ben/" };
@@ -156,5 +166,62 @@ describe("shared games", () => {
     const token = await runAs(ana, async () => (await sg.openGame("g1"))!.game.share!.token!);
     await runAs(ana, async () => sg.stopSharing((await sg.openGame("g1"))!));
     expect(await runAs(ben, () => sg.joinGame(token).catch((e: Error) => e.message))).toMatch(/doesn't work/);
+  });
+});
+
+describe("linking past games to a club member", () => {
+  let sg: typeof import("./sharedGames.ts");
+  let store: typeof import("./store.ts");
+  let notices: typeof import("./notices.ts");
+  beforeAll(async () => {
+    sg = await import("./sharedGames.ts");
+    store = await import("./store.ts");
+    notices = await import("./notices.ts");
+  });
+  const past = (id: string, opponentName: string, vp: [number, number]): Game => {
+    const g = newGame();
+    return { ...g, id, opponentName, date: `2026-09-${id.slice(-1).padStart(2, "0")}`, state: { ...g.state, vp: { me: vp[0], opponent: vp[1] } }, finished: { conclusion: "played", at: "2026-09-30T00:00:00Z" } };
+  };
+
+  it("proposes games, the member accepts them, and both have confirmed the results", async () => {
+    const cids = new store.Collection<Game>("games", cid.prefix);
+    await runAs(cid, async () => {
+      await cids.save(past("p1", "Diego", [60, 40]));
+      await cids.save(past("p2", "Diego", [30, 70]));
+      await cids.save(past("p3", "Someone else", [50, 50]));
+    });
+    const benMember = { id: ben.id, name: ben.name, prefix: ben.prefix };
+    expect(await runAs(cid, () => sg.offerGames({ id: cid.id, name: "Cid", prefix: cid.prefix }, ["p1"]).catch((e: Error) => e.message))).toMatch(/not yourself/);
+    expect(await runAs(cid, () => sg.offerGames(benMember, ["p1", "p2", "nope"]))).toEqual({ offered: 2 });
+    expect((await runAs(ben, () => notices.myNotices())).some((n) => /Cid wants to link 2 games they recorded against "Diego"/.test(n.text))).toBe(true);
+
+    // Ben sees them from his side: his score first.
+    const [offer] = await runAs(ben, () => sg.myOffers());
+    expect(offer).toMatchObject({ id: "cid", fromName: "Cid" });
+    expect(offer.games.map((g) => [g.id, g.vp.me, g.vp.opponent])).toEqual([
+      ["p2", 70, 30],
+      ["p1", 40, 60],
+    ]);
+
+    const linked = await runAs(ben, () => sg.acceptOffer("cid"));
+    expect(linked.map((o) => o.game.id).sort()).toEqual(["p1", "p2"]);
+    expect(await runAs(ben, () => sg.myOffers())).toEqual([]);
+    // Ben has them now, from his side, and both players' confirmations count.
+    const p1 = (await runAs(ben, () => sg.openGame("p1")))!;
+    expect(p1.role).toBe("player");
+    expect(sg.viewGame(p1).state.vp).toEqual({ me: 40, opponent: 60 });
+    expect(sg.bothConfirmed(p1)).toBe(true);
+    expect((await runAs(cid, () => notices.myNotices())).some((n) => /Ben accepted: 2 games are linked/.test(n.text))).toBe(true);
+    // A linked game can't be offered again.
+    expect(await runAs(cid, () => sg.offerGames(benMember, ["p1"]).catch((e: Error) => e.message))).toMatch(/can be linked/);
+  });
+
+  it("drops a declined proposal", async () => {
+    await runAs(ana, async () => new store.Collection<Game>("games", ana.prefix).save(past("p4", "Cid", [10, 20])));
+    await runAs(ana, () => sg.offerGames({ id: cid.id, name: "Cid", prefix: cid.prefix }, ["p4"]));
+    expect((await runAs(cid, () => sg.myOffers())).length).toBe(1);
+    await runAs(cid, () => sg.declineOffer("ana"));
+    expect(await runAs(cid, () => sg.myOffers())).toEqual([]);
+    expect(await runAs(cid, () => sg.acceptOffer("ana").catch((e: Error) => e.message))).toMatch(/isn't there/);
   });
 });
