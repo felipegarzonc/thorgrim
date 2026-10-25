@@ -8,6 +8,7 @@
 import crypto from "node:crypto";
 import type Anthropic from "@anthropic-ai/sdk";
 import { blobs } from "./blobs.ts";
+import { hot } from "./hot.ts";
 import { currentUser } from "./context.ts";
 
 export interface Account {
@@ -77,8 +78,13 @@ const USERS = "settings/users.json";
 const INVITES = "settings/invites.json";
 const SETTINGS = "settings/accounts.json";
 
-export const listAccounts = () => readJson<Account[]>(USERS, []);
-export const saveAccounts = (a: Account[]) => writeJson(USERS, a);
+// Every signed-in request reads the accounts: a short copy in memory (server/hot.ts).
+const accounts = hot(() => readJson<Account[]>(USERS, []));
+export const listAccounts = () => accounts();
+export const saveAccounts = async (a: Account[]) => {
+  await writeJson(USERS, a);
+  accounts.forget();
+};
 export const listInvites = () => readJson<Invite[]>(INVITES, []);
 export const saveInvites = (i: Invite[]) => writeJson(INVITES, i);
 export const accountSettings = async () => ({ defaultLimitUsd: 5, ...(await readJson<Partial<AccountSettings>>(SETTINGS, {})) });

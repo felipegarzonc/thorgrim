@@ -9,6 +9,7 @@
 import { accountsEnabled, listAccounts } from "./accounts.ts";
 import { currentUser, runAs, type UserCtx } from "./context.ts";
 import { FeedError } from "./feed.ts";
+import { hot } from "./hot.ts";
 import { Collection, newId } from "./store.ts";
 
 export interface Club {
@@ -27,8 +28,15 @@ export type ClubCtx = Pick<Club, "id" | "name" | "prefix" | "leaderId">;
 const registry = new Collection<Club>("clubs", "settings/");
 const LEGACY = "club/";
 
-export const listClubs = async () => (await registry.list()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-export const getClub = (id: string) => registry.get(id);
+// Every request finds its club: the registry stays in memory a few seconds (server/hot.ts).
+const clubs = hot(async () => (await registry.list()).sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+export const listClubs = () => clubs();
+export const getClub = async (id: string) => (await clubs()).find((c) => c.id === id);
+const saveClub = async (c: Club) => {
+  const saved = await registry.save(c);
+  clubs.forget();
+  return saved;
+};
 
 /** The app's owner (the first admin, or the app password): the only one who creates clubs for now. */
 export const isOwner = (u: UserCtx = currentUser()) => u.prefix === "";
@@ -94,7 +102,7 @@ export async function createClub(name: string, leaderId: string, memberIds: stri
     prefix: clubs.length ? `clubs/${id}/` : LEGACY,
     createdAt: new Date().toISOString(),
   };
-  return registry.save(club);
+  return saveClub(club);
 }
 
 async function mustLead(clubId: string): Promise<Club> {
@@ -109,31 +117,31 @@ export async function addMembers(clubId: string, ids: string[]): Promise<Club> {
   const c = await mustLead(clubId);
   const accounts = await listAccounts();
   const add = ids.filter((id) => accounts.some((a) => a.id === id && !a.disabled));
-  return registry.save({ ...c, memberIds: [...new Set([...c.memberIds, ...add])] });
+  return saveClub({ ...c, memberIds: [...new Set([...c.memberIds, ...add])] });
 }
 
 export async function removeMember(clubId: string, id: string): Promise<Club> {
   const c = await mustLead(clubId);
   if (id === c.leaderId) throw new FeedError("The leader stays in the club: name another leader first.");
-  return registry.save({ ...c, memberIds: c.memberIds.filter((m) => m !== id) });
+  return saveClub({ ...c, memberIds: c.memberIds.filter((m) => m !== id) });
 }
 
 /** A new leader (the owner, or the current leader handing over); they must be a member. */
 export async function setLeader(clubId: string, id: string): Promise<Club> {
   const c = await mustLead(clubId);
   if (!c.memberIds.includes(id)) throw new FeedError("The new leader has to be a member of the club.");
-  return registry.save({ ...c, leaderId: id });
+  return saveClub({ ...c, leaderId: id });
 }
 
 export async function renameClub(clubId: string, name: string): Promise<Club> {
   const c = await mustLead(clubId);
   const clean = name.trim().slice(0, 60);
   if (!clean) throw new FeedError("Give the club a name.");
-  return registry.save({ ...c, name: clean });
+  return saveClub({ ...c, name: clean });
 }
 
 /** Someone who joins with a club's invite becomes a member (no leader check: the invite is the leader's). */
 export async function joinClub(clubId: string, userId: string) {
   const c = await registry.get(clubId);
-  if (c && !c.memberIds.includes(userId)) await registry.save({ ...c, memberIds: [...c.memberIds, userId] });
+  if (c && !c.memberIds.includes(userId)) await saveClub({ ...c, memberIds: [...c.memberIds, userId] });
 }

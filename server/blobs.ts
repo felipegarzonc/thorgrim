@@ -73,16 +73,51 @@ export class FileBlobStore implements BlobStore {
   }
 }
 
+/**
+ * At most `max` storage requests at a time from this server instance. Each
+ * Supabase Storage request holds one of the project's database connections
+ * while it runs, and a page listing many records (all notices, all posts)
+ * would otherwise ask for all of them at once ("Too many connections").
+ */
+export class Gate {
+  private running = 0;
+  private waiting: (() => void)[] = [];
+  constructor(readonly max: number) {}
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.running >= this.max) await new Promise<void>((go) => this.waiting.push(go));
+    else this.running++;
+    try {
+      return await fn();
+    } finally {
+      // Hand the slot straight to the next in line, or free it.
+      const next = this.waiting.shift();
+      if (next) next();
+      else this.running--;
+    }
+  }
+}
+
+/** Supabase out of connections or rate-limiting: worth one more try after a moment. */
+export const busyError = (message: string) => /too many connections|too many requests|rate limit|timeout|ECONNRESET|503|502|429/i.test(message);
+
 export class SupabaseBlobStore implements BlobStore {
   readonly kind = "supabase" as const;
   private client: StorageClient;
   private ready: Promise<void> | null = null;
+  private gate = new Gate(Number(process.env.SUPABASE_MAX_REQUESTS) || 6);
   constructor(
     storageUrl: string,
     serviceKey: string,
     readonly bucket = "thorgrim",
   ) {
     this.client = new StorageClient(storageUrl, { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` });
+  }
+  /** A storage request through the gate; when Supabase is busy, once more after a short wait. */
+  private async call<R extends { error: { message: string } | null }>(fn: () => Promise<R>): Promise<R> {
+    const first = await this.gate.run(fn);
+    if (!first.error || !busyError(first.error.message)) return first;
+    await new Promise((r) => setTimeout(r, 300 + Math.random() * 500));
+    return this.gate.run(fn);
   }
   /** Create the private bucket on first use. */
   private ensureBucket() {
@@ -104,7 +139,7 @@ export class SupabaseBlobStore implements BlobStore {
     await this.ensureBucket();
     // A fresh nonce skips Supabase's CDN, which would otherwise serve the
     // previous version of a record for a while after it was overwritten.
-    const { data, error } = await this.files.download(safe(p), { cacheNonce: crypto.randomUUID() }, { cache: "no-store" });
+    const { data, error } = await this.call(() => this.files.download(safe(p), { cacheNonce: crypto.randomUUID() }, { cache: "no-store" }));
     if (error) {
       if (/not.?found|does not exist|404/i.test(`${error.message} ${(error as { statusCode?: string }).statusCode ?? ""}`)) return undefined;
       throw new Error(`Supabase storage read ${p}: ${error.message}`);
@@ -114,12 +149,12 @@ export class SupabaseBlobStore implements BlobStore {
   async write(p: string, data: Buffer | string, contentType = "application/json") {
     await this.ensureBucket();
     const body = typeof data === "string" ? Buffer.from(data, "utf8") : data;
-    const { error } = await this.files.upload(safe(p), body, { upsert: true, contentType, cacheControl: "0" });
+    const { error } = await this.call(() => this.files.upload(safe(p), body, { upsert: true, contentType, cacheControl: "0" }));
     if (error) throw new Error(`Supabase storage write ${p}: ${error.message}`);
   }
   async remove(p: string) {
     await this.ensureBucket();
-    const { error } = await this.files.remove([safe(p)]);
+    const { error } = await this.call(() => this.files.remove([safe(p)]));
     if (error) throw new Error(`Supabase storage remove ${p}: ${error.message}`);
   }
   async list(folder: string) {
@@ -129,7 +164,7 @@ export class SupabaseBlobStore implements BlobStore {
     await this.ensureBucket();
     const files: { name: string; updatedAt: number }[] = [];
     for (let offset = 0; ; offset += 1000) {
-      const { data, error } = await this.files.list(safe(folder), { limit: 1000, offset });
+      const { data, error } = await this.call(() => this.files.list(safe(folder), { limit: 1000, offset }));
       if (error) throw new Error(`Supabase storage list ${folder}: ${error.message}`);
       // Folders come back with a null id; keep files only.
       for (const o of data) if (o.id) files.push({ name: o.name, updatedAt: Date.parse(o.updated_at ?? o.created_at ?? "") || 0 });
