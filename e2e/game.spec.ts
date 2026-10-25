@@ -64,9 +64,14 @@ test("score a game and post its report to the club", async ({ page }) => {
 
   // Share it outside the club: the link's page carries this battle's own picture.
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  // The picture goes with the link: on a computer it's saved and the link (with the title) copied.
+  const download = page.waitForEvent("download");
   await post.getByRole("button", { name: "Share outside the club" }).click();
-  await expect(post.getByText("Link copied.")).toBeVisible({ timeout: 15_000 });
-  const link = await page.evaluate(() => navigator.clipboard.readText());
+  await expect(post.getByText("Picture saved and link copied.")).toBeVisible({ timeout: 15_000 });
+  expect((await download).suggestedFilename()).toMatch(/\.jpg$/);
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied.split("\n")[0]).toBe("The Saga of the Test Table");
+  const link = copied.split("\n").pop()!;
   expect(link).toMatch(/\/r\/[a-f0-9]{32}$/);
   const html = await (await page.request.get(link)).text();
   expect(html).toContain('og:title" content="The Saga of the Test Table"');

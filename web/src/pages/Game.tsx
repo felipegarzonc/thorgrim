@@ -18,7 +18,7 @@ import { CoachChat } from "./CoachChat.tsx";
 import { BoardInfo, LogCard, OddsCard, other, PhaseChecklist, UnitsCard, useUnits, type Army, type Side, type Update } from "./gameTools.tsx";
 import { battleplanInfo } from "../../../shared/battleplans.ts";
 import { BattleplanCard } from "../battleplanView.tsx";
-import { drawResult, shareImage, type ShareRow } from "../shareImage.ts";
+import { drawResult, shareImageAndLink, type ShareRow } from "../shareImage.ts";
 import { WarscrollCard } from "./Lists.tsx";
 import { BattleReportCard, ReviewCard } from "./report.tsx";
 import { shareText, shareUrl } from "../links.ts";
@@ -2311,14 +2311,33 @@ function ResultsStep({
       if (url) URL.revokeObjectURL(url);
     };
   }, [shareKey]);
+  // With a club report, the picture goes out with the link to the full report (made ahead, so the tap shares at once).
+  const postId = game.report?.postId;
+  const [reportLink, setReportLink] = useState<string>();
+  useEffect(() => {
+    if (!postId) return setReportLink(undefined);
+    void api<{ shareToken?: string }>(`/feed/${postId}`)
+      .then((p) => setReportLink(p.shareToken ? shareUrl("r", p.shareToken) : undefined))
+      .catch(() => undefined);
+  }, [postId]);
   const share = async () => {
     if (!image) return;
-    try {
-      const how = await shareImage(image.file, summary);
-      setShareMsg(how === "downloaded" ? "Image saved: send it from your photos or downloads." : undefined);
-    } catch {
-      /* cancelled */
+    let link = reportLink;
+    if (postId && !link) {
+      const p = await api<{ shareToken?: string }>(`/feed/${postId}/share`, { method: "POST" }).catch(() => undefined);
+      link = p?.shareToken ? shareUrl("r", p.shareToken) : undefined;
+      setReportLink(link);
     }
+    const how = await shareImageAndLink(image.file, summary, link);
+    setShareMsg(
+      how === "tap-again"
+        ? "The link to the full report is ready: tap Share image again."
+        : how === "saved"
+          ? link
+            ? "Image saved and the report's link copied."
+            : "Image saved: send it from your photos or downloads."
+          : undefined,
+    );
   };
 
   const badges = gameBadges(game, reportSides(game, me.list, opp.list));

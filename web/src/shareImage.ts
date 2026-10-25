@@ -164,17 +164,30 @@ export async function drawResult(d: ShareData): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not draw the image"))), "image/png"));
 }
 
-/** Share the image (phone share sheet → WhatsApp…), or download it where sharing files isn't possible. */
-export async function shareImage(file: File, text: string): Promise<"shared" | "downloaded"> {
+/**
+ * Share a battle's picture with its text and the link to the full report, in
+ * one go (phone share sheet → WhatsApp…: the picture with the link as its
+ * caption). Where files can't be shared (most computers) the picture is
+ * saved and the link copied. "tap-again": the phone wanted a fresh tap
+ * (preparing the link took too long after the first one).
+ */
+export async function shareImageAndLink(file: File, text: string, url?: string): Promise<"shared" | "saved" | "tap-again"> {
+  const caption = url ? `${text}\n${url}` : text;
   if (navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ files: [file], text });
+    try {
+      await navigator.share({ files: [file], text: caption });
+    } catch (e) {
+      if ((e as Error).name === "NotAllowedError") return "tap-again";
+      // Cancelled: nothing to do.
+    }
     return "shared";
   }
-  const url = URL.createObjectURL(file);
   const a = document.createElement("a");
-  a.href = url;
+  const href = URL.createObjectURL(file);
+  a.href = href;
   a.download = file.name;
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
-  return "downloaded";
+  setTimeout(() => URL.revokeObjectURL(href), 5000);
+  if (url) await navigator.clipboard?.writeText(caption).catch(() => undefined);
+  return "saved";
 }

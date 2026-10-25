@@ -12,6 +12,7 @@ import { rowsFromDetail, ScoreSheet, type SheetSide } from "../scoreSheet.tsx";
 import { Story } from "./report.tsx";
 import { shareUrl } from "../links.ts";
 import { drawReportCard } from "../reportCard.ts";
+import { shareImageAndLink } from "../shareImage.ts";
 import { moment } from "../analytics.tsx";
 import { Skeleton } from "../motion.tsx";
 import { feedback } from "../sound.ts";
@@ -193,8 +194,18 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
   const cardStale = (p: FeedPostView) => p.mine && !!p.shareToken && (!p.cardAt || p.cardAt < (p.updatedAt ?? p.createdAt));
   const drawCard = async (p: FeedPostView) => {
     const body = await drawReportCard(p);
+    setPicture(cardFile(p, body));
     return api<FeedPostView>(`/feed/${p.id}/card`, { method: "POST", body, headers: { "content-type": "image/jpeg" } });
   };
+  // The battle's picture, ready before the tap: sharing always sends it with the link.
+  const cardFile = (p: FeedPostView, body: Blob) => new File([body], `${p.title || "battle"}.jpg`.replace(/[^\w.-]+/g, "-"), { type: "image/jpeg" });
+  const [picture, setPicture] = useState<File>();
+  useEffect(() => {
+    if (!post.shareToken || picture) return;
+    void drawReportCard(post)
+      .then((b) => setPicture(cardFile(post, b)))
+      .catch(() => undefined);
+  }, [post.shareToken]);
   const drawing = useRef(false);
   useEffect(() => {
     if (!cardStale(post) || drawing.current) return;
@@ -204,10 +215,12 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
       .catch(() => undefined)
       .finally(() => (drawing.current = false));
   }, [post.updatedAt, post.cardAt, post.shareToken]);
-  const sendLink = async (url: string) => {
-    if (navigator.share) return navigator.share({ text: `${post.title} ${url}` }).catch(() => undefined);
-    await navigator.clipboard?.writeText(url);
-    setMsg("Link copied.");
+  /** The picture and the link to the full report, together. */
+  const sendLink = async (url: string, file = picture) => {
+    const pic = file ?? cardFile(post, await drawReportCard(post));
+    const how = await shareImageAndLink(pic, post.title, url);
+    if (how === "tap-again") setMsg("The link is ready: tap Share image and link to send it.");
+    else if (how === "saved") setMsg("Picture saved and link copied.");
   };
   const reactors = post.reactions.filter((r) => r.count);
 
@@ -339,7 +352,7 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
                   <p className="small muted">Anyone with the public link can read this report (story, photos and score; no comments).</p>
                   <div className="two-buttons">
                     <button type="button" className="outline" onClick={() => void sendLink(link)}>
-                      <Icon name="share" /> Send the link
+                      <Icon name="share" /> Share image and link
                     </button>
                     <button type="button" className="ghost" disabled={busy} onClick={() => call(() => api<FeedPostView>(`/feed/${post.id}/share`, { method: "DELETE" }))}>
                       Stop the public link
@@ -356,9 +369,10 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
                       let p = await api<FeedPostView>(`/feed/${post.id}/share`, { method: "POST" });
                       // The picture first, so the very first preview shows this battle.
                       drawing.current = true;
-                      p = await drawCard(p).catch(() => p);
+                      const body = await drawReportCard(p).catch(() => undefined);
+                      if (body) p = await api<FeedPostView>(`/feed/${p.id}/card`, { method: "POST", body, headers: { "content-type": "image/jpeg" } }).catch(() => p);
                       drawing.current = false;
-                      if (p.shareToken) void sendLink(shareUrl("r", p.shareToken));
+                      if (p.shareToken) void sendLink(shareUrl("r", p.shareToken), body ? cardFile(p, body) : undefined);
                       moment("Report shared");
                       return p;
                     })
