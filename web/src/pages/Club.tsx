@@ -243,6 +243,23 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
     else if (how === "saved") setMsg("Picture saved and link copied.");
   };
   const reactors = post.reactions.filter((r) => r.count);
+  /** Share outside the club: the picture and the public link (made on the first share). */
+  const canShare = post.canEdit && post.kind !== "chronicle";
+  const shareOut = () =>
+    link
+      ? void sendLink(link)
+      : call(async () => {
+          let p = await api<FeedPostView>(`/feed/${post.id}/share`, { method: "POST" });
+          // The link's preview picture first, so the very first preview shows this battle.
+          drawing.current = true;
+          const body = await drawReportCard(p).catch(() => undefined);
+          if (body) p = await api<FeedPostView>(`/feed/${p.id}/card`, { method: "POST", body, headers: { "content-type": "image/jpeg" } }).catch(() => p);
+          drawing.current = false;
+          const pic = await sharePicture(p).catch(() => undefined);
+          if (p.shareToken) void sendLink(shareUrl("r", p.shareToken), pic ? cardFile(p, pic) : undefined);
+          moment("Report shared");
+          return p;
+        });
 
   return (
     <article className={`card post ${single ? "single" : ""} ${post.kind === "chronicle" ? "chronicle" : ""}`}>
@@ -296,6 +313,11 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
           );
         })}
         <span className="grow" />
+        {canShare && (
+          <button type="button" className="react share-post" disabled={busy} onClick={shareOut} aria-label="Share" title="Share">
+            <Icon name="share" />
+          </button>
+        )}
         <button type="button" className="react" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={`${post.comments.length} comments`}>
           <Icon name="coach" />
           <span>{post.comments.length || ""}</span>
@@ -365,7 +387,7 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
               </button>
             </div>
           )}
-          {post.canEdit && post.kind !== "chronicle" && (
+          {canShare && (
             <div className="post-owner">
               {link ? (
                 <>
@@ -380,25 +402,7 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
                   </div>
                 </>
               ) : (
-                <button
-                  type="button"
-                  className="outline wide"
-                  disabled={busy}
-                  onClick={() =>
-                    call(async () => {
-                      let p = await api<FeedPostView>(`/feed/${post.id}/share`, { method: "POST" });
-                      // The picture first, so the very first preview shows this battle.
-                      drawing.current = true;
-                      const body = await drawReportCard(p).catch(() => undefined);
-                      if (body) p = await api<FeedPostView>(`/feed/${p.id}/card`, { method: "POST", body, headers: { "content-type": "image/jpeg" } }).catch(() => p);
-                      drawing.current = false;
-                      const pic = await sharePicture(p).catch(() => undefined);
-                      if (p.shareToken) void sendLink(shareUrl("r", p.shareToken), pic ? cardFile(p, pic) : undefined);
-                      moment("Report shared");
-                      return p;
-                    })
-                  }
-                >
+                <button type="button" className="outline wide" disabled={busy} onClick={shareOut}>
                   <Icon name="share" /> Share outside the club
                 </button>
               )}

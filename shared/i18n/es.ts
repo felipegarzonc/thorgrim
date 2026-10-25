@@ -1208,6 +1208,7 @@ export const ES_PHRASES: Record<string, string> = {
   Missed: "Fallaste",
   "Live now": "En vivo",
   "Hide points": "Ocultar puntos",
+  Share: "Compartir",
   "Share image and link": "Compartir imagen y enlace",
   "The link is ready: tap Share image and link to send it.": "El enlace está listo: toca Compartir imagen y enlace para enviarlo.",
   "Picture saved and link copied.": "Imagen guardada y enlace copiado.",

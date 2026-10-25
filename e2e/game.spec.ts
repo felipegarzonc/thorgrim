@@ -62,6 +62,10 @@ test("score a game and post its report to the club", async ({ page }) => {
   await expect(post.locator(".post-stats")).toContainText("6–0");
   await expect(post.locator(".story")).toContainText("The test army won the day.");
 
+  // In the feed, sharing is one tap: no need to open the post.
+  await page.goto("/#/club");
+  await expect(page.locator(".post").first().getByRole("button", { name: "Share", exact: true })).toBeVisible();
+  await page.goBack();
   // Share it outside the club: the link's page carries this battle's own picture.
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   // The picture goes with the link: on a computer it's saved and the link (with the title) copied.
