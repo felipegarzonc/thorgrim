@@ -6819,3 +6819,97 @@ button.speak.on {
   gap: 0.3rem;
   color: var(--good, #6fbf73);
 }
+
+/* The battle's rounds, always in the bottom bar: R1…R5 and the result. */
+.round-strip {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.round-chip {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--faint);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.round-chip.played {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.round-chip.live::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e0503a;
+}
+.round-chip.on {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: var(--me-ink);
+}
+.step-bar .step-title.grow {
+  flex: 1;
+}
+
+/* Battle tactics: whose cards, and how many picked. */
+.tactic-sides {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  padding: 0.4rem 0;
+  background: var(--bg);
+}
+.tactic-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  min-height: 54px;
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+}
+.tactic-side b {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tactic-side small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--faint);
+}
+.tactic-side.done small {
+  color: var(--good, #6fbf73);
+}
+.tactic-side.on {
+  border-color: var(--brass);
+  background: var(--brass-soft);
+}
+.finish-game {
+  margin-top: 0.2rem;
+}
+.finish-note {
+  margin: -0.4rem 0 0;
+  text-align: center;
+}

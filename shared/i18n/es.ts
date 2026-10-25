@@ -1208,6 +1208,11 @@ export const ES_PHRASES: Record<string, string> = {
   Missed: "Fallaste",
   "Live now": "En vivo",
   "Hide points": "Ocultar puntos",
+  "Finishing…": "Terminando…",
+  "Finishing confirms this result for the club ladder; your opponent confirms it on their phone.": "Al terminar confirmas este resultado para el ranking del club; tu rival lo confirma en su teléfono.",
+  "Battle rounds": "Rondas de la batalla",
+  "Whose battle tactics": "Tácticas de quién",
+  "Next step": "Paso siguiente",
   "Updated just now": "Actualizado ahora mismo",
   Link: "Asociar",
   "Link games to club members": "Asociar partidas a miembros del club",
@@ -1284,6 +1289,7 @@ export const ES_PHRASES: Record<string, string> = {
 
 /** Text with names and numbers in it. */
 export const ES_PATTERNS: [RegExp, string][] = [
+  [/^Finish and confirm (\d+)–(\d+)$/, "Terminar y confirmar $1–$2"],
   [/^Updated (\d+) min ago$/, "Actualizado hace $1 min"],
   [/^No changes for (\d+) (min|h)$/, "Sin cambios hace $1 $2"],
   [/^(.+) wants to link a game to your account$/, "$1 quiere asociar una partida a tu cuenta"],

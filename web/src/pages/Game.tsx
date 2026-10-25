@@ -258,6 +258,15 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
       "Game finished.",
     );
     moment("Game finished");
+    // Played together: finishing confirms the result for the club ladder, and the page stays to show who still has to.
+    if (game.access?.players.length || game.access?.role === "player") {
+      await saving.current;
+      const confirmed = await api<Game>(`/games/${game.id}/confirm`, { method: "POST" }).catch(() => undefined);
+      if (confirmed) adopt(confirmed, ref.current!);
+      if (current !== "results") go("results");
+      else window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     window.location.hash = "#/games";
   };
 
@@ -290,12 +299,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
         {current === "players" && <PlayersStep game={game} lists={lists} mutate={mutate} reloadLists={reloadLists} shareChanged={meta?.accounts ? shareChanged : undefined} />}
         {current === "setup" && <SetupStep game={game} mutate={mutate} />}
         {current === "battleplan" && <BattleplanStep game={game} mutate={mutate} />}
-        {current === "tactics" && (
-          <div className="stack">
-            <TacticsStep game={game} side="me" mutate={mutate} />
-            <TacticsStep game={game} side="opponent" mutate={mutate} />
-          </div>
-        )}
+        {current === "tactics" && <BothTactics game={game} mutate={mutate} names={{ me: me.name, opponent: opp.name }} />}
         {current === "plan" && <PlanStep game={game} mutate={mutate} saved={() => saving.current} go={go} />}
         {current.startsWith("round-") && (
           <RoundStep
@@ -312,16 +316,44 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
             openCoach={() => setSheet("coach")}
           />
         )}
-        {current === "results" && <ResultsStep game={game} lists={lists} mutate={mutate} saved={() => saving.current} openCoach={() => setSheet("coach")} serverChanged={shareChanged} />}
+        {current === "results" && <ResultsStep game={game} lists={lists} mutate={mutate} saved={() => saving.current} openCoach={() => setSheet("coach")} serverChanged={shareChanged} finish={finish} />}
       </div>
 
       <footer className="step-bar">
         <button type="button" className="icon" aria-label="Previous step" disabled={!prevStep} onClick={() => prevStep && go(prevStep)}>
           <Icon name="left" />
         </button>
-        <span className="step-title">{stepTitle(current)}</span>
+        {current.startsWith("round-") || current === "results" ? (
+          // In the battle: every round and the result one tap away.
+          <nav className="round-strip" aria-label="Battle rounds">
+            {[...ROUND_STEPS, "results"].map((s, i) => {
+              const played = s !== "results" && !!game.state.rounds?.[i]?.first;
+              const live = s === `round-${game.state.round}` && !game.finished;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  className={`round-chip ${s === current ? "on" : ""} ${played ? "played" : ""} ${live ? "live" : ""}`}
+                  aria-current={s === current ? "step" : undefined}
+                  aria-label={stepTitle(s)}
+                  onClick={() => go(s)}
+                >
+                  {s === "results" ? <Icon name="flag" /> : `R${i + 1}`}
+                </button>
+              );
+            })}
+          </nav>
+        ) : (
+          <span className="step-title grow">{stepTitle(current)}</span>
+        )}
+        {/* Elsewhere the round button does it. */}
+        {current.startsWith("round-") && (
+          <button type="button" className="icon" aria-label="Next step" disabled={!nextStep} onClick={() => nextStep && go(nextStep)}>
+            <Icon name="right" />
+          </button>
+        )}
       </footer>
-      {!(current === `round-${game.state.round}` && game.state.phase !== "Deployment" && game.state.rounds?.[game.state.round - 1]?.first) && (
+      {current !== "results" && !current.startsWith("round-") && (
       <button
         type="button"
         className="fab step-fab"
@@ -1042,6 +1074,36 @@ function BattleplanStep({ game, mutate }: { game: Game; mutate: Mutate }) {
 
 // ---------- battle tactics ----------
 
+/** Both players' battle tactics: one list at a time, with a switch on top saying how many each has picked. */
+function BothTactics({ game, mutate, names }: { game: Game; mutate: Mutate; names: Record<Side, string> }) {
+  const count = (side: Side) => ((side === "me" ? game.state.tactics : game.state.opponentTactics) ?? []).length;
+  const [side, setSide] = useState<Side>(count("me") >= 2 && count("opponent") < 2 ? "opponent" : "me");
+  // Two cards picked for you: on to the opponent's.
+  const mine = count("me");
+  const before = useRef(mine);
+  useEffect(() => {
+    if (before.current < 2 && mine >= 2 && count("opponent") < 2) {
+      setSide("opponent");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    before.current = mine;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mine]);
+  return (
+    <div className="stack">
+      <div className="tactic-sides" role="tablist" aria-label="Whose battle tactics">
+        {(["me", "opponent"] as const).map((s) => (
+          <button key={s} type="button" role="tab" aria-selected={side === s} className={`tactic-side ${side === s ? "on" : ""} ${count(s) >= 2 ? "done" : ""}`} onClick={() => setSide(s)}>
+            <b translate="no">{s === "me" ? "You" : names.opponent || "Opponent"}</b>
+            <small>{count(s) >= 2 ? <><Icon name="check" /> 2/2</> : `${count(s)}/2`}</small>
+          </button>
+        ))}
+      </div>
+      <TacticsStep key={side} game={game} side={side} mutate={mutate} />
+    </div>
+  );
+}
+
 function TacticsStep({ game, side, mutate }: { game: Game; side: Side; mutate: Mutate }) {
   const meta = useMeta();
   const key = side === "me" ? "tactics" : "opponentTactics";
@@ -1540,7 +1602,6 @@ function RoundStep(props: {
           isLive={isLive}
           name={names[side]}
           faction={factions[side]}
-          folded={isLive && side !== s.activePlayer}
         />
       ))}
 
@@ -2183,6 +2244,7 @@ function ResultsStep({
   saved,
   openCoach,
   serverChanged,
+  finish,
 }: {
   game: Game;
   lists?: ArmyList[];
@@ -2190,7 +2252,10 @@ function ResultsStep({
   saved: () => Promise<unknown>;
   openCoach: () => void;
   serverChanged: (g: Game) => Promise<void>;
+  finish: () => Promise<void>;
 }) {
+  const [finishing, setFinishing] = useState(false);
+  const together = !!game.access?.players.length || game.access?.role === "player";
   const [conclusion, setConclusion] = useState<NonNullable<Game["finished"]>["conclusion"]>(game.finished?.conclusion ?? "played");
   const s = game.state;
   const rounds = s.rounds ?? [];
@@ -2289,6 +2354,21 @@ function ResultsStep({
           </span>
         </div>
       </section>
+      {!game.finished && (
+        <button
+          type="button"
+          className="primary wide finish-game"
+          disabled={finishing}
+          onClick={async () => {
+            setFinishing(true);
+            await finish().finally(() => setFinishing(false));
+          }}
+        >
+          <Icon name="check" /> {finishing ? "Finishing…" : together ? `Finish and confirm ${s.vp.me}–${s.vp.opponent}` : "Finish game"}
+        </button>
+      )}
+      {!game.finished && together && <p className="small muted finish-note">Finishing confirms this result for the club ladder; your opponent confirms it on their phone.</p>}
+      <LadderConfirm game={game} saved={saved} changed={serverChanged} names={{ me: me.name, opponent: opp.name }} />
       {rivalry && rivalry.played > 1 && (
         <a className="rivalry-line" href="#/stats">
           <Icon name="swords" />
@@ -2309,7 +2389,6 @@ function ResultsStep({
         </div>
       )}
       {game.bcp && <BcpResult game={{ ...game, finished: { conclusion, at: "" } }} names={{ me: me.name, opponent: opp.name }} />}
-      <LadderConfirm game={game} saved={saved} changed={serverChanged} names={{ me: me.name, opponent: opp.name }} />
       <label className="field">
         <span className="field-label">Game conclusion</span>
         <span className="field-box">
