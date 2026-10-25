@@ -12,7 +12,7 @@ import { rowsFromDetail, ScoreSheet, type SheetSide } from "../scoreSheet.tsx";
 import { Story } from "./report.tsx";
 import { shareUrl } from "../links.ts";
 import { drawReportCard } from "../reportCard.ts";
-import { shareImageAndLink } from "../shareImage.ts";
+import { drawResult, shareImageAndLink } from "../shareImage.ts";
 import { moment } from "../analytics.tsx";
 import { Skeleton } from "../motion.tsx";
 import { feedback } from "../sound.ts";
@@ -28,6 +28,26 @@ const REACTION_LOOK: Record<string, { icon: IconName; label: string }> = {
   "👏": { icon: "flag", label: "Salute" },
   "💀": { icon: "skull", label: "Brutal" },
 };
+
+/**
+ * The picture sent when a post is shared: the full score sheet (the same as a
+ * game's Results share), or the report card when the post has no rounds.
+ * The link's own preview stays the wide report card (reportCard.ts).
+ */
+function sharePicture(p: FeedPostView): Promise<Blob> {
+  const [a, b] = p.sides;
+  if (!p.detail?.rounds.length || !a || !b) return drawReportCard(p);
+  const side = (s: typeof a, key: "me" | "opponent") => ({ name: s.name, faction: s.faction, sub: "", vp: s.vp, rows: rowsFromDetail(p.detail!, key) });
+  return drawResult({
+    date: p.date ? new Date(`${p.date}T12:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }) : "",
+    status: p.result === "win" ? "VICTORY" : p.result === "loss" ? "DEFEAT" : "DRAW",
+    me: side(a, "me"),
+    opponent: side(b, "opponent"),
+    footer: ["Age of Sigmar 4e · Pitched Battles 2026-27", p.battleplan, p.points && `${p.points}pts`].filter(Boolean).join(" · "),
+    title: p.title,
+    badges: p.badges,
+  });
+}
 
 /** Tells the bottom bar to re-count what's unread. */
 export const CLUB_SEEN = "thorgrim-club-seen";
@@ -201,11 +221,11 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
   const cardFile = (p: FeedPostView, body: Blob) => new File([body], `${p.title || "battle"}.jpg`.replace(/[^\w.-]+/g, "-"), { type: "image/jpeg" });
   const [picture, setPicture] = useState<File>();
   useEffect(() => {
-    if (!post.shareToken || picture) return;
-    void drawReportCard(post)
+    if (!post.shareToken) return;
+    void sharePicture(post)
       .then((b) => setPicture(cardFile(post, b)))
       .catch(() => undefined);
-  }, [post.shareToken]);
+  }, [post.shareToken, post.updatedAt]);
   const drawing = useRef(false);
   useEffect(() => {
     if (!cardStale(post) || drawing.current) return;
@@ -217,7 +237,7 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
   }, [post.updatedAt, post.cardAt, post.shareToken]);
   /** The picture and the link to the full report, together. */
   const sendLink = async (url: string, file = picture) => {
-    const pic = file ?? cardFile(post, await drawReportCard(post));
+    const pic = file ?? cardFile(post, await sharePicture(post));
     const how = await shareImageAndLink(pic, post.title, url);
     if (how === "tap-again") setMsg("The link is ready: tap Share image and link to send it.");
     else if (how === "saved") setMsg("Picture saved and link copied.");
@@ -372,7 +392,8 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
                       const body = await drawReportCard(p).catch(() => undefined);
                       if (body) p = await api<FeedPostView>(`/feed/${p.id}/card`, { method: "POST", body, headers: { "content-type": "image/jpeg" } }).catch(() => p);
                       drawing.current = false;
-                      if (p.shareToken) void sendLink(shareUrl("r", p.shareToken), body ? cardFile(p, body) : undefined);
+                      const pic = await sharePicture(p).catch(() => undefined);
+                      if (p.shareToken) void sendLink(shareUrl("r", p.shareToken), pic ? cardFile(p, pic) : undefined);
                       moment("Report shared");
                       return p;
                     })

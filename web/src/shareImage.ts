@@ -1,8 +1,14 @@
-// The result of a game as an image to share (WhatsApp, Instagram…), drawn on
-// a canvas in the scoreboard style: names, factions, big score, result, and
-// the points per battle round.
+// The result of a game as an image to share (WhatsApp, Instagram…), in
+// Thorgrim's war-table look: the brass frame and seal, the report's title,
+// both armies with their crests, the big score and result, the highlights,
+// then each side's points round by round (objectives and every battle
+// tactic). Shared from the game's Results and from its club post.
 
-import { allianceOf, baseFaction } from "../../shared/season.ts";
+import { translate } from "../../shared/i18n/index.ts";
+import { baseFaction } from "../../shared/season.ts";
+import { currentLang } from "./i18n.ts";
+import { C, crest, DISPLAY, fitText, icon, SANS, SEAL, wrap } from "./reportCard.ts";
+import { armyColor } from "./ui.tsx";
 
 export interface ShareRow {
   label: string;
@@ -22,146 +28,188 @@ export interface ShareData {
   me: ShareSide;
   opponent: ShareSide;
   footer: string;
+  /** The battle report's title, when there is one. */
+  title?: string;
+  /** Highlights ("Crushing victory for Goy"…), up to three shown. */
+  badges?: string[];
 }
 
 const W = 1080;
-const H = 1350;
-const C = {
-  bg: "#111318",
-  card: "#1b1e24",
-  cell: "#2f3239",
-  text: "#e3e3e8",
-  muted: "#a9acb5",
-  accent: "#a8c7fa",
-  win: "#a6d5a0",
-  loss: "#f2a8a0",
-};
-const ALLIANCE_COLOR: Record<string, string> = { Order: "#2c5a8f", Chaos: "#7a2e2e", Death: "#35574f", Destruction: "#6b5520" };
-const FONT = '"Roboto", system-ui, sans-serif';
+const PAD = 70;
+const ROW_H = 62;
 
-function font(ctx: CanvasRenderingContext2D, size: number, weight = 400) {
-  ctx.font = `${weight} ${size}px ${FONT}`;
-}
-
-/** Draw text shrinking it until it fits `max` px. */
-function fit(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, max: number, size: number, weight = 400) {
-  let s = size;
-  font(ctx, s, weight);
-  while (ctx.measureText(text).width > max && s > 14) font(ctx, --s, weight);
-  ctx.fillText(text, x, y);
-}
-
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+function frame(ctx: CanvasRenderingContext2D, h: number) {
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, W, h);
+  const glow = ctx.createRadialGradient(W / 2, 420, 40, W / 2, 420, 640);
+  glow.addColorStop(0, "rgba(217,174,85,0.13)");
+  glow.addColorStop(1, "rgba(217,174,85,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, h);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = C.line;
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-  ctx.fill();
-}
-
-function badge(ctx: CanvasRenderingContext2D, faction: string, cx: number, cy: number, r: number) {
-  const base = baseFaction(faction || "?");
-  const initials = base
-    .split(/[\s-]+/)
-    .filter((w) => /^[A-Z]/.test(w))
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("");
-  ctx.fillStyle = ALLIANCE_COLOR[allianceOf(base) ?? ""] ?? "#3a3d44";
+  ctx.roundRect(24, 24, W - 48, h - 48, 22);
+  ctx.stroke();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = C.lineSoft;
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#f3eee4";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  font(ctx, r * 0.8, 700);
-  ctx.fillText(initials || "?", cx, cy + 2);
-  ctx.textBaseline = "alphabetic";
+  ctx.roundRect(38, 38, W - 76, h - 76, 14);
+  ctx.stroke();
 }
 
 export async function drawResult(d: ShareData): Promise<Blob> {
-  await Promise.all([document.fonts.load(`400 40px Roboto`), document.fonts.load(`700 40px Roboto`), document.fonts.load(`500 40px Roboto`)]).catch(() => undefined);
+  const lang = currentLang();
+  const t = (s: string) => translate(s, lang);
+  await Promise.all([document.fonts.load(`700 60px ${DISPLAY}`), document.fonts.load(`600 30px ${SANS}`), document.fonts.load(`400 24px ${SANS}`)]).catch(() => undefined);
+  const measure = document.createElement("canvas").getContext("2d")!;
+  measure.font = `700 50px ${DISPLAY}`;
+  const title = d.title ? wrap(measure, d.title, W - 2 * PAD - 40, 2) : [];
+  const badges = (d.badges ?? []).slice(0, 3).map(t);
+  const sides = [d.me, d.opponent].map((s) => ({ ...s, rows: s.rows.slice(0, 3) }));
+  // Height: the header and score, then the sheet's rows.
+  const top = 150 + title.length * 60;
+  const scoreEnd = top + (d.me.sub || d.opponent.sub ? 300 : 260) + (badges.length ? 76 : 0);
+  const sheet = sides.reduce((h, s) => h + 70 + s.rows.length * ROW_H + 26, 70);
+  const H = scoreEnd + sheet + 130;
+
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = C.bg;
-  ctx.fillRect(0, 0, W, H);
+  frame(ctx, H);
 
-  // header
-  ctx.fillStyle = C.muted;
+  // The seal and Thorgrim, the date on the right.
+  icon(ctx, SEAL, 66, 58, 46, C.brass);
+  ctx.textBaseline = "middle";
   ctx.textAlign = "left";
-  font(ctx, 30, 500);
-  ctx.fillText(d.date, 70, 100);
+  ctx.fillStyle = C.brass;
+  ctx.font = `700 26px ${DISPLAY}`;
+  ctx.fillText(`THORGRIM · ${t("Battle report").toUpperCase()}`, 124, 82);
   ctx.textAlign = "right";
-  ctx.fillStyle = C.accent;
-  font(ctx, 30, 700);
-  ctx.fillText("THORGRIM", W - 70, 100);
+  ctx.fillStyle = C.muted;
+  ctx.font = `400 26px ${SANS}`;
+  ctx.fillText(d.date, W - PAD, 82);
+  ctx.textBaseline = "alphabetic";
 
-  // score card
-  ctx.fillStyle = C.card;
-  roundRect(ctx, 40, 140, W - 80, 450, 40);
-  badge(ctx, d.me.faction, 170, 250, 62);
-  badge(ctx, d.opponent.faction, W - 170, 250, 62);
+  // The report's title.
   ctx.textAlign = "center";
   ctx.fillStyle = C.text;
-  fit(ctx, `${d.me.vp} - ${d.opponent.vp}`, W / 2, 300, 520, 170, 500);
-  ctx.fillStyle = d.status === "VICTORY" ? C.win : d.status === "DEFEAT" ? C.loss : C.text;
-  font(ctx, 48, 500);
-  ctx.fillText(d.status, W / 2, 380);
-  for (const [side, x, align] of [
-    [d.me, 80, "left"],
-    [d.opponent, W - 80, "right"],
+  ctx.font = `700 50px ${DISPLAY}`;
+  title.forEach((line, i) => ctx.fillText(line, W / 2, 178 + i * 60));
+
+  // Armies, score and result.
+  const crestY = top + 70;
+  for (const [side, x] of [
+    [d.me, 200],
+    [d.opponent, W - 200],
   ] as const) {
-    ctx.textAlign = align;
+    crest(ctx, side.faction, x, crestY, 62);
+    ctx.textAlign = "center";
     ctx.fillStyle = C.text;
-    fit(ctx, side.name, x, 470, 400, 50, 700);
-    ctx.fillStyle = C.text;
-    fit(ctx, baseFaction(side.faction || "Unknown faction"), x, 520, 420, 32, 400);
-    if (side.sub) {
-      ctx.fillStyle = C.muted;
-      fit(ctx, side.sub, x, 562, 420, 26, 400);
-    }
+    fitText(ctx, side.name, x, crestY + 118, 330, 40, 600, SANS);
+    ctx.fillStyle = C.muted;
+    fitText(ctx, side.faction ? baseFaction(side.faction) : t("Unknown faction"), x, crestY + 160, 330, 26, 400, SANS);
+    if (side.sub) fitText(ctx, side.sub, x, crestY + 196, 330, 22, 400, SANS);
+  }
+  ctx.textAlign = "center";
+  ctx.fillStyle = C.text;
+  fitText(ctx, `${d.me.vp}–${d.opponent.vp}`, W / 2, crestY + 40, 400, 130, 700, DISPLAY);
+  ctx.fillStyle = d.status === "DEFEAT" ? C.loss : C.brass;
+  ctx.font = `700 40px ${DISPLAY}`;
+  ctx.fillText(t(d.status), W / 2, crestY + 112);
+
+  // Highlights, as brass pills.
+  if (badges.length) {
+    ctx.font = `600 24px ${SANS}`;
+    const widths = badges.map((x) => Math.min(ctx.measureText(x).width + 44, 310));
+    const total = widths.reduce((s, w) => s + w, 0) + (badges.length - 1) * 14;
+    let x = (W - total) / 2;
+    const y = scoreEnd - 78;
+    badges.forEach((text, i) => {
+      ctx.fillStyle = "#2a2418";
+      ctx.strokeStyle = C.line;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(x, y, widths[i], 50, 25);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = C.brass;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      fitText(ctx, text, x + widths[i] / 2, y + 26, widths[i] - 28, 24, 600, SANS);
+      ctx.textBaseline = "alphabetic";
+      x += widths[i] + 14;
+    });
   }
 
-  // points per round
-  let y = 680;
-  const cellW = 70;
-  const cellsX = W - 80 - 130 - 5 * (cellW + 6);
+  // The score sheet: a panel with each side's rows, round by round.
+  const panelX = 56;
+  const panelW = W - 112;
+  ctx.fillStyle = C.panel;
+  ctx.strokeStyle = C.lineSoft;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(panelX, scoreEnd, panelW, sheet, 20);
+  ctx.fill();
+  ctx.stroke();
+  const cellW = 74;
+  const gap = 8;
+  const totalW = 120;
+  const cellsX = panelX + panelW - 34 - totalW - 5 * cellW - 4 * gap;
+  let y = scoreEnd + 58;
   ctx.textAlign = "center";
   ctx.fillStyle = C.muted;
-  font(ctx, 24, 500);
-  for (let r = 0; r < 5; r++) ctx.fillText(`R${r + 1}`, cellsX + r * (cellW + 6) + cellW / 2, y - 18);
-  for (const side of [d.me, d.opponent]) {
+  ctx.font = `600 22px ${SANS}`;
+  for (let r = 0; r < 5; r++) ctx.fillText(`R${r + 1}`, cellsX + r * (cellW + gap) + cellW / 2, y);
+  y += 12;
+  for (const side of sides) {
+    // The side's name with its army's colour.
+    const color = armyColor(side.faction);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(panelX + 34, y + 20, 8, 36, 4);
+    ctx.fill();
     ctx.textAlign = "left";
     ctx.fillStyle = C.text;
-    fit(ctx, side.name, 80, y + 22, 600, 40, 700);
-    y += 48;
-    for (const row of side.rows.slice(0, 3)) {
+    fitText(ctx, side.name, panelX + 56, y + 50, cellsX - panelX - 80, 36, 700, DISPLAY);
+    y += 70;
+    for (const row of side.rows) {
       ctx.textAlign = "left";
       ctx.fillStyle = C.text;
-      fit(ctx, row.label, 80, y + 38, cellsX - 100, 30, 400);
+      fitText(ctx, t(row.label), panelX + 34, y + 38, cellsX - panelX - 50, 28, 400, SANS);
       row.cells.forEach((v, i) => {
-        ctx.fillStyle = C.cell;
-        ctx.fillRect(cellsX + i * (cellW + 6), y + 6, cellW, 48);
-        ctx.fillStyle = v === null ? C.muted : C.text;
+        const x = cellsX + i * (cellW + gap);
+        ctx.fillStyle = v ? "#2a2418" : "#22262d";
+        ctx.strokeStyle = v ? C.line : "#2c3037";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(x, y + 6, cellW, 48, 10);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = v === null ? "#5d6068" : v ? C.brass : C.muted;
         ctx.textAlign = "center";
-        font(ctx, 28, 500);
-        ctx.fillText(v === null ? "-" : String(v), cellsX + i * (cellW + 6) + cellW / 2, y + 40);
+        ctx.font = `700 28px ${SANS}`;
+        ctx.fillText(v === null ? "–" : String(v), x + cellW / 2, y + 41);
       });
       ctx.textAlign = "right";
       ctx.fillStyle = C.text;
-      font(ctx, 30, 500);
-      ctx.fillText(row.total, W - 80, y + 40);
-      y += 60;
+      ctx.font = `700 30px ${SANS}`;
+      ctx.fillText(row.total, panelX + panelW - 34, y + 41);
+      y += ROW_H;
     }
-    y += 34;
+    y += 26;
   }
 
-  // footer
+  // Footer: the game, and where it comes from.
   ctx.textAlign = "center";
   ctx.fillStyle = C.muted;
-  fit(ctx, d.footer, W / 2, H - 70, W - 140, 28, 400);
+  fitText(ctx, d.footer, W / 2, H - 92, W - 2 * PAD - 40, 24, 400, SANS);
+  ctx.fillStyle = C.brass;
+  ctx.font = `600 24px ${SANS}`;
+  ctx.fillText("thorgrim.co", W / 2, H - 56);
 
-  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not draw the image"))), "image/png"));
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not draw the image"))), "image/jpeg", 0.92));
 }
 
 /**

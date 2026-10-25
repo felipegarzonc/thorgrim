@@ -2289,7 +2289,7 @@ function ResultsStep({
       })),
     ];
   };
-  const shareKey = JSON.stringify([s.vp, s.rounds, conclusion, me.name, opp.name, me.faction, opp.faction, game.battleplan]);
+  const shareKey = JSON.stringify([s.vp, s.rounds, conclusion, me.name, opp.name, me.faction, opp.faction, game.battleplan, game.report?.title]);
   const [image, setImage] = useState<{ file: File; url: string }>();
   const [shareMsg, setShareMsg] = useState<string>();
   useEffect(() => {
@@ -2301,10 +2301,12 @@ function ResultsStep({
       me: { name: me.name, faction: me.faction, sub: me.sub, vp: s.vp.me, rows: shareRows("me") },
       opponent: { name: opp.name, faction: opp.faction, sub: opp.sub, vp: s.vp.opponent, rows: shareRows("opponent") },
       footer: `Age of Sigmar 4e · Pitched Battles 2026-27 · ${game.battleplan || "battleplan not set"} · ${game.points ?? 2000}pts`,
+      title: game.report?.title,
+      badges: gameBadges(game, reportSides(game, me.list, opp.list)),
     }).then((blob) => {
       if (cancelled) return;
       url = URL.createObjectURL(blob);
-      setImage({ file: new File([blob], `${me.name}-vs-${opp.name}.png`.replace(/[^\w.-]+/g, "-"), { type: "image/png" }), url });
+      setImage({ file: new File([blob], `${me.name}-vs-${opp.name}.jpg`.replace(/[^\w.-]+/g, "-"), { type: "image/jpeg" }), url });
     });
     return () => {
       cancelled = true;

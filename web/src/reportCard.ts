@@ -11,10 +11,10 @@ import { ARMY, armyColor } from "./ui.tsx";
 
 const W = 1200;
 const H = 630;
-const C = { bg: "#0f1115", panel: "#191c22", line: "#5a4a26", lineSoft: "#2e2716", brass: "#d9ae55", text: "#ece6da", muted: "#a8a396", win: "#9cbf5e", loss: "#e08a4a" };
-const DISPLAY = '"Cinzel", Georgia, serif';
-const SANS = '"Inter", system-ui, sans-serif';
-const SEAL = [
+export const C = { bg: "#0f1115", panel: "#191c22", line: "#5a4a26", lineSoft: "#2e2716", brass: "#d9ae55", text: "#ece6da", muted: "#a8a396", win: "#9cbf5e", loss: "#e08a4a" };
+export const DISPLAY = '"Cinzel", Georgia, serif';
+export const SANS = '"Inter", system-ui, sans-serif';
+export const SEAL = [
   "M6 12.5a6 6 0 0 1 12 0v1.5H6z",
   "M6.2 11.5C4 10.8 2.8 8.3 3.4 5.3c.9 1.8 2.3 2.8 3.9 3.2",
   "M17.8 11.5c2.2-.7 3.4-3.2 2.8-6.2-.9 1.8-2.3 2.8-3.9 3.2",
@@ -26,7 +26,7 @@ const SEAL = [
 type Post = Pick<FeedPostView, "title" | "sides" | "result" | "battleplan" | "points" | "date" | "badges">;
 
 /** A stroked 24x24 icon (SVG path data) at x, y, `size` px wide. */
-function icon(ctx: CanvasRenderingContext2D, paths: string[], x: number, y: number, size: number, color: string, width = 1.4) {
+export function icon(ctx: CanvasRenderingContext2D, paths: string[], x: number, y: number, size: number, color: string, width = 1.4) {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(size / 24, size / 24);
@@ -39,7 +39,7 @@ function icon(ctx: CanvasRenderingContext2D, paths: string[], x: number, y: numb
 }
 
 /** Text that shrinks until it fits `max` px. */
-function fitText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, max: number, size: number, weight: number, family: string) {
+export function fitText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, max: number, size: number, weight: number, family: string) {
   let s = size;
   do ctx.font = `${weight} ${s}px ${family}`;
   while (ctx.measureText(text).width > max && --s > 14);
@@ -47,7 +47,7 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, x: number, y: numb
 }
 
 /** Up to `lines` lines of wrapped text, the last ending in … when cut. */
-function wrap(ctx: CanvasRenderingContext2D, text: string, max: number, lines: number): string[] {
+export function wrap(ctx: CanvasRenderingContext2D, text: string, max: number, lines: number): string[] {
   const out: string[] = [];
   let line = "";
   for (const word of text.split(/\s+/)) {
@@ -64,7 +64,7 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, max: number, lines: n
   return out;
 }
 
-function crest(ctx: CanvasRenderingContext2D, faction: string, cx: number, cy: number, r: number) {
+export function crest(ctx: CanvasRenderingContext2D, faction: string, cx: number, cy: number, r: number) {
   const color = armyColor(faction);
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
