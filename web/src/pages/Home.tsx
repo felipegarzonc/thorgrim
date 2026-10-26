@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { result } from "../../../shared/scoring.ts";
 import { baseFaction } from "../../../shared/season.ts";
 import type { ArmyList, FeedPostView, Game } from "../../../shared/types.ts";
@@ -6,8 +6,9 @@ import { api, withKey } from "../api.ts";
 import { gameDate, gameHref, sideInfo } from "../gameView.tsx";
 import { Avatar, Icon, useLoad, useMeta } from "../ui.tsx";
 import { gamePhotoUrl } from "./report.tsx";
-import { Challenges } from "./Members.tsx";
-import { GloryStrip } from "./Glory.tsx";
+// Club parts of Home come a moment after it (they bring the club's code), so Home shows at once.
+const Challenges = lazy(() => import("./Members.tsx").then((m) => ({ default: m.Challenges })));
+const GloryStrip = lazy(() => import("./Glory.tsx").then((m) => ({ default: m.GloryStrip })));
 import { moment } from "../analytics.tsx";
 import { Skeleton } from "../motion.tsx";
 
@@ -56,7 +57,11 @@ export function HomePage({ unread = 0 }: { unread?: number }) {
         </section>
       )}
 
-      {meta?.accounts && <Challenges compact />}
+      {meta?.accounts && (
+        <Suspense fallback={null}>
+          <Challenges compact />
+        </Suspense>
+      )}
 
       {hero && <GameHero game={hero} lists={lists} />}
 
@@ -75,7 +80,11 @@ export function HomePage({ unread = 0 }: { unread?: number }) {
         </a>
       </div>
 
-      {meta?.accounts && <GloryStrip />}
+      {meta?.accounts && (
+        <Suspense fallback={null}>
+          <GloryStrip />
+        </Suspense>
+      )}
 
       {finished.length > 0 && <Season games={finished} lists={lists} />}
 

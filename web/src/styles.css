@@ -7117,3 +7117,18 @@ button.speak.on {
 .result-card .tally-date {
   padding: 0.6rem 1rem 0;
 }
+
+/* iPhone zooms the whole page into any text box under 16px when it's tapped: never smaller. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea {
+  font-size: max(16px, 1em) !important;
+}
+/* Small links and toggles still get a finger-sized target. */
+.tap-link {
+  display: inline-block;
+  padding: 0.7rem 0;
+}
+.share-preview > summary {
+  padding: 0.7rem 0;
+}

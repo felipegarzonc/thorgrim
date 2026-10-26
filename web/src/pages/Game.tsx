@@ -27,7 +27,7 @@ import { CountUp, Gain, Sparks } from "../motion.tsx";
 import { feedback, feedbackOnce } from "../sound.ts";
 import { InviteMember } from "./GameLinks.tsx";
 import { BCP_HOME, bcpUrl } from "../../../shared/bcp.ts";
-import { translate } from "../../../shared/i18n/index.ts";
+import { translate } from "../../../shared/i18n/core.ts";
 import { currentLang } from "../i18n.ts";
 import { VpLines } from "../vpChart.tsx";
 import { ScoreSheet } from "../scoreSheet.tsx";

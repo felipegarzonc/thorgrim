@@ -250,7 +250,7 @@ export function ProfilePage() {
         {me.user.email && <p className="muted small">{me.user.email}</p>}
         <span className="badge">{me.user.role === "admin" ? "Admin" : "Player"}</span>
         {meta?.user?.id && (
-          <a className="small" href={`#/club/member/${meta.user.id}`}>
+          <a className="small tap-link" href={`#/club/member/${meta.user.id}`}>
             Your club page and army showcase →
           </a>
         )}

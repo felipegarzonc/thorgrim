@@ -4,7 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { BattleDetail, FeedPost, FeedPostView, Notice } from "../../../shared/types.ts";
-import { api, setCurrentClub, withKey } from "../api.ts";
+import { api, CLUB_SEEN, setCurrentClub, withKey } from "../api.ts";
 import { baseFaction } from "../../../shared/season.ts";
 import { armyStats, headToHead, inSeason, seasonRanges, seasonRecap, standings, type ClubResult, type Season, type SeasonRecap } from "../../../shared/ladder.ts";
 import { Avatar, Icon, Seg, useLoad, useMeta, type IconName } from "../ui.tsx";
@@ -49,8 +49,7 @@ function sharePicture(p: FeedPostView): Promise<Blob> {
   });
 }
 
-/** Tells the bottom bar to re-count what's unread. */
-export const CLUB_SEEN = "thorgrim-club-seen";
+export { CLUB_SEEN } from "../api.ts";
 
 type PostLike = Pick<FeedPost, "title" | "story" | "photos" | "sides" | "battleplan" | "points" | "date" | "badges" | "createdAt" | "result"> & {
   detail?: Pick<BattleDetail, "rounds" | "tactics">;

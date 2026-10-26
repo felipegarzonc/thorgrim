@@ -8,7 +8,7 @@
 // Players' own words (names, stories, rules text, Thorgrim's answers) are
 // left alone: those elements carry translate="no".
 
-import { translate, type Lang } from "../../shared/i18n/index.ts";
+import { translate, useSpanish, type Lang } from "../../shared/i18n/core.ts";
 
 const KEY = "thorgrim-lang";
 export type LangSetting = "auto" | Lang;
@@ -103,6 +103,13 @@ function translateTree(root: Element, lang: Lang) {
 }
 
 /** Start translating the page (no-op in English). */
+/** The Spanish phrases, downloaded only for players who use Spanish (they are a large file). */
+export async function loadLanguage() {
+  if (currentLang() !== "es") return;
+  const { ES_PATTERNS, ES_PHRASES } = await import("../../shared/i18n/es.ts");
+  useSpanish(ES_PHRASES, ES_PATTERNS);
+}
+
 export function startTranslating() {
   const lang = currentLang();
   document.documentElement.lang = lang;

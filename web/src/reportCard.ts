@@ -3,7 +3,7 @@
 // the battleplan and its highlights. Drawn here in the sharer's language and
 // kept with the club post (server/feed.ts), drawn again when the post changes.
 
-import { translate } from "../../shared/i18n/index.ts";
+import { translate } from "../../shared/i18n/core.ts";
 import { allianceOf, baseFaction } from "../../shared/season.ts";
 import type { FeedPostView } from "../../shared/types.ts";
 import { currentLang } from "./i18n.ts";

@@ -1,7 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
-import { api, LOGIN_EVENT, mediaExpiry, setMediaToken } from "./api.ts";
-import { CLUB_SEEN, ClubPage } from "./pages/Club.tsx";
-import { Join, Login } from "./pages/Auth.tsx";
+import { api, CLUB_SEEN, LOGIN_EVENT, mediaExpiry, setMediaToken } from "./api.ts";
 import { HomePage } from "./pages/Home.tsx";
 import { Icon, MetaContext, type IconName, type Meta } from "./ui.tsx";
 import { Skeleton } from "./motion.tsx";
@@ -22,6 +20,8 @@ const load = {
   report: () => import("./pages/PublicReport.tsx"),
   joinGame: () => import("./pages/JoinGame.tsx"),
   landing: () => import("./pages/Landing.tsx"),
+  club: () => import("./pages/Club.tsx"),
+  auth: () => import("./pages/Auth.tsx"),
 };
 const GamePage = lazy(() => load.game().then((m) => ({ default: m.GamePage })));
 const CoachChat = lazy(() => load.coach().then((m) => ({ default: m.CoachChat })));
@@ -34,10 +34,13 @@ const StatsPage = lazy(() => load.stats().then((m) => ({ default: m.StatsPage })
 const PublicReport = lazy(() => load.report().then((m) => ({ default: m.PublicReport })));
 const JoinGame = lazy(() => load.joinGame().then((m) => ({ default: m.JoinGame })));
 const Landing = lazy(() => load.landing().then((m) => ({ default: m.Landing })));
+const ClubPage = lazy(() => load.club().then((m) => ({ default: m.ClubPage })));
+const Login = lazy(() => load.auth().then((m) => ({ default: m.Login })));
+const Join = lazy(() => load.auth().then((m) => ({ default: m.Join })));
 
 /** After the first screen: fetch what a player needs at the table, while the network is idle. */
 function prefetchForTheTable() {
-  const go = () => void Promise.all([load.game(), load.coach(), load.lists(), load.games()]).catch(() => undefined);
+  const go = () => void Promise.all([load.game(), load.coach(), load.lists(), load.games(), load.club()]).catch(() => undefined);
   if ("requestIdleCallback" in window) window.requestIdleCallback(go, { timeout: 4000 });
   else setTimeout(go, 1500);
 }
@@ -146,7 +149,12 @@ export function App() {
   // The rules library is for developers only (app password); players never see it.
   const developer = !!meta?.user?.developer;
   const tabs = TABS.filter(([key]) => key !== "library" || developer);
-  if (tab === "join" && id) return <Join token={id} />;
+  if (tab === "join" && id)
+    return (
+      <Wait>
+        <Join token={id} />
+      </Wait>
+    );
   if (tab === "r" && id)
     return (
       <Wait>
@@ -162,7 +170,9 @@ export function App() {
   // Not signed in: the landing page first; its buttons (and game links) lead to sign-in.
   if (needLogin)
     return tab === "signin" || tab === "play" ? (
-      <Login />
+      <Wait>
+        <Login />
+      </Wait>
     ) : (
       <Wait>
         <Landing />
@@ -218,7 +228,11 @@ export function App() {
         <Wait>
         {tab === "home" && <HomePage unread={unread.notices + unread.posts} />}
         {tab === "games" && <GamesPage />}
-        {tab === "club" && <ClubPage postId={id} sub={step} unreadNotices={unread.notices} />}
+        {tab === "club" && (
+          <Wait>
+            <ClubPage postId={id} sub={step} unreadNotices={unread.notices} />
+          </Wait>
+        )}
         {tab === "lists" && <ListsPage selectedId={id} />}
         {tab === "library" && developer && <LibraryPage />}
         {tab === "library" && meta && !developer && <Redirect to="#/home" />}

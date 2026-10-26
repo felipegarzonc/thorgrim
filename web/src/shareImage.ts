@@ -4,7 +4,7 @@
 // then each side's points round by round (objectives and every battle
 // tactic). Shared from the game's Results and from its club post.
 
-import { translate } from "../../shared/i18n/index.ts";
+import { translate } from "../../shared/i18n/core.ts";
 import { baseFaction } from "../../shared/season.ts";
 import { currentLang } from "./i18n.ts";
 import { C, crest, DISPLAY, fitText, icon, SANS, SEAL, wrap } from "./reportCard.ts";

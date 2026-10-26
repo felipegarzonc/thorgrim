@@ -192,3 +192,6 @@ export async function runJob<T>(path: string, json: unknown, key?: string): Prom
   if (key) write(JOB_KEY(key), job.id);
   return waitForJob<T>(job.id, key);
 }
+
+/** Tells the bottom bar to re-count what's unread (the club page sends it after marking things seen). */
+export const CLUB_SEEN = "thorgrim-club-seen";

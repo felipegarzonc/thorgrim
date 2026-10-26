@@ -2,7 +2,7 @@
 // small page with its own preview in WhatsApp and the like (web/public/join.html
 // and friends), in the sharer's language, which then opens the app.
 
-import { translate } from "../../shared/i18n/index.ts";
+import { translate } from "../../shared/i18n/core.ts";
 import { currentLang } from "./i18n.ts";
 
 export function shareUrl(kind: "join" | "play" | "r", token: string): string {
