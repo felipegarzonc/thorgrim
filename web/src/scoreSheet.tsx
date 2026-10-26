@@ -2,9 +2,10 @@
 // round by round (objectives and every battle tactic). The heart of a game's
 // Results and the main picture of its club post.
 
-import { BATTLE_ROUNDS, TACTIC_VP } from "../../shared/season.ts";
+import { baseFaction, BATTLE_ROUNDS, TACTIC_VP } from "../../shared/season.ts";
 import type { BattleDetail } from "../../shared/types.ts";
 import type { ShareRow } from "./shareImage.ts";
+import { armyColor, Avatar } from "./ui.tsx";
 
 export interface SheetSide {
   name: string;
@@ -19,27 +20,16 @@ export function ScoreSheet({ date, status, tone, sides, footer }: { date: string
   const [a, b] = sides;
   return (
     <article className="card result-card">
-      <div className="game-card-body">
-        <div className="gc-side">
-          <span className="muted gc-date">{date}</span>
-          <b className="gc-name">{a.name}</b>
-          <span className="gc-faction">{a.base}</span>
-          {a.sub && <small className="muted">{a.sub}</small>}
-        </div>
-        <div className="gc-score">
-          <span className="big-score">
-            {a.vp}-{b.vp}
-          </span>
-          {status && <span className={`gc-status ${tone}`}>{status}</span>}
-        </div>
-        <div className="gc-side right">
-          <span className="muted gc-date">&nbsp;</span>
-          <b className="gc-name">{b.name}</b>
-          <span className="gc-faction">{b.base}</span>
-          {b.sub && <small className="muted">{b.sub}</small>}
-        </div>
-      </div>
-      <SheetRows sides={sides} />
+      {date && <p className="tally-date">{date}</p>}
+      <BattleHeader
+        sides={[
+          { name: a.name, faction: a.base, vp: a.vp },
+          { name: b.name, faction: b.base, vp: b.vp },
+        ]}
+        status={status}
+        tone={tone}
+      />
+      <SheetRows sides={sides.map((x) => ({ ...x, faction: x.base }))} />
       <p className="res-foot">
         {footer}
         <br />
@@ -49,30 +39,76 @@ export function ScoreSheet({ date, status, tone, sides, footer }: { date: string
   );
 }
 
-/** Each side's rows: objectives and battle tactics, round by round. */
-export function SheetRows({ sides }: { sides: (Pick<SheetSide, "name" | "rows"> & { note?: string })[] }) {
+/**
+ * Each side's rows round by round (objectives and every battle tactic), in
+ * the look of the shared picture (shareImage.ts): the rounds on top, each
+ * side under its army's colour, rounds that scored in brass.
+ */
+export function SheetRows({ sides }: { sides: (Pick<SheetSide, "name" | "rows"> & { faction?: string; note?: string })[] }) {
   return (
-    <>
+    <div className="tally">
+      <div className="tally-row tally-rounds" aria-hidden="true">
+        <span className="grow" />
+        <span className="tally-cells">
+          {Array.from({ length: BATTLE_ROUNDS }, (_, i) => (
+            <span key={i}>{`R${i + 1}`}</span>
+          ))}
+        </span>
+        <span className="tally-total" />
+      </div>
       {sides.map((side, i) => (
-        <div key={i} className="res-side">
-          <h2>{side.name}</h2>
+        <div key={i} className="tally-side">
+          <h3 style={{ ["--army" as string]: side.faction ? armyColor(side.faction) : undefined }}>{side.name}</h3>
           {side.rows.map((row) => (
-            <div key={row.label} className="res-row">
+            <div key={row.label} className="tally-row">
               <span className="grow">{row.label}</span>
-              <span className="cells">
+              <span className="tally-cells">
                 {row.cells.map((c, j) => (
-                  <span key={j} className="cell">
-                    {c === null ? "-" : c}
+                  <span key={j} className={`tally-cell ${c === null ? "none" : c ? "scored" : ""}`}>
+                    {c === null ? "–" : c}
                   </span>
                 ))}
               </span>
-              <span className="res-total">{row.total}</span>
+              <span className="tally-total">{row.total}</span>
             </div>
           ))}
           {side.note && <p className="muted small">{side.note}</p>}
         </div>
       ))}
-    </>
+    </div>
+  );
+}
+
+/** The top of a battle, as on the shared picture: both armies' crests and names, the score and result, the highlights. */
+export function BattleHeader({ sides, status, tone, badges = [] }: { sides: [{ name: string; faction?: string; vp: number }, { name: string; faction?: string; vp: number }]; status?: string; tone?: string; badges?: string[] }) {
+  const [a, b] = sides;
+  const who = (x: typeof a, right?: boolean) => (
+    <span className={`bh-side ${right ? "right" : ""}`}>
+      <Avatar faction={x.faction} size={3.2} />
+      <b translate="no">{x.name}</b>
+      <small>{x.faction ? baseFaction(x.faction) : "Unknown faction"}</small>
+    </span>
+  );
+  return (
+    <div className="battle-head">
+      <div className="bh-main">
+        {who(a)}
+        <span className="bh-score">
+          <b>
+            {a.vp}–{b.vp}
+          </b>
+          {status && <span className={`bh-result ${tone ?? ""}`}>{status}</span>}
+        </span>
+        {who(b, true)}
+      </div>
+      {badges.length > 0 && (
+        <div className="bh-pills">
+          {badges.map((x) => (
+            <span key={x}>{x}</span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

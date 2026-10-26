@@ -461,6 +461,7 @@ function LiveCard({ g, cheer, back }: { g: LiveGame; cheer: (kind: string) => vo
             sides={[
               ...(["me", "opponent"] as const).map((side) => ({
                 name: names[side],
+                faction: side === "me" ? g.myFaction : g.opponentFaction,
                 rows: rowsFromDetail(g.detail, side),
                 // Tactic rows come from the cards picked for that player: none picked, none shown.
                 note: g.detail.tactics[side].length ? undefined : "No battle tactic cards picked yet.",

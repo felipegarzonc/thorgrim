@@ -59,7 +59,7 @@ test("score a game and post its report to the club", async ({ page }) => {
   await expect(page).toHaveURL(/#\/club\/[a-z0-9]+/);
   const post = page.locator(".post").first();
   await expect(post.locator(".post-title")).toHaveText("The Saga of the Test Table");
-  await expect(post.locator(".post-stats")).toContainText("6–0");
+  await expect(post.locator(".battle-head")).toContainText("6–0");
   await expect(post.locator(".story")).toContainText("The test army won the day.");
 
   // In the feed, sharing is one tap: no need to open the post.

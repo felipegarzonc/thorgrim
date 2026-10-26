@@ -8,7 +8,7 @@ import { api, setCurrentClub, withKey } from "../api.ts";
 import { baseFaction } from "../../../shared/season.ts";
 import { armyStats, headToHead, inSeason, seasonRanges, seasonRecap, standings, type ClubResult, type Season, type SeasonRecap } from "../../../shared/ladder.ts";
 import { Avatar, Icon, Seg, useLoad, useMeta, type IconName } from "../ui.tsx";
-import { rowsFromDetail, ScoreSheet, type SheetSide } from "../scoreSheet.tsx";
+import { BattleHeader, rowsFromDetail, SheetRows } from "../scoreSheet.tsx";
 import { Story } from "./report.tsx";
 import { shareUrl } from "../links.ts";
 import { drawReportCard } from "../reportCard.ts";
@@ -102,58 +102,16 @@ export function Carousel({ slides }: { slides: React.ReactNode[] }) {
 export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; photoUrl: (n: number) => string; short?: boolean; onMore?: () => void }) {
   const [a, b] = post.sides;
   const paras = post.story.split(/\n\s*\n/).filter((p) => p.trim()).length;
-  const side = (x: (typeof post.sides)[number], rows: SheetSide["rows"]): SheetSide => ({
-    name: x.name,
-    base: x.faction ? baseFaction(x.faction) : "Unknown faction",
-    sub: x.faction?.includes(" - ") ? x.faction.split(" - ").slice(1).join(" - ") : undefined,
-    vp: x.vp,
-    rows,
-  });
   const status = post.result === "win" ? "VICTORY" : post.result === "loss" ? "DEFEAT" : post.result === "draw" ? "DRAW" : "";
-  const tactics = post.detail?.tactics.me ?? [];
-  const tacticVp = tactics.reduce((n, t) => n + t.done.length * 5, 0);
+  // The same layout as the shared picture (shareImage.ts): title, armies and score, highlights, then the score sheet.
   return (
     <>
       <h2 className="post-title">{post.title}</h2>
-      {a && b && (
-        <div className="post-stats">
-          <span>
-            <small>Score</small>
-            <b>
-              {a.vp}–{b.vp}
-            </b>
-          </span>
-          {status && (
-            <span>
-              <small>Result</small>
-              <b className={`post-result ${post.result ?? ""}`}>{status.charAt(0) + status.slice(1).toLowerCase()}</b>
-            </span>
-          )}
-          {tactics.length > 0 && (
-            <span>
-              <small>Tactics</small>
-              <b>
-                {tacticVp}/{tactics.length * 15}
-              </b>
-            </span>
-          )}
-        </div>
-      )}
+      {a && b && <BattleHeader sides={[a, b]} status={status} tone={post.result ?? ""} badges={post.badges} />}
       <div className="post-lines">
         {(post.battleplan || post.points) && (
           <span>
             <Icon name="map" /> {[post.battleplan, post.points && `${post.points} pts`].filter(Boolean).join(" · ")}
-          </span>
-        )}
-        {a && b && (
-          <span>
-            <Avatar faction={a.faction} size={1.15} /> {a.faction ? baseFaction(a.faction) : a.name} <span className="muted">vs</span> <Avatar faction={b.faction} size={1.15} />{" "}
-            {b.faction ? baseFaction(b.faction) : b.name}
-          </span>
-        )}
-        {!!post.badges.length && (
-          <span>
-            <Icon name="flag" /> {post.badges.join(" · ")}
           </span>
         )}
         {post.rivalry && a && b && (
@@ -169,7 +127,12 @@ export function PostBody({ post, photoUrl, short, onMore }: { post: PostLike; ph
             ...(a && b && post.detail
               ? [
                   <div key="sheet" className="media-sheet">
-                    <ScoreSheet date="" status="" tone="" sides={[side(a, rowsFromDetail(post.detail, "me")), side(b, rowsFromDetail(post.detail, "opponent"))]} footer="" />
+                    <SheetRows
+                      sides={[
+                        { name: a.name, faction: a.faction, rows: rowsFromDetail(post.detail, "me") },
+                        { name: b.name, faction: b.faction, rows: rowsFromDetail(post.detail, "opponent") },
+                      ]}
+                    />
                   </div>,
                 ]
               : []),
@@ -278,6 +241,11 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
             {post.battleplan ? ` · ${post.battleplan}` : ""}
           </small>
         </span>
+        {canShare && (
+          <button type="button" className="icon share-post" disabled={busy} onClick={shareOut} aria-label="Share" title="Share">
+            <Icon name="share" />
+          </button>
+        )}
       </header>
       <PostBody post={post} photoUrl={(n) => withKey(`/api/feed/${post.id}/photo/${n}?v=${encodeURIComponent(post.updatedAt ?? post.createdAt)}`)} short={!open} onMore={() => setOpen(true)} />
 
@@ -313,11 +281,6 @@ function PostCard({ post, single, changed, votes, onVotes }: { post: FeedPostVie
           );
         })}
         <span className="grow" />
-        {canShare && (
-          <button type="button" className="react share-post" disabled={busy} onClick={shareOut} aria-label="Share" title="Share">
-            <Icon name="share" />
-          </button>
-        )}
         <button type="button" className="react" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={`${post.comments.length} comments`}>
           <Icon name="coach" />
           <span>{post.comments.length || ""}</span>
