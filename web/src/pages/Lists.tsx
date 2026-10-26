@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { listPoints, type ArmyList, type Unit } from "../../../shared/types.ts";
+import { listPoints, type ArmyList, type Game, type Unit } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { Avatar, Card, RulesText, useLoad, useMeta } from "../ui.tsx";
 
@@ -20,7 +20,7 @@ export function ListsPage({ selectedId }: { selectedId?: string }) {
               <a href={`#/lists/${l.id}`}>
                 <strong>{l.name}</strong>
               </a>
-              <span className={`tag ${l.owner}`}>{l.owner === "me" ? "Mine" : "Opponent"}</span>
+              <span className={`tag ${l.owner}`}>{l.owner === "me" ? "Mine" : l.opponentName ? <span translate="no">{l.opponentName}</span> : "Opponent"}</span>
               <span className="muted">
                 {l.faction || "faction?"} · {l.units.length} units · {listPoints(l)} pts
               </span>
@@ -28,17 +28,29 @@ export function ListsPage({ selectedId }: { selectedId?: string }) {
           ))}
         </ul>
       </Card>
-      {!selected && <ListForm onSaved={reload} />}
+      {!selected && <ListForm onSaved={() => reload()} />}
     </div>
   );
 }
 
-function ListForm({ onSaved }: { onSaved: () => void }) {
+/** Names to pick an opponent from: the club's members and the opponents of your games. */
+function useOpponentNames(): string[] {
   const meta = useMeta();
-  const [name, setName] = useState("");
-  const [owner, setOwner] = useState<"me" | "opponent">("me");
-  const [faction, setFaction] = useState("");
-  const [text, setText] = useState("");
+  const [members] = useLoad<{ id: string; name: string }[]>(meta?.accounts ? "/club/members" : null);
+  const [games] = useLoad<Game[]>("/games");
+  const names = [...(members ?? []).filter((m) => m.id !== meta?.user?.id).map((m) => m.name), ...(games ?? []).map((g) => g.opponentName ?? "")];
+  return [...new Set(names.map((n) => n.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+/** Add a list, or change one (`initial`): its name, whose it is, the faction, and its text (read again on save). */
+function ListForm({ onSaved, initial, onCancel }: { onSaved: (list: ArmyList) => void; initial?: ArmyList; onCancel?: () => void }) {
+  const meta = useMeta();
+  const names = useOpponentNames();
+  const [name, setName] = useState(initial?.name ?? "");
+  const [owner, setOwner] = useState<"me" | "opponent">(initial?.owner ?? "me");
+  const [opponentName, setOpponentName] = useState(initial?.opponentName ?? "");
+  const [faction, setFaction] = useState(initial?.faction ?? "");
+  const [text, setText] = useState(initial?.rawText ?? "");
   const [parsed, setParsed] = useState<Parsed>();
   const [busy, setBusy] = useState(false);
 
@@ -46,11 +58,17 @@ function ListForm({ onSaved }: { onSaved: () => void }) {
   const save = async () => {
     setBusy(true);
     try {
-      const list = await api<ArmyList>("/lists", { method: "POST", json: { name, owner, faction: faction || parsed?.faction, rawText: text } });
-      setText("");
-      setName("");
+      const list = await api<ArmyList>("/lists", {
+        method: "POST",
+        json: { ...(initial ? { id: initial.id, createdAt: initial.createdAt } : {}), name, owner, opponentName: owner === "opponent" ? opponentName : "", faction: faction || parsed?.faction, rawText: text },
+      });
       setParsed(undefined);
-      onSaved();
+      if (!initial) {
+        setText("");
+        setName("");
+        setOpponentName("");
+      }
+      onSaved(list);
       window.location.hash = `#/lists/${list.id}`;
     } finally {
       setBusy(false);
@@ -58,8 +76,8 @@ function ListForm({ onSaved }: { onSaved: () => void }) {
   };
 
   return (
-    <Card title="Add an army list">
-      <p className="muted">Paste a list exported from the Warhammer AoS app, New Recruit, or copied from Listhammer.</p>
+    <Card title={initial ? `Edit ${initial.name}` : "Add an army list"}>
+      {!initial && <p className="muted">Paste a list exported from the Warhammer AoS app, New Recruit, or copied from Listhammer.</p>}
       <div className="grid2">
         <label>
           Name
@@ -72,6 +90,17 @@ function ListForm({ onSaved }: { onSaved: () => void }) {
             <option value="opponent">Opponent</option>
           </select>
         </label>
+        {owner === "opponent" && (
+          <label>
+            Which opponent
+            <input list="opponent-names" value={opponentName} onChange={(e) => setOpponentName(e.target.value)} placeholder="A club member or any name" />
+            <datalist id="opponent-names">
+              {names.map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+          </label>
+        )}
         <label>
           Faction (auto-detected if blank)
           <select value={faction} onChange={(e) => setFaction(e.target.value)}>
@@ -91,8 +120,13 @@ function ListForm({ onSaved }: { onSaved: () => void }) {
           Check list
         </button>
         <button type="button" className="primary" onClick={save} disabled={!text.trim() || busy}>
-          Save list
+          {initial ? "Save changes" : "Save list"}
         </button>
+        {onCancel && (
+          <button type="button" className="ghost" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
       </div>
       {parsed && (
         <div className="parsed">
@@ -117,6 +151,18 @@ function ListForm({ onSaved }: { onSaved: () => void }) {
 }
 
 function ListView({ list, onDeleted }: { list: ArmyList; onDeleted: () => void }) {
+  const [editing, setEditing] = useState(false);
+  if (editing)
+    return (
+      <ListForm
+        initial={list}
+        onCancel={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          onDeleted();
+        }}
+      />
+    );
   const remove = async () => {
     if (!confirm(`Delete ${list.name}?`)) return;
     await api(`/lists/${list.id}`, { method: "DELETE" });
@@ -128,6 +174,9 @@ function ListView({ list, onDeleted }: { list: ArmyList; onDeleted: () => void }
       title={list.name}
       actions={
         <>
+          <button type="button" onClick={() => setEditing(true)}>
+            Edit
+          </button>
           <a className="button" href="#/lists">
             New list
           </a>
@@ -138,7 +187,7 @@ function ListView({ list, onDeleted }: { list: ArmyList; onDeleted: () => void }
       }
     >
       <p className="muted">
-        {list.owner === "me" ? "My list" : "Opponent list"} · {list.faction}{list.formation ? ` · ${list.formation.name}${list.formation.points ? ` (${list.formation.points} pts)` : ""}` : ""} · {listPoints(list)} pts
+        {list.owner === "me" ? "My list" : list.opponentName ? <>Opponent list · <span translate="no">{list.opponentName}</span></> : "Opponent list"} · {list.faction}{list.formation ? ` · ${list.formation.name}${list.formation.points ? ` (${list.formation.points} pts)` : ""}` : ""} · {listPoints(list)} pts
         {list.tacticCards?.length ? ` · Tactics: ${list.tacticCards.join(", ")}` : ""}
       </p>
       {list.unmatched.length > 0 && <p className="warning">Not recognised: {list.unmatched.join(" · ")}</p>}

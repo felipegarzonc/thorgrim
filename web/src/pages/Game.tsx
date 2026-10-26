@@ -717,7 +717,9 @@ function PlayerBlock({ side, game, lists, mutate, reloadLists }: { side: Side; g
       list ? `${side === "me" ? "My" : "Opponent's"} list: ${list.name}.` : undefined,
     );
   };
-  const ordered = [...(lists ?? [])].sort((a, b) => Number(b.owner === side) - Number(a.owner === side) || b.createdAt.localeCompare(a.createdAt));
+  // This side's lists first; for the opponent, the lists kept for this opponent before any other.
+  const forThem = (l: ArmyList) => side === "opponent" && !!l.opponentName && !!game.opponentName && l.opponentName.trim().toLowerCase() === game.opponentName.trim().toLowerCase();
+  const ordered = [...(lists ?? [])].sort((a, b) => Number(forThem(b)) - Number(forThem(a)) || Number(b.owner === side) - Number(a.owner === side) || b.createdAt.localeCompare(a.createdAt));
 
   return (
     <section>
@@ -744,7 +746,7 @@ function PlayerBlock({ side, game, lists, mutate, reloadLists }: { side: Side; g
           <option value="">Add an army list…</option>
           {ordered.map((l) => (
             <option key={l.id} value={l.id}>
-              {l.name} ({l.faction || "?"})
+              {l.name} ({l.faction || "?"}){l.owner === "opponent" && l.opponentName ? ` · ${l.opponentName}` : ""}
             </option>
           ))}
         </select>

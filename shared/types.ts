@@ -81,6 +81,8 @@ export interface ArmyList {
   id: string;
   name: string;
   owner: "me" | "opponent";
+  /** For an opponent's list: whose it is (a club member's name, or any name), to offer it first in games against them. */
+  opponentName?: string;
   faction: string;
   rawText: string;
   units: ListUnit[];

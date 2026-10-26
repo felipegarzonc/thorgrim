@@ -433,6 +433,7 @@ app.post("/api/lists", async (req, res) => {
     id: body.id ?? newId(),
     name: body.name || "Untitled list",
     owner: body.owner === "opponent" ? "opponent" : "me",
+    ...(body.owner === "opponent" && typeof body.opponentName === "string" && body.opponentName.trim() ? { opponentName: body.opponentName.trim().slice(0, 60) } : {}),
     rawText: body.rawText ?? "",
     createdAt: body.createdAt ?? new Date().toISOString(),
     ...parsed,

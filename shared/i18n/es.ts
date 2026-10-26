@@ -1208,6 +1208,9 @@ export const ES_PHRASES: Record<string, string> = {
   Missed: "Fallaste",
   "Live now": "En vivo",
   "Hide points": "Ocultar puntos",
+  "Save changes": "Guardar cambios",
+  "Which opponent": "Qué rival",
+  "A club member or any name": "Un miembro del club o cualquier nombre",
   Share: "Compartir",
   "Share image and link": "Compartir imagen y enlace",
   "The link is ready: tap Share image and link to send it.": "El enlace está listo: toca Compartir imagen y enlace para enviarlo.",
@@ -1295,6 +1298,7 @@ export const ES_PHRASES: Record<string, string> = {
 
 /** Text with names and numbers in it. */
 export const ES_PATTERNS: [RegExp, string][] = [
+  [/^Edit (.+)$/, "Editar $1"],
   [/^Finish and confirm (\d+)–(\d+)$/, "Terminar y confirmar $1–$2"],
   [/^Updated (\d+) min ago$/, "Actualizado hace $1 min"],
   [/^No changes for (\d+) (min|h)$/, "Sin cambios hace $1 $2"],
