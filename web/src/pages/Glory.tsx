@@ -9,7 +9,7 @@ import { api } from "../api.ts";
 import { rowsFromDetail, SheetRows } from "../scoreSheet.tsx";
 import { CountUp, Skeleton, Sparks } from "../motion.tsx";
 import { feedback, feedbackOnce } from "../sound.ts";
-import { Avatar, Icon, useLoad, useMeta, type IconName } from "../ui.tsx";
+import { Avatar, Icon, useLoad, useMeta, useOnRefresh, type IconName } from "../ui.tsx";
 
 interface Achievement {
   id: string;
@@ -358,6 +358,7 @@ const CHEER_LOOK: [string, IconName, string][] = [
 /** Games being played right now in the club, with cheers. */
 export function LiveGames() {
   const [games, setGames] = useState<LiveGame[]>();
+  useOnRefresh(() => api<LiveGame[]>("/glory/live").then(setGames).catch(() => undefined));
   useEffect(() => {
     let on = true;
     // Only while the page is in front of someone: a phone in a pocket doesn't poll.

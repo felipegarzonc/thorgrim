@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ALLIANCES, allianceOf, baseFaction, type Alliance } from "../../shared/season.ts";
 import { api } from "./api.ts";
 
@@ -23,19 +23,55 @@ export interface Meta {
 export const MetaContext = createContext<Meta | null>(null);
 export const useMeta = () => useContext(MetaContext);
 
+// ---------- pulling down to refresh ----------
+// Pulling a page down (PullToRefresh) sends REFRESH: every loaded piece of the
+// page fetches again, and the pull waits for them to come back.
+
+const REFRESH = "thorgrim-refresh";
+const inFlight = new Set<Promise<unknown>>();
+const track = <P extends Promise<unknown>>(p: P) => {
+  inFlight.add(p);
+  void p.catch(() => undefined).finally(() => inFlight.delete(p));
+  return p;
+};
+
+/** Run `again` when the page is pulled to refresh (a promise it returns is waited for). */
+export function useOnRefresh(again: () => unknown) {
+  const latest = useRef(again);
+  latest.current = again;
+  useEffect(() => {
+    const run = () => {
+      const r = latest.current();
+      if (r instanceof Promise) track(r);
+    };
+    window.addEventListener(REFRESH, run);
+    return () => window.removeEventListener(REFRESH, run);
+  }, []);
+}
+
+/** Everything on the page loads again; resolves when it's back (8 s at most). */
+export async function refreshAll() {
+  window.dispatchEvent(new Event(REFRESH));
+  await new Promise((r) => setTimeout(r, 80));
+  await Promise.race([Promise.allSettled([...inFlight]), new Promise((r) => setTimeout(r, 8000))]);
+}
+
 export function useLoad<T>(path: string | null, deps: unknown[] = []): [T | undefined, () => void, string | undefined] {
   const [data, setData] = useState<T>();
   const [error, setError] = useState<string>();
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!path) return;
-    api<T>(path)
-      .then((d) => {
-        setData(d);
-        setError(undefined);
-      })
-      .catch((e: Error) => setError(e.message));
+    track(
+      api<T>(path)
+        .then((d) => {
+          setData(d);
+          setError(undefined);
+        })
+        .catch((e: Error) => setError(e.message)),
+    );
   }, [path, tick, ...deps]);
+  useOnRefresh(() => setTick((t) => t + 1));
   return [data, () => setTick((t) => t + 1), error];
 }
 

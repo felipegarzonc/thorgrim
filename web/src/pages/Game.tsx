@@ -23,9 +23,10 @@ import { WarscrollCard } from "./Lists.tsx";
 import { BattleReportCard, ReviewCard } from "./report.tsx";
 import { shareText, shareUrl } from "../links.ts";
 import { moment } from "../analytics.tsx";
-import { CountUp, Gain, Sparks } from "../motion.tsx";
+import { buzz, CountUp, Gain, Sparks } from "../motion.tsx";
 import { feedback, feedbackOnce } from "../sound.ts";
 import { InviteMember } from "./GameLinks.tsx";
+import { useSwipe } from "../gestures.tsx";
 import { BCP_HOME, bcpUrl } from "../../../shared/bcp.ts";
 import { translate } from "../../../shared/i18n/core.ts";
 import { currentLang } from "../i18n.ts";
@@ -35,6 +36,8 @@ import { doubleTurns, gameBadges, reportSides, runningScore } from "../../../sha
 
 type Step = string;
 const ROUND_STEPS = Array.from({ length: BATTLE_ROUNDS }, (_, i) => `round-${i + 1}`);
+/** The battle: its rounds and the result (the bottom bar's buttons, and swipes). */
+const BATTLE_STEPS = [...ROUND_STEPS, "results"];
 // Every screen of a game (the menu lists them all)...
 const STEPS: Step[] = ["players", "setup", "battleplan", "tactics", "plan", ...ROUND_STEPS, "results"];
 // ...and the quick way through it: game details and Thorgrim's plan are optional, so Next skips them.
@@ -195,6 +198,15 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
   const myRules = rulesOf(myList?.id);
   const oppRules = rulesOf(oppList?.id);
 
+  // In the battle, a sideways swipe moves between the rounds and the result (like the bottom bar).
+  const battleAt = BATTLE_STEPS.indexOf(OLD_STEPS[step ?? ""] ?? step ?? "");
+  useSwipe((dir) => {
+    const to = BATTLE_STEPS[battleAt + dir];
+    if (!to) return;
+    buzz(8);
+    window.location.hash = `#/games/${id}/${to}`;
+    window.scrollTo(0, 0);
+  }, !!game && battleAt >= 0 && !sheet);
   if (!game) return <p className="muted game-loading">{sync.state === "error" ? `Could not open the game: ${sync.error}` : "Loading…"}</p>;
   const isPlayer = game.access?.role === "player";
   // After making or stopping the join link: take the server's copy.
@@ -230,6 +242,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
     window.location.hash = `#/games/${game.id}/${s}`;
     window.scrollTo(0, 0);
   };
+
   const armies: Record<Side, Army> = {
     me: { side: "me", list: myList, rules: myRules ?? [] },
     opponent: { side: "opponent", list: oppList, rules: oppRules ?? [] },

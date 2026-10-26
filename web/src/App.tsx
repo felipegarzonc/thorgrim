@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, CLUB_SEEN, LOGIN_EVENT, mediaExpiry, setMediaToken } from "./api.ts";
 import { HomePage } from "./pages/Home.tsx";
-import { Icon, MetaContext, type IconName, type Meta } from "./ui.tsx";
+import { Icon, MetaContext, useOnRefresh, type IconName, type Meta } from "./ui.tsx";
+import { PullToRefresh } from "./gestures.tsx";
 import { Skeleton } from "./motion.tsx";
 import { play } from "./sound.ts";
 
@@ -44,6 +45,9 @@ function prefetchForTheTable() {
   if ("requestIdleCallback" in window) window.requestIdleCallback(go, { timeout: 4000 });
   else setTimeout(go, 1500);
 }
+
+/** Pull down to refresh on the main tabs. */
+const Pullable = ({ on, children }: { on: boolean; children: ReactNode }) => (on ? <PullToRefresh>{children}</PullToRefresh> : <>{children}</>);
 
 const Wait = ({ children }: { children: ReactNode }) => (
   <Suspense
@@ -94,6 +98,7 @@ export function App() {
   const [newVersion, setNewVersion] = useState(false);
   const loadedBuild = useRef<string>("");
   const [unread, setUnread] = useState({ notices: 0, posts: 0 });
+  useOnRefresh(() => (meta?.user ? api<typeof unread>("/club/unread").then(setUnread).catch(() => undefined) : undefined));
 
   // What's new in the club, for the badge on its tab: checked now and then, and when a page says it was seen.
   useEffect(() => {
@@ -226,6 +231,7 @@ export function App() {
           </p>
         )}
         <Wait>
+        <Pullable on={["home", "games", "club", "lists"].includes(tab)}>
         {tab === "home" && <HomePage unread={unread.notices + unread.posts} />}
         {tab === "games" && <GamesPage />}
         {tab === "club" && (
@@ -254,6 +260,7 @@ export function App() {
             ]}
           />
         )}
+        </Pullable>
         </Wait>
       </main>
       <nav className="bottom-nav" aria-label="Sections" style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}>

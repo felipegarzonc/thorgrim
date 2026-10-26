@@ -7132,3 +7132,54 @@ textarea {
 .share-preview > summary {
   padding: 0.7rem 0;
 }
+
+/* Pull to refresh: the seal turns as the page is pulled, and spins while it loads. */
+html,
+body {
+  overscroll-behavior-y: contain;
+}
+.ptr {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  transition: height 0.15s ease-out;
+}
+.ptr.rest {
+  transition: height 0.25s ease;
+}
+.ptr-seal {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  color: var(--faint);
+  background: var(--panel);
+}
+.ptr-seal.ready {
+  color: var(--brass);
+  border-color: var(--me-line);
+  background: #2a2418;
+}
+.ptr.busy .ptr-seal {
+  animation: ptr-spin 0.9s linear infinite;
+}
+@keyframes ptr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ptr.busy .ptr-seal {
+    animation: none;
+  }
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

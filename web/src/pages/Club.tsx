@@ -7,7 +7,7 @@ import type { BattleDetail, FeedPost, FeedPostView, Notice } from "../../../shar
 import { api, CLUB_SEEN, setCurrentClub, withKey } from "../api.ts";
 import { baseFaction } from "../../../shared/season.ts";
 import { armyStats, headToHead, inSeason, seasonRanges, seasonRecap, standings, type ClubResult, type Season, type SeasonRecap } from "../../../shared/ladder.ts";
-import { Avatar, Icon, Seg, useLoad, useMeta, type IconName } from "../ui.tsx";
+import { Avatar, Icon, Seg, useLoad, useMeta, useOnRefresh, type IconName } from "../ui.tsx";
 import { BattleHeader, rowsFromDetail, SheetRows } from "../scoreSheet.tsx";
 import { Story } from "./report.tsx";
 import { shareUrl } from "../links.ts";
@@ -621,13 +621,16 @@ function ClubHome({ tab, postId, unreadNotices }: { tab: ClubTab; postId?: strin
   const votes = votesNow ?? votesLoaded;
   const setTab = (t: ClubTab) => window.location.replace(`#/club/${t}`);
 
-  useEffect(() => {
-    if (meta?.club === null) return;
+  const loadFeed = () =>
     api<FeedPostView[]>("/feed")
       .then(setPosts)
       .catch((e: Error) => setError(e.message));
+  useEffect(() => {
+    if (meta?.club === null) return;
+    void loadFeed();
     void api("/feed/seen", { method: "POST" }).then(() => window.dispatchEvent(new Event(CLUB_SEEN)));
   }, [postId]);
+  useOnRefresh(() => (meta?.club === null ? undefined : loadFeed()));
 
   const changed = (id: string) => (p: FeedPostView | null) => setPosts((cur) => (p ? cur?.map((x) => (x.id === id ? p : x)) : cur?.filter((x) => x.id !== id)));
   const armies = [...new Set((posts ?? []).flatMap((p) => p.sides.map((x) => (x.faction ? baseFaction(x.faction) : ""))).filter(Boolean))].sort();
