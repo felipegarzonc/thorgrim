@@ -184,8 +184,8 @@ v1 is built in this folder (see README.md):
 | M2 Math engine + calculator UI (Statshammer-style) | ✅ tested |
 | M3 Lists (paste and match), game tracker, phase checklist | ✅ |
 | M4 AI coach with tools (rules search, warscrolls, calculators, web research) | ✅ loop tested with a mocked API, not yet run against the live API |
-| M5 Pre-game brief and post-game review prompts | ✅ (lessons memory across games still to do) |
-| Next | Stream coach answers; save lessons across games; core abilities in the checklist (from the uploaded core rules); deploy online |
+| M5 Pre-game brief and post-game review prompts | ✅ lessons from past reviews feed the next game (same matchup first) |
+| Next | Stream coach answers; core abilities in the checklist (from the uploaded core rules); deploy online |
 
 ---
 

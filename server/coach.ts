@@ -26,6 +26,7 @@ import type { Lang } from "../shared/i18n/index.ts";
 import { baseFaction } from "../shared/season.ts";
 import { metaDescriptions, metaSchemas, omnissiahGet, omnissiahReady, runMetaTool, type MetaTool } from "./omnissiah.ts";
 import { Collection } from "./store.ts";
+import { lessonsFor } from "./lessons.ts";
 
 type Msg = Anthropic.Beta.BetaMessageParam;
 
@@ -352,6 +353,9 @@ async function dossier(ctx: CoachContext): Promise<string> {
   }
   if (ctx.myList) parts.push(listDossier(ctx.myList), "");
   if (ctx.opponentList) parts.push(listDossier(ctx.opponentList), "");
+  // A failure here must not stop the coach: lessons are a bonus.
+  const lessons = await lessonsFor(ctx.game?.id, ctx.opponentList?.faction || ctx.game?.opponentFaction).catch(() => "");
+  if (lessons) parts.push(lessons, "");
   parts.push("</dossier>");
   return parts.filter((p) => p !== undefined).join("\n");
 }
