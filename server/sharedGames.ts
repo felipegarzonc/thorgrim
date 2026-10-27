@@ -12,6 +12,7 @@ import type { ArmyList, Game } from "../shared/types.ts";
 import { currentUser } from "./context.ts";
 import { notify } from "./notices.ts";
 import { Collection } from "./store.ts";
+import { UserError } from "./errors.ts";
 
 interface GameLink {
   id: string; // the game's id
@@ -154,9 +155,9 @@ export async function myGames(): Promise<Game[]> {
 export async function confirmResult(o: OpenGame): Promise<OpenGame> {
   const me = currentUser().id;
   const { ownerId, playerId } = ladderSides(o);
-  if (!o.game.finished) throw new Error("Finish the game first.");
-  if (!playerId || !ownerId) throw new Error("Only games played together count on the ladder: share the game with your opponent first.");
-  if (me !== ownerId && me !== playerId) throw new Error("Only the two players can confirm the result.");
+  if (!o.game.finished) throw new UserError("Finish the game first.");
+  if (!playerId || !ownerId) throw new UserError("Only games played together count on the ladder: share the game with your opponent first.");
+  if (me !== ownerId && me !== playerId) throw new UserError("Only the two players can confirm the result.", 403);
   const confirmations = { ...o.game.confirmations, [me]: { result: resultKey(o.game), at: new Date().toISOString() } };
   return { ...o, game: await save(o, { ...o.game, confirmations }) };
 }
@@ -186,7 +187,7 @@ export async function stopSharing(o: OpenGame): Promise<OpenGame> {
 
 /** Join a shared game from its link. Returns the game's id. */
 export async function joinGame(token: string): Promise<string> {
-  const bad = new Error("This game link doesn't work any more. Ask your opponent for a new one.");
+  const bad = new UserError("This game link doesn't work any more. Ask your opponent for a new one.", 404);
   const invite = /^[a-f0-9]{32}$/.test(token) ? await invites.get(token) : undefined;
   if (!invite) throw bad;
   const game = await gamesIn(invite.ownerPrefix).get(invite.gameId);
@@ -294,10 +295,10 @@ const confirmNow = (g: Game, id: string): Game["confirmations"] =>
 /** Propose some of the signed-in player's games to the member who was their opponent. */
 export async function offerGames(to: { id: string; name: string; prefix: string }, gameIds: string[]): Promise<{ offered: number }> {
   const me = currentUser();
-  if (to.id === me.id) throw new Error("Pick your opponent, not yourself.");
+  if (to.id === me.id) throw new UserError("Pick your opponent, not yourself.");
   const mine = gamesIn(me.prefix);
   const games = (await Promise.all([...new Set(gameIds)].slice(0, 200).map((id) => mine.get(id)))).filter(linkable);
-  if (!games.length) throw new Error("None of these games can be linked: they're not yours, or another player is already in them.");
+  if (!games.length) throw new UserError("None of these games can be linked: they're not yours, or another player is already in them.");
   for (const g of games) {
     const confirmations = confirmNow(g, me.id);
     if (confirmations !== g.confirmations) await gamesIn(me.prefix).save({ ...g, confirmations, version: (g.version ?? 0) + 1 });
@@ -353,7 +354,7 @@ export async function myOffers() {
 export async function acceptOffer(offerId: string, only?: string[]): Promise<OpenGame[]> {
   const me = currentUser();
   const offer = await offersIn(me.prefix).get(offerId);
-  if (!offer) throw new Error("That proposal isn't there any more.");
+  if (!offer) throw new UserError("That proposal isn't there any more.", 404);
   const linked: OpenGame[] = [];
   for (const id of offer.gameIds) {
     if (only && !only.includes(id)) continue;

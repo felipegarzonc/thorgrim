@@ -34,6 +34,7 @@ The app runs on [Vercel](https://vercel.com) (free Hobby plan) and keeps your li
    - `SUPABASE_URL`: the Project URL from step 1.
    - `SUPABASE_SERVICE_ROLE_KEY`: the `service_role` key from step 1. Keep it secret: it only lives in Vercel, never in the browser.
    - `ANTHROPIC_API_KEY`: your Claude API key (optional here; it can be pasted later on the Ask page, and is then kept in your Supabase bucket).
+   - `APP_URL`: the app's address, e.g. `https://thorgrim.co` (recommended). Invite emails and shared reports link there. Without it, Vercel's production address is used.
 3. Deploy, open the `https://thorgrim-….vercel.app` address and sign in with your password.
 
 Each push to `main` redeploys automatically. Online, big files are uploaded from the browser straight to Supabase, and scanned pages are read while the Rules page is open (keep it open until it says "Searchable"). Books uploaded on your Mac need to be uploaded again online.

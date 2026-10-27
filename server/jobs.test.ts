@@ -30,11 +30,18 @@ describe("background jobs", () => {
     expect(await settle(job.id)).toMatchObject({ status: "done", result: { summary: "Hold the centre." } });
   });
 
-  it("records failures with their message", async () => {
-    const job = await startJob("tips", async () => {
-      throw new Error("Monthly limit reached");
+  it("records failures with their message for the player, and keeps other errors on the server", async () => {
+    const { AuthError } = await import("./accounts.ts");
+    const limit = await startJob("tips", async () => {
+      throw new AuthError("You've used this month's Thorgrim allowance ($5.00).", 402);
     });
-    expect(await settle(job.id)).toMatchObject({ status: "failed", error: "Monthly limit reached" });
+    expect(await settle(limit.id)).toMatchObject({ status: "failed", error: "You've used this month's Thorgrim allowance ($5.00).", code: 402 });
+    const bug = await startJob("tips", async () => {
+      throw new Error("Supabase storage read users/p9/games/x.json: denied");
+    });
+    const failed = await settle(bug.id);
+    expect(failed).toMatchObject({ status: "failed", code: 500 });
+    expect(failed.error).not.toContain("users/p9");
   });
 
   it("runs as the user who started it, in their own space", async () => {

@@ -17,6 +17,7 @@ import { noticesIn, notify, seenIn } from "./notices.ts";
 import { doubleTurns, gameBadges, playerBadges, reportSides, runningScore, type ReportSides } from "../shared/report.ts";
 import { changeGame, gameLists, isGamePhoto, myGames, viewGame, type OpenGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
+import { UserError } from "./errors.ts";
 import { clubSpace, getClub, listClubs } from "./clubs.ts";
 import { translate, type Lang } from "../shared/i18n/index.ts";
 import { headToHead, type ClubResult } from "../shared/ladder.ts";
@@ -40,14 +41,8 @@ async function inClub<T>(clubId: string | undefined, fn: () => Promise<T>): Prom
 export const REACTIONS = ["⚔️", "🔥", "😂", "👏", "💀"];
 const MAX_PHOTOS = 8;
 
-export class FeedError extends Error {
-  constructor(
-    message: string,
-    readonly status = 400,
-  ) {
-    super(message);
-  }
-}
+/** A club feature's error for the player (see server/errors.ts). */
+export class FeedError extends UserError {}
 
 /** What's new for the signed-in member: unread notices and posts by others since they last looked. */
 /** New notices and club posts (no club yet: just the notices). */

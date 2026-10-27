@@ -10,6 +10,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { blobs } from "./blobs.ts";
 import { hot } from "./hot.ts";
 import { currentUser } from "./context.ts";
+import { SERVER_ERROR, UserError } from "./errors.ts";
 
 export interface Account {
   id: string; // Supabase Auth user id
@@ -57,12 +58,10 @@ export interface Session {
   expires_at: number;
 }
 
-export class AuthError extends Error {
-  constructor(
-    message: string,
-    readonly status = 401,
-  ) {
-    super(message);
+/** A sign-in error for the player (see server/errors.ts); 401 asks them to sign in again. */
+export class AuthError extends UserError {
+  constructor(message: string, status = 401) {
+    super(message, status);
   }
 }
 
@@ -117,6 +116,11 @@ async function gotrue<T>(path: string, init: { method?: string; body?: unknown; 
   });
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
+    // Supabase's own failures (5xx) stay in the log; its answers about the request (taken email, weak password) are shown.
+    if (res.status >= 500) {
+      console.error(`Supabase Auth ${path}: HTTP ${res.status}`, data);
+      throw new AuthError(SERVER_ERROR, 503);
+    }
     const msg = String(data.msg ?? data.error_description ?? data.message ?? data.error ?? res.statusText);
     throw new AuthError(/invalid login credentials/i.test(msg) ? "Wrong email or password." : msg, res.status === 400 || res.status === 422 ? 400 : res.status);
   }

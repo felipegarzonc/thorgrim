@@ -8,6 +8,7 @@ import webpush from "web-push";
 import { blobs } from "./blobs.ts";
 import { currentUser } from "./context.ts";
 import { Collection } from "./store.ts";
+import { UserError } from "./errors.ts";
 
 interface Keys {
   publicKey: string;
@@ -58,7 +59,7 @@ export function isPushEndpoint(endpoint: unknown): endpoint is string {
 
 /** This phone wants notifications for the signed-in member. */
 export async function subscribe(sub: webpush.PushSubscription) {
-  if (!isPushEndpoint(sub?.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) throw new Error("That isn't a push subscription.");
+  if (!isPushEndpoint(sub?.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) throw new UserError("That isn't a push subscription.");
   const clean = { endpoint: sub.endpoint, keys: { p256dh: String(sub.keys.p256dh), auth: String(sub.keys.auth) } };
   await subsIn(currentUser().prefix).save({ id: idOf(sub.endpoint), sub: clean, at: new Date().toISOString() });
 }

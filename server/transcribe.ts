@@ -10,6 +10,7 @@ import { checkBudget, recordUsage } from "./accounts.ts";
 import { anthropic, hasCredentials } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
 import { docPath, libraryDocs, setPageText } from "./library.ts";
+import { UserError } from "./errors.ts";
 
 const MODEL = process.env.COACH_MODEL ?? "claude-opus-5-5";
 const PAGES_PER_REQUEST = 4;
@@ -72,7 +73,7 @@ export async function transcribeStep(id: string): Promise<LibraryDoc["transcript
   if (!doc || !t || t.status === "done") return t;
   try {
     const buffer = await blobs().read(docPath(doc));
-    if (!buffer) throw new Error("The file is missing from storage. Upload it again.");
+    if (!buffer) throw new UserError("The file is missing from storage. Upload it again.", 404);
     let batch: number[];
     let pages: Map<number, string>;
     if (doc.kind === "image") {
