@@ -249,7 +249,41 @@ export interface SimulationResult {
   expectedModelsSlain?: number;
 }
 
+// ---------- limits ----------
+// The calculator takes its numbers from the page (and the coach), so huge
+// ones (a million models, "100000D6" attacks) are refused, and runs are cut
+// when a unit is big, so one request can't keep the server busy for minutes.
+
+const MAX_PROFILES = 30;
+/** Most damage one simulated activation could deal. A real unit is in the low thousands. */
+const MAX_DAMAGE = 100_000;
+/** Dice rolled across all runs of one simulation, at most. */
+const MAX_WORK = 30_000_000;
+
+const maxRoll = (d: DiceExpr) => d.count * d.sides + d.flat;
+
+/** Throws when the profiles can't be a real attack; else the most dice one run can roll. */
+export function workPerRun(profiles: AttackProfile[], t: TargetProfile): number {
+  if (!Array.isArray(profiles) || profiles.length > MAX_PROFILES) throw new Error(`Up to ${MAX_PROFILES} weapon profiles at a time.`);
+  let work = 0;
+  let damage = 0;
+  for (const p of profiles) {
+    const atk = parseDice(p.attacks);
+    const dmg = parseDice(p.damage);
+    const models = p.models ?? 1;
+    const sane = (d: DiceExpr) => d.count <= 100 && d.sides <= 100 && d.flat >= 0 && d.flat <= 1000;
+    if (!(Number.isFinite(models) && models >= 0 && models <= 1000) || !sane(atk) || !sane(dmg)) throw new Error("Those numbers are too big for one unit.");
+    const attacks = models * maxRoll(atk);
+    damage += attacks * 2 * maxRoll(dmg);
+    // Per attack: hit, two wounds and saves with re-rolls, damage dice, and a ward roll per point of damage.
+    work += models * atk.count + attacks * (6 + 2 * (dmg.count + (t.ward ? maxRoll(dmg) : 0)));
+  }
+  if (!(damage <= MAX_DAMAGE)) throw new Error("Those numbers are too big for one unit.");
+  return Math.max(1, work);
+}
+
 export function simulate(profiles: AttackProfile[], t: TargetProfile, runs = 20000, rng: () => number = Math.random): SimulationResult {
+  runs = Math.max(1, Math.min(Math.floor(runs) || 1, Math.floor(MAX_WORK / workPerRun(profiles, t))));
   const counts: number[] = [];
   let sum = 0;
   let kills = 0;

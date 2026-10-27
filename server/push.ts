@@ -43,9 +43,22 @@ export const publicKey = async () => (await vapid()).publicKey;
 
 const idOf = (endpoint: string) => crypto.createHash("sha256").update(endpoint).digest("hex").slice(0, 24);
 
+// The browsers' push services. The server sends to whatever endpoint a phone
+// gives, so any other address (an internal service, someone's site) is refused.
+const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /^android\.googleapis\.com$/, /(^|\.)push\.services\.mozilla\.com$/, /(^|\.)push\.apple\.com$/, /\.notify\.windows\.com$/];
+export function isPushEndpoint(endpoint: unknown): endpoint is string {
+  if (typeof endpoint !== "string" || endpoint.length > 2000) return false;
+  try {
+    const u = new URL(endpoint);
+    return u.protocol === "https:" && !u.port && !u.username && !u.password && PUSH_HOSTS.some((h) => h.test(u.hostname.toLowerCase()));
+  } catch {
+    return false;
+  }
+}
+
 /** This phone wants notifications for the signed-in member. */
 export async function subscribe(sub: webpush.PushSubscription) {
-  if (typeof sub?.endpoint !== "string" || !/^https:\/\//.test(sub.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) throw new Error("That isn't a push subscription.");
+  if (!isPushEndpoint(sub?.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) throw new Error("That isn't a push subscription.");
   const clean = { endpoint: sub.endpoint, keys: { p256dh: String(sub.keys.p256dh), auth: String(sub.keys.auth) } };
   await subsIn(currentUser().prefix).save({ id: idOf(sub.endpoint), sub: clean, at: new Date().toISOString() });
 }
@@ -56,7 +69,8 @@ export async function unsubscribe(endpoint: string) {
 
 /** Send to every phone a member turned notifications on for. Phones that went away are forgotten. */
 export async function pushTo(prefix: string, payload: { title: string; body: string; href: string; tag?: string }) {
-  const subs = await subsIn(prefix).list();
+  // Subscriptions saved before the endpoint check are skipped too.
+  const subs = (await subsIn(prefix).list()).filter((s) => isPushEndpoint(s.sub?.endpoint));
   if (!subs.length) return;
   const { publicKey: pub, privateKey } = await vapid();
   await Promise.all(

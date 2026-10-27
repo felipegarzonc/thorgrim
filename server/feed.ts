@@ -393,8 +393,13 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
  * post in the club and everyone else to the public report, which invites
  * them to ask for access.
  */
-export async function reportPage(token: string, lang: Lang, origin: string): Promise<string> {
-  const found = await publicPost(token).catch(() => undefined);
+/** JSON for an inline <script>: no "</script>" or "<!--" can close or confuse it. */
+const scriptJson = (v: unknown) => JSON.stringify(v).replace(/</g, "\\u003c");
+
+export async function reportPage(rawToken: string, lang: Lang, origin: string): Promise<string> {
+  // The token comes straight from the link: anything but a real token's shape is dropped, never echoed.
+  const token = /^[a-f0-9]{32}$/.test(rawToken) ? rawToken : "";
+  const found = token ? await publicPost(token).catch(() => undefined) : undefined;
   const p = found?.post;
   const t = (s: string) => translate(s, lang);
   const [a, b] = p?.sides ?? [];
@@ -429,7 +434,7 @@ export async function reportPage(token: string, lang: Lang, origin: string): Pro
   // Members (signed in on this phone) open the post in the club; everyone else the public report.
   var member = false;
   try { member = !!(localStorage.getItem("thorgrim-session") || localStorage.getItem("aos-coach-access-key")); } catch (e) {}
-  location.replace(member && ${JSON.stringify(member)} ? ${JSON.stringify(member)} : ${JSON.stringify(visitor)});
+  location.replace(member && ${scriptJson(member)} ? ${scriptJson(member)} : ${scriptJson(visitor)});
 </script>
 </head>
 <body style="margin:0;background:#0f1115;color:#ece6da;font-family:system-ui,sans-serif">

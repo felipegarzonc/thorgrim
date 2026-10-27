@@ -241,3 +241,13 @@ describe("club feed", () => {
     expect(await runAs(ana, () => feed.readPostPhoto(post.id, 0))).toBeUndefined();
   });
 });
+
+describe("shared report page", () => {
+  it("never echoes a made-up token into the page", async () => {
+    const { reportPage } = await import("./feed.ts");
+    const html = await reportPage('x"</script><script>alert(document.domain)</script>', "en", "https://thorgrim.co");
+    expect(html).not.toContain("alert(document.domain)");
+    expect(html.match(/<script>/g)).toHaveLength(1);
+    expect(html).toContain('"/#/r/"');
+  });
+});

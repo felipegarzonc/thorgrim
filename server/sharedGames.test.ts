@@ -78,6 +78,22 @@ describe("small edits", () => {
     expect(({} as Record<string, unknown>).x).toBeUndefined();
     expect(out.x).toBeUndefined();
   });
+
+  it("never stretches a list far past its end, so a saved game can't balloon", () => {
+    const start = { log: ["a"], state: { rounds: [] as unknown[] } };
+    const out = applyOps(start, [
+      { path: ["log", 1_000_000_000], set: "far" },
+      { path: ["log", "length"], set: 1_000_000_000 },
+      { path: ["log", -1], set: "neg" },
+      { path: ["log", 1.5], set: "half" },
+      { path: ["state", "rounds", 9_999_999, "me"], set: 1 },
+      { path: ["log", 1], set: "b" },
+      { path: ["log"], push: "c" },
+    ]);
+    expect(out.log).toEqual(["a", "b", "c"]);
+    expect(out.state.rounds).toEqual([]);
+    expect(JSON.stringify(out).length).toBeLessThan(100);
+  });
 });
 
 describe("other side", () => {

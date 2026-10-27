@@ -14,7 +14,7 @@ REPO="felipegarzonc/thorgrim"
 BRANCH="${AOS_BRANCH:-main}"
 HOME_DIR="${AOS_HOME:-$HOME/aos-coach}"
 APP="$HOME_DIR/app"
-NODE_VERSION="22.22.0"
+NODE_VERSION="22.23.4"
 PORT="${PORT:-8787}"
 
 say() { printf '\n\033[1;31m▶\033[0m %s\n' "$1"; }
@@ -32,7 +32,13 @@ echo "AoS Coach installer — $(date) — $(uname -sm) — macOS $(sw_vers -prod
 
 # ---- Node ----------------------------------------------------------------
 STEP="getting Node"
-node_ok() { command -v node >/dev/null 2>&1 && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ]; }
+# Node 22+ with the October 2026 security fixes (22.23.4, 24.22.1, 26.12.1); older copies are replaced.
+node_ok() {
+  command -v node >/dev/null 2>&1 && node -e '
+    const [a, b, c] = process.versions.node.split(".").map(Number);
+    const min = { 22: [23, 4], 24: [22, 1], 26: [12, 1] }[a];
+    process.exit(a > 26 || (min && (b > min[0] || (b === min[0] && c >= min[1]))) ? 0 : 1);'
+}
 if [ -x "$HOME_DIR/node/bin/node" ]; then export PATH="$HOME_DIR/node/bin:$PATH"; fi
 if [ -n "${AOS_FORCE_NODE:-}" ] || ! node_ok; then
   say "Downloading Node $NODE_VERSION (private copy, only for this app)…"
@@ -43,7 +49,7 @@ if [ -n "${AOS_FORCE_NODE:-}" ] || ! node_ok; then
   curl -fsSL "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-$os-$arch.tar.gz" | tar -xz -C "$HOME_DIR/node" --strip-components=1
   export PATH="$HOME_DIR/node/bin:$PATH"
 fi
-node_ok || die "Node 22+ is still not available."
+node_ok || die "Node $NODE_VERSION (or a newer supported release) is still not available."
 echo "Using Node $(node -v)"
 
 # ---- App -----------------------------------------------------------------

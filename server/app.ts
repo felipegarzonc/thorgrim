@@ -9,7 +9,7 @@ import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import express, { type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
-import { castChance, chargeChance, damageBySave, expectedDamage, simulate, type AttackProfile, type TargetProfile } from "../engine/dice.ts";
+import { castChance, chargeChance, damageBySave, expectedDamage, simulate, workPerRun, type AttackProfile, type TargetProfile } from "../engine/dice.ts";
 import type { Op } from "../shared/patch.ts";
 import type { ArmyList, FeedPost, Game, GameState, LibraryDoc } from "../shared/types.ts";
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
@@ -315,9 +315,13 @@ app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
   res.json(publicAccount(await updateAccount(target.id, patch)));
 });
 // A new temporary password, shown once to the admin to pass on.
+// An admin's password (the owner's included) only the owner resets: else any admin could take over the owner's account.
 app.post("/api/admin/users/:id/password", requireAdmin, async (req, res) => {
+  const target = (await listAccounts()).find((a) => a.id === param(req, "id"));
+  if (!target) return res.status(404).json({ error: "No such player" });
+  if (target.role === "admin" && target.id !== currentUser().id && !isOwner()) return res.status(403).json({ error: "Only the app's owner can reset an admin's password." });
   const password = crypto.randomBytes(9).toString("base64url");
-  await setLoginPassword(param(req, "id"), password);
+  await setLoginPassword(target.id, password);
   res.json({ password });
 });
 app.get("/api/admin/invites", requireAdmin, async (_req, res) => {
@@ -454,7 +458,8 @@ const startReading = async (doc: LibraryDoc) => {
 app.get("/api/library", async (_req, res) => res.json(newestFirst(await listDocuments()).map((d) => ({ ...d, canEdit: !!currentUser().developer }))));
 
 // Upload in one request (used for small files and by older clients).
-app.post("/api/library", upload.single("file"), requireDeveloper, async (req, res) => {
+// The developer check comes first, so nobody else can make the server take in a 150 MB file.
+app.post("/api/library", requireDeveloper, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file" });
   const doc = await addDocument({
     title: String(req.body.title ?? ""),
@@ -938,6 +943,11 @@ app.get("/api/public/reports/:token/photo/:n", async (req, res) => {
 
 app.post("/api/calc/damage", (req, res) => {
   const { profiles, target, runs } = req.body as { profiles: AttackProfile[]; target: TargetProfile; runs?: number };
+  try {
+    workPerRun(profiles, target ?? {});
+  } catch (e) {
+    return res.status(400).json({ error: (e as Error).message });
+  }
   res.json({
     perProfile: profiles.map((p) => expectedDamage(p, target)),
     bySave: damageBySave(profiles, { ward: target.ward, saveMod: target.saveMod, rerollSaves: target.rerollSaves }),
