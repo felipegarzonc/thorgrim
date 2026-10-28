@@ -4,7 +4,7 @@
 // writes the story from these facts only (server/coach.ts, battleReport).
 
 import { baseFaction } from "./season.ts";
-import { result, sideRoundVp } from "./scoring.ts";
+import { result, roundPlayed, sideRoundVp } from "./scoring.ts";
 import type { ArmyList, Game } from "./types.ts";
 
 type Side = "me" | "opponent";
@@ -28,7 +28,7 @@ export function runningScore(game: Game): { me: number; opponent: number }[] {
   let me = 0;
   let opponent = 0;
   (game.state.rounds ?? []).forEach((rec, i) => {
-    if (!rec.first) return;
+    if (!roundPlayed(rec)) return;
     me += sideRoundVp(rec.me, game.battleplan, i + 1);
     opponent += sideRoundVp(rec.opponent, game.battleplan, i + 1);
     out.push({ me, opponent });
@@ -47,25 +47,27 @@ export function reportFacts(game: Game, sides: ReportSides): string {
   const name = (s: Side) => sides[s].name;
   const s = game.state;
   const rounds = s.rounds ?? [];
-  const totals = runningScore(game);
   const lines: string[] = [
     `Players: ${name("me")} (${sides.me.faction || "unknown faction"}) vs ${name("opponent")} (${sides.opponent.faction || "unknown faction"}).`,
     `Battleplan: ${game.battleplan || "not recorded"}. ${game.points ?? 2000} points. Date: ${game.date ?? game.createdAt.slice(0, 10)}.`,
     `Attacker: ${name(s.attacker)}.`,
   ];
+  const total = { me: 0, opponent: 0 };
   rounds.forEach((rec, i) => {
-    if (!rec.first) return;
-    const parts = [`Round ${i + 1}: ${rec.priority ? `${name(rec.priority)} won priority, ` : ""}${name(rec.first)} took the first turn.`];
+    if (!roundPlayed(rec)) return;
+    const order = rec.first ? ` ${rec.priority ? `${name(rec.priority)} won priority, ` : ""}${name(rec.first)} took the first turn.` : "";
+    const parts = [`Round ${i + 1}:${order}`];
     for (const side of ["me", "opponent"] as const) {
       const sr = rec[side];
       const vp = sideRoundVp(sr, game.battleplan, i + 1);
+      total[side] += vp;
       const bits = [`${vp} VP`];
       if (sr.scored.length) bits.push(`scored ${sr.scored.join(", ")}`);
       for (const t of sr.tactics) bits.push(`completed the ${t.step} tactic of ${t.card}`);
       if (sr.cpSpent) bits.push(`spent ${sr.cpSpent} CP`);
       parts.push(`${name(side)}: ${bits.join("; ")}.`);
     }
-    if (totals[i]) parts.push(`Score after round ${i + 1}: ${name("me")} ${totals[i].me}, ${name("opponent")} ${totals[i].opponent}.`);
+    parts.push(`Score after round ${i + 1}: ${name("me")} ${total.me}, ${name("opponent")} ${total.opponent}.`);
     lines.push(parts.join(" "));
   });
   for (const d of doubleTurns(game)) lines.push(`${name(d.side)} took a double turn in round ${d.round}.`);

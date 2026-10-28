@@ -8,7 +8,7 @@
 // the report update it (syncPost).
 
 import crypto from "node:crypto";
-import { result, sideRoundVp, tacticSteps } from "../shared/scoring.ts";
+import { result, roundPlayed, sideRoundVp, tacticSteps } from "../shared/scoring.ts";
 import { flipGame } from "../shared/perspective.ts";
 import type { ArmyList, BattleDetail, FeedPost, FeedPostView, Game } from "../shared/types.ts";
 import { blobs } from "./blobs.ts";
@@ -143,11 +143,11 @@ export function scoreDetail(game: Game): Pick<BattleDetail, "rounds" | "tactics"
   const steps = (side: "me" | "opponent", card: string) => [...tacticSteps(rounds, side, card)];
   return {
     rounds: rounds.flatMap((r, i) =>
-      r.first
+      roundPlayed(r)
         ? [
             {
               round: i + 1,
-              first: r.first,
+              ...(r.first ? { first: r.first } : {}),
               ...(r.priority ? { priority: r.priority } : {}),
               me: { vp: sideRoundVp(r.me, game.battleplan, i + 1), scored: r.me.scored, tactics: r.me.tactics.map((t) => `${t.card}: ${t.step}`) },
               opponent: { vp: sideRoundVp(r.opponent, game.battleplan, i + 1), scored: r.opponent.scored, tactics: r.opponent.tactics.map((t) => `${t.card}: ${t.step}`) },

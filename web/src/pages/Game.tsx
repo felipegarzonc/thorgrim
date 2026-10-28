@@ -4,7 +4,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { baseFaction, BATTLE_ROUNDS, CORE_COMMANDS, isBattleplanDoc, SEASON_ABILITIES, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
-import { derive, emptyRound, nextTacticStep, planBasis, result, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
+import { derive, emptyRound, nextTacticStep, planBasis, result, roundPlayed, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
 import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type GameState, type GlossaryEntry, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TacticStep, type TurnTips, type Unit } from "../../../shared/types.ts";
 import { applyOps, diff } from "../../../shared/patch.ts";
 import { clockTimes, formatClock, passClock, toggleClock } from "../../../shared/clock.ts";
@@ -340,7 +340,7 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
           // In the battle: every round and the result one tap away.
           <nav className="round-strip" aria-label="Battle rounds">
             {[...ROUND_STEPS, "results"].map((s, i) => {
-              const played = s !== "results" && !!game.state.rounds?.[i]?.first;
+              const played = s !== "results" && roundPlayed(game.state.rounds?.[i]);
               const live = s === `round-${game.state.round}` && !game.finished;
               return (
                 <button
@@ -2294,12 +2294,12 @@ function ResultsStep({
   const shareRows = (side: Side): ShareRow[] => {
     const tactics = (side === "me" ? s.tactics : s.opponentTactics) ?? [];
     const pad = <T,>(xs: T[]) => Array.from({ length: BATTLE_ROUNDS }, (_, i) => xs[i] ?? null);
-    const obj = rounds.map((rec, i) => (rec.first ? sideRoundVp({ ...rec[side], tactics: [] }, game.battleplan, i + 1) : null));
+    const obj = rounds.map((rec, i) => (roundPlayed(rec) ? sideRoundVp({ ...rec[side], tactics: [] }, game.battleplan, i + 1) : null));
     return [
       { label: "Objectives", cells: pad(obj), total: String(obj.reduce<number>((x, v) => x + (v ?? 0), 0)) },
       ...tactics.map((t) => ({
         label: t.card,
-        cells: pad(rounds.map((rec) => (rec[side].tactics.some((x) => x.card === t.card) ? TACTIC_VP : rec.first ? 0 : null))),
+        cells: pad(rounds.map((rec) => (rec[side].tactics.some((x) => x.card === t.card) ? TACTIC_VP : roundPlayed(rec) ? 0 : null))),
         total: `${tacticSteps(rounds, side, t.card).size * TACTIC_VP}/15`,
       })),
     ];
@@ -2414,7 +2414,7 @@ function ResultsStep({
           <Icon name="right" />
         </a>
       )}
-      {rounds.some((x) => x.first) && <VpChart game={game} names={{ me: me.name, opponent: opp.name }} colors={{ me: armyColor(me.faction), opponent: armyColor(opp.faction) }} />}
+      {rounds.some(roundPlayed) && <VpChart game={game} names={{ me: me.name, opponent: opp.name }} colors={{ me: armyColor(me.faction), opponent: armyColor(opp.faction) }} />}
       {badges.length > 0 && (
         <div className="post-badges">
           {badges.map((b) => (

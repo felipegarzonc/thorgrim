@@ -251,3 +251,28 @@ describe("shared report page", () => {
     expect(html).toContain('"/#/r/"');
   });
 });
+
+describe("rounds scored without a priority roll", () => {
+  it("count on the score sheet, the round-by-round totals and the coach's facts", async () => {
+    const { scoreDetail } = await import("./feed.ts");
+    const { reportFacts, reportSides, runningScore } = await import("../shared/report.ts");
+    const g = finishedGame();
+    // Round 4: alone on the table, the player scored 10 without saying who went first.
+    g.state.rounds = [...g.state.rounds!, { ...emptyRound(), me: side(10, { tactics: [{ card: "Smokescreen", step: "strike" }] }), opponent: side(0) }];
+    const d = scoreDetail(g);
+    expect(d.rounds.map((r) => r.round)).toEqual([1, 2, 3, 4]);
+    expect(d.rounds[3]).toMatchObject({ round: 4, me: { vp: 15 } });
+    expect(d.rounds[3].first).toBeUndefined();
+    expect(runningScore(g).at(-1)).toEqual({ me: 50, opponent: 22 });
+    const facts = reportFacts(g, reportSides(g, undefined, undefined));
+    expect(facts).toContain("Round 4: Ana: 15 VP");
+    expect(facts).toContain("Score after round 4: Ana 50, Ben 22.");
+  });
+
+  it("an empty round with nobody going first still doesn't count", async () => {
+    const { roundPlayed } = await import("../shared/scoring.ts");
+    expect(roundPlayed(emptyRound())).toBe(false);
+    expect(roundPlayed({ ...emptyRound(), first: "me" })).toBe(true);
+    expect(roundPlayed({ ...emptyRound(), opponent: side(0, { scored: ["Hold One"] }) })).toBe(true);
+  });
+});

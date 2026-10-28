@@ -15,6 +15,14 @@ const RENAMED: Record<string, string> = {
 export const emptySideRound = (): SideRound => ({ scored: [], extraVp: 0, tactics: [], cpGained: 0, cpSpent: 0 });
 export const emptyRound = (): RoundRecord => ({ me: emptySideRound(), opponent: emptySideRound() });
 
+/**
+ * A round that was played: someone went first in it, or anything was scored
+ * in it. A player left alone on the table may score without rolling for
+ * priority, and those points count everywhere the total does.
+ */
+export const roundPlayed = (r: RoundRecord | undefined): boolean =>
+  !!r && (!!r.first || (["me", "opponent"] as const).some((s) => r[s].scored.length > 0 || r[s].extraVp !== 0 || r[s].tactics.length > 0));
+
 /** VP one player scored in one round. */
 export function sideRoundVp(sr: SideRound, battleplan: string, round: number): number {
   const lines = scoringFor(battleplan, round) ?? [];

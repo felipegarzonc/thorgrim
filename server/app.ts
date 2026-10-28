@@ -51,6 +51,7 @@ import { parseList } from "./listParser.ts";
 import { acceptOffer, bothConfirmed, changeGame, confirmResult, declineOffer, forgetShares, gameLists, joinGame, ladderSides, leaveGame, myGames, myOffers, offerGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
 import { forgetResult, ladder, listResults, startSeason, syncResult } from "./ladder.ts";
 import { Collection, newId } from "./store.ts";
+import { roundPlayed } from "../shared/scoring.ts";
 import { blankGame } from "./newGame.ts";
 import { rememberLang } from "./lang.ts";
 import { omnissiahStatus } from "./omnissiah.ts";
@@ -809,7 +810,7 @@ app.post("/api/games/:id/review", async (req, res) => {
   const o = await openOr404(req, res);
   if (!o) return;
   const game = viewGame(o);
-  if (!game.state.rounds?.some((r) => r.first)) return res.status(400).json({ error: "Play a battle round first." });
+  if (!game.state.rounds?.some(roundPlayed)) return res.status(400).json({ error: "Play a battle round first." });
   const [myList, opponentList] = await gameLists(o);
   await checkBudget();
   res.json({ job: await startJob("review", () => gameReview({ game, myList, opponentList })) });
