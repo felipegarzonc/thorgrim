@@ -15,7 +15,7 @@ import { blobs } from "./blobs.ts";
 import { currentUser, runAs } from "./context.ts";
 import { noticesIn, notify, seenIn } from "./notices.ts";
 import { doubleTurns, gameBadges, playerBadges, reportSides, runningScore, type ReportSides } from "../shared/report.ts";
-import { changeGame, gameLists, isGamePhoto, myGames, viewGame, type OpenGame } from "./sharedGames.ts";
+import { changeGame, gameLists, isGamePhoto, myGames, openGame, viewGame, type OpenGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
 import { UserError } from "./errors.ts";
 import { clubSpace, getClub, listClubs } from "./clubs.ts";
@@ -80,7 +80,24 @@ export const allPosts = () => posts().list();
 
 export async function feed(): Promise<FeedPostView[]> {
   const [all, results] = await Promise.all([posts().list(), listResults()]);
-  return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((p) => postView(p, results));
+  const fixed = await Promise.all(all.map(repairSheet));
+  return fixed.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((p) => postView(p, results));
+}
+
+/**
+ * A post's score sheet that doesn't add up to its score: posted before rounds
+ * scored without a priority roll counted (see roundPlayed), so those rounds
+ * are missing from it. Games from before round records have no sheet at all.
+ */
+const sheetBehind = (p: FeedPost) =>
+  !!p.detail?.rounds.length && p.sides.length === 2 && (["me", "opponent"] as const).some((s, i) => p.detail!.rounds.reduce((t, r) => t + r[s].vp, 0) !== p.sides[i].vp);
+
+/** Rebuild such a post from its game when one of the game's players opens the club (only they can open the game). */
+export async function repairSheet(p: FeedPost): Promise<FeedPost> {
+  if (!p.gameId || !isPlayer(p) || !sheetBehind(p)) return p;
+  const o = await openGame(p.gameId).catch(() => undefined);
+  if (!o || o.game.report?.postId !== p.id) return p;
+  return (await syncPost(o).catch((e: Error) => console.error(`Repairing the sheet of post ${p.id} failed:`, e))) ?? p;
 }
 
 export async function getPost(id: string): Promise<FeedPost> {

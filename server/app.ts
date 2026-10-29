@@ -15,7 +15,7 @@ import type { ArmyList, FeedPost, Game, GameState, LibraryDoc } from "../shared/
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
 import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips, voiceScore, gameReview } from "./coach.ts";
-import { addComment, deleteComment, deletePost, feed, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, readPublicCard, readPublicPhoto, reportPage, saveCard, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
+import { addComment, deleteComment, deletePost, feed, getPost, repairSheet, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, readPublicCard, readPublicPhoto, reportPage, saveCard, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
 import { markNoticesRead, myNotices, notify } from "./notices.ts";
 import { publicKey, pushTo, subscribe, unsubscribe } from "./push.ts";
 import { gameData, listRules, warscrollText } from "./data.ts";
@@ -868,7 +868,7 @@ app.post("/api/feed/seen", async (_req, res) => {
 });
 // A post as the member sees it, with the rivalry between its players.
 const viewPost = async (p: FeedPost) => postView(p, await listResults());
-app.get("/api/feed/:id", async (req, res) => res.json(await viewPost(await getPost(param(req, "id")))));
+app.get("/api/feed/:id", async (req, res) => res.json(await viewPost(await repairSheet(await getPost(param(req, "id"))))));
 app.delete("/api/feed/:id", async (req, res) => {
   const post = await deletePost(param(req, "id"));
   // The game forgets its post, so its report can be posted again.
