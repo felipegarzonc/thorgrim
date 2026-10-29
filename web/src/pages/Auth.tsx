@@ -156,7 +156,7 @@ export function Reset({ token }: { token: string }) {
   if (valid === undefined) return <Shell title="Choose a new password">{null}</Shell>;
   if (!valid)
     return (
-      <Shell title="This link doesn't work" sub="It was already used or it expired (links last an hour). Ask for a new one from the sign-in screen.">
+      <Shell title="This link doesn't work" sub="It was already used or it expired. Ask for a new one from the sign-in screen, or ask your club admin.">
         <a className="button primary wide" href="#/signin">
           Go to sign in
         </a>

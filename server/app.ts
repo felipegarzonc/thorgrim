@@ -47,7 +47,7 @@ import {
 import { currentUser, LOCAL_USER, runAs, userPrefix, type UserCtx } from "./context.ts";
 import { jobs, startJob } from "./jobs.ts";
 import { publicError } from "./errors.ts";
-import { finishReset, requestReset, resetValid } from "./passwordReset.ts";
+import { adminResetLink, finishReset, requestReset, resetValid } from "./passwordReset.ts";
 import { addDocument, deleteDocument, docPath, finishUpload, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
 import { acceptOffer, bothConfirmed, changeGame, confirmResult, declineOffer, forgetShares, gameLists, joinGame, ladderSides, leaveGame, myGames, myOffers, offerGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
@@ -360,6 +360,13 @@ app.post("/api/admin/users/:id/password", requireAdmin, async (req, res) => {
   const password = crypto.randomBytes(9).toString("base64url");
   await setLoginPassword(target.id, password);
   res.json({ password });
+});
+// A link for the player to choose a new password themselves (server/passwordReset.ts), emailed and shown to the admin.
+app.post("/api/admin/users/:id/reset-link", requireAdmin, async (req, res) => {
+  const target = (await listAccounts()).find((a) => a.id === param(req, "id"));
+  if (!target) return res.status(404).json({ error: "No such player" });
+  if (target.role === "admin" && target.id !== currentUser().id && !isOwner()) return res.status(403).json({ error: "Only the app's owner can reset an admin's password." });
+  res.json(await adminResetLink(target, appOrigin(req)));
 });
 app.get("/api/admin/invites", requireAdmin, async (_req, res) => {
   const now = new Date().toISOString();
