@@ -38,6 +38,7 @@ const Landing = lazy(() => load.landing().then((m) => ({ default: m.Landing })))
 const ClubPage = lazy(() => load.club().then((m) => ({ default: m.ClubPage })));
 const Login = lazy(() => load.auth().then((m) => ({ default: m.Login })));
 const Join = lazy(() => load.auth().then((m) => ({ default: m.Join })));
+const Reset = lazy(() => load.auth().then((m) => ({ default: m.Reset })));
 
 /** After the first screen: fetch what a player needs at the table, while the network is idle. */
 function prefetchForTheTable() {
@@ -158,6 +159,12 @@ export function App() {
     return (
       <Wait>
         <Join token={id} />
+      </Wait>
+    );
+  if (tab === "reset" && id)
+    return (
+      <Wait>
+        <Reset token={id} />
       </Wait>
     );
   if (tab === "r" && id)

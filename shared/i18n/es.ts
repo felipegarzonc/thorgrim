@@ -101,6 +101,26 @@ export const ES_PHRASES: Record<string, string> = {
   "Signing in…": "Entrando…",
   "New here? Ask the admin for an invite link. Forgot your password? The admin can give you a new one.":
     "¿Eres nuevo? Pide al administrador un enlace de invitación. ¿Olvidaste la contraseña? El administrador te puede dar una nueva.",
+  "New here? Ask the admin for an invite link.": "¿Eres nuevo? Pide al administrador un enlace de invitación.",
+  "Forgot your password?": "¿Olvidaste tu contraseña?",
+  "Write your account's email: we'll send you a link to choose a new password.": "Escribe el email de tu cuenta: te enviaremos un enlace para elegir una contraseña nueva.",
+  "Send me a link": "Envíame un enlace",
+  "Back to sign in": "Volver a entrar",
+  "Check your email": "Revisa tu correo",
+  "If that email has a Thorgrim account, a link to choose a new password is on its way. It works once, for an hour. Not there? Look in spam.":
+    "Si ese email tiene una cuenta de Thorgrim, te llega un enlace para elegir una contraseña nueva. Funciona una vez, durante una hora. ¿No aparece? Mira en spam.",
+  "Ask your club admin": "Pregunta al administrador de tu club",
+  "This Thorgrim can't send email yet. Your club admin can give you a new password from their profile.":
+    "Este Thorgrim todavía no puede enviar correos. El administrador de tu club te puede dar una contraseña nueva desde su perfil.",
+  "Choose a new password": "Elige una contraseña nueva",
+  "You'll be signed in with it, and signed out everywhere else.": "Entrarás con ella, y se cerrará tu sesión en los demás sitios.",
+  "This link doesn't work": "Este enlace no funciona",
+  "It was already used or it expired (links last an hour). Ask for a new one from the sign-in screen.":
+    "Ya se usó o caducó (los enlaces duran una hora). Pide uno nuevo desde la pantalla de entrar.",
+  "The same again": "Repítela",
+  "Save and sign in": "Guardar y entrar",
+  "The two passwords don't match.": "Las dos contraseñas no coinciden.",
+  "This link doesn't work any more. Ask for a new one from the sign-in screen.": "Este enlace ya no funciona. Pide uno nuevo desde la pantalla de entrar.",
   "Use the app password": "Usar la contraseña de la app",
   "Enter the app password you chose when you set it up.": "Escribe la contraseña de la app que elegiste al configurarla.",
   "Wrong password.": "Contraseña incorrecta.",
