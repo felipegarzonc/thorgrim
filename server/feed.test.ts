@@ -183,6 +183,19 @@ describe("club feed", () => {
     expect(await blobs.blobs().read(`club/post-photos/${post.id}/0.jpg`)).toBeUndefined();
   });
 
+  it("rebuilds an old post whose sheet doesn't add up to its score, when a player opens the club", async () => {
+    // As posted before rounds without a priority roll counted: the last round is missing from the sheet.
+    const postsHere = new store.Collection<import("../shared/types.ts").FeedPost>("posts", "club/");
+    const [stored] = await postsHere.list();
+    const full = stored.detail!.rounds.length;
+    await postsHere.save({ ...stored, detail: { ...stored.detail!, rounds: stored.detail!.rounds.slice(0, -1) } });
+    // A member who isn't in the game can't open it: their view stays as it is.
+    expect((await runAs(cid, () => feed.feed()))[0].detail?.rounds).toHaveLength(full - 1);
+    // One of its players opens the club: the sheet comes back whole, for everyone.
+    expect((await runAs(ben, () => feed.feed()))[0].detail?.rounds).toHaveLength(full);
+    expect((await postsHere.get(stored.id))?.detail?.rounds).toHaveLength(full);
+  });
+
   it("lets members react and comment, and tells the players", async () => {
     const [post] = await runAs(cid, () => feed.feed());
     expect(post.canEdit).toBe(false);
