@@ -4,6 +4,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { publicApi, setAccessKey, setSession, type Session } from "../api.ts";
 import { moment } from "../analytics.tsx";
+import { currentLang } from "../i18n.ts";
 
 interface Status {
   accounts: boolean;
@@ -71,7 +72,9 @@ export function Login() {
 function AccountLogin({ onMaster }: { onMaster?: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [forgot, setForgot] = useState(false);
   const { busy, error, submit } = useSubmit();
+  if (forgot) return <Forgot email={email} back={() => setForgot(false)} />;
   return (
     <Shell title="Sign in" sub="With the email and password of your Thorgrim account.">
       <form onSubmit={submit(async () => done(await publicApi<SignedIn>("/auth/login", { email, password })))}>
@@ -88,12 +91,100 @@ function AccountLogin({ onMaster }: { onMaster?: () => void }) {
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
-      <p className="muted small">New here? Ask the admin for an invite link. Forgot your password? The admin can give you a new one.</p>
+      <button type="button" className="small ghost" onClick={() => setForgot(true)}>
+        Forgot your password?
+      </button>
+      <p className="muted small">New here? Ask the admin for an invite link.</p>
       {onMaster && (
         <button type="button" className="small ghost" onClick={onMaster}>
           Use the app password
         </button>
       )}
+    </Shell>
+  );
+}
+
+/** Ask for an email with a link to choose a new password (server/passwordReset.ts). */
+function Forgot({ email: typed, back }: { email: string; back: () => void }) {
+  const [email, setEmail] = useState(typed);
+  const [sent, setSent] = useState<{ mail: boolean }>();
+  const { busy, error, submit } = useSubmit();
+  if (sent)
+    return sent.mail ? (
+      <Shell title="Check your email" sub="If that email has a Thorgrim account, a link to choose a new password is on its way. It works once, for an hour. Not there? Look in spam.">
+        <button type="button" className="primary wide" onClick={back}>
+          Back to sign in
+        </button>
+      </Shell>
+    ) : (
+      <Shell title="Ask your club admin" sub="This Thorgrim can't send email yet. Your club admin can give you a new password from their profile.">
+        <button type="button" className="primary wide" onClick={back}>
+          Back to sign in
+        </button>
+      </Shell>
+    );
+  return (
+    <Shell title="Forgot your password?" sub="Write your account's email: we'll send you a link to choose a new password.">
+      <form onSubmit={submit(async () => setSent(await publicApi<{ mail: boolean }>("/auth/forgot", { email, lang: currentLang() })))}>
+        <label>
+          Email
+          <input type="email" autoComplete="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        {error && <p className="error small">{error}</p>}
+        <button type="submit" className="primary wide" disabled={!email || busy}>
+          {busy ? "Sending…" : "Send me a link"}
+        </button>
+      </form>
+      <button type="button" className="small ghost" onClick={back}>
+        Back to sign in
+      </button>
+    </Shell>
+  );
+}
+
+/** The page behind the link in the email: choose a new password, then you're signed in. */
+export function Reset({ token }: { token: string }) {
+  const [valid, setValid] = useState<boolean>();
+  const [password, setPassword] = useState("");
+  const [again, setAgain] = useState("");
+  const { busy, error, submit } = useSubmit();
+  useEffect(() => {
+    publicApi<{ valid: boolean }>(`/auth/reset/${encodeURIComponent(token)}`)
+      .then((r) => setValid(r.valid))
+      .catch(() => setValid(false));
+  }, [token]);
+  if (valid === undefined) return <Shell title="Choose a new password">{null}</Shell>;
+  if (!valid)
+    return (
+      <Shell title="This link doesn't work" sub="It was already used or it expired (links last an hour). Ask for a new one from the sign-in screen.">
+        <a className="button primary wide" href="#/signin">
+          Go to sign in
+        </a>
+      </Shell>
+    );
+  return (
+    <Shell title="Choose a new password" sub="You'll be signed in with it, and signed out everywhere else.">
+      <form
+        onSubmit={submit(async () => {
+          if (password !== again) throw new Error("The two passwords don't match.");
+          const signedIn = await publicApi<SignedIn>("/auth/reset", { token, password });
+          moment("Password reset");
+          done(signedIn);
+        })}
+      >
+        <label>
+          New password
+          <input type="password" autoComplete="new-password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" />
+        </label>
+        <label>
+          The same again
+          <input type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} />
+        </label>
+        {error && <p className="error small">{error}</p>}
+        <button type="submit" className="primary wide" disabled={password.length < 8 || !again || busy}>
+          {busy ? "Saving…" : "Save and sign in"}
+        </button>
+      </form>
     </Shell>
   );
 }

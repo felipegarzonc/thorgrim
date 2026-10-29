@@ -164,6 +164,12 @@ export async function userIdFromToken(token: string): Promise<string> {
   return u.id;
 }
 
+/** After a password reset: sign out the account's other sessions (a phone someone else holds), and forget cached tokens. */
+export async function signOutOthers(accessToken: string) {
+  tokenCache.clear();
+  await gotrue("/logout?scope=others", { method: "POST", bearer: accessToken }).catch((e: Error) => console.error("Signing out other sessions failed:", e.message));
+}
+
 // ---------- invites ----------
 
 const hashToken = (t: string) => crypto.createHash("sha256").update(t).digest("hex");

@@ -36,6 +36,7 @@ export function screenOf(hash: string): string {
 export type Moment =
   | "Access requested"
   | "Account created"
+  | "Password reset"
   | "Game created"
   | "Game finished"
   | "Report posted"

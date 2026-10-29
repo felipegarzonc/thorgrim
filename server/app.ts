@@ -37,6 +37,7 @@ import {
   saveInvites,
   setLoginPassword,
   signIn,
+  signOutOthers,
   updateAccount,
   usageOf,
   userIdFromToken,
@@ -46,6 +47,7 @@ import {
 import { currentUser, LOCAL_USER, runAs, userPrefix, type UserCtx } from "./context.ts";
 import { jobs, startJob } from "./jobs.ts";
 import { publicError } from "./errors.ts";
+import { finishReset, requestReset, resetValid } from "./passwordReset.ts";
 import { addDocument, deleteDocument, docPath, finishUpload, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
 import { acceptOffer, bothConfirmed, changeGame, confirmResult, declineOffer, forgetShares, gameLists, joinGame, ladderSides, leaveGame, myGames, myOffers, offerGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
@@ -263,6 +265,23 @@ app.post("/api/auth/setup", async (req, res) => {
   await saveAccounts([{ id, email, name, role: "admin", owner: true, monthlyLimitUsd: null, createdAt: new Date().toISOString() }]);
   const { session } = await signIn(email, String(req.body.password ?? ""));
   res.json(await signedIn(id, session));
+});
+
+// Forgotten password (server/passwordReset.ts): an email with a one-time link, then the new password.
+app.post("/api/auth/forgot", async (req, res) => res.json(await requestReset(req.body?.email, req.body?.lang === "es" ? "es" : "en", appOrigin(req), req.ip ?? "?")));
+app.get("/api/auth/reset/:token", async (req, res) => res.json({ valid: await resetValid(param(req, "token")) }));
+app.post("/api/auth/reset", async (req, res) => {
+  if (tooMany(req)) return res.status(429).json({ error: "Too many tries. Try again in 15 minutes." });
+  const password = String(req.body?.password ?? "");
+  if (password.length < 8) return res.status(400).json({ error: "Use a password of at least 8 characters." });
+  const done = await finishReset(req.body?.token, password);
+  if (!done) {
+    failed(req);
+    return res.status(400).json({ error: "This link doesn't work any more. Ask for a new one from the sign-in screen." });
+  }
+  const { session } = await signIn(done.email, password);
+  await signOutOthers(session.access_token);
+  res.json(await signedIn(done.userId, session));
 });
 
 app.get("/api/auth/invite/:token", async (req, res) => {
