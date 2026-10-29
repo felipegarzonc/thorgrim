@@ -7,7 +7,9 @@
 import crypto from "node:crypto";
 import { waitUntil } from "@vercel/functions";
 import type { Lang } from "../shared/i18n/index.ts";
-import { accountsEnabled, listAccounts, setLoginPassword } from "./accounts.ts";
+import { accountsEnabled, listAccounts, setLoginPassword, type Account } from "./accounts.ts";
+import { userPrefix } from "./context.ts";
+import { langOf } from "./lang.ts";
 import { UserError } from "./errors.ts";
 import { escapeHtml, mailReady, sendMail } from "./mail.ts";
 import { Collection } from "./store.ts";
@@ -21,6 +23,8 @@ interface PasswordReset {
 
 const resets = new Collection<PasswordReset>("password-resets", "settings/");
 const TTL_MS = 60 * 60_000;
+/** A link an admin sends may travel by WhatsApp and be opened later: a day. */
+const ADMIN_TTL_MS = 24 * 60 * 60_000;
 /** One email per account in this time, however often someone asks. */
 const RESEND_MS = 5 * 60_000;
 const hash = (token: string) => crypto.createHash("sha256").update(token).digest("hex");
@@ -34,12 +38,22 @@ function slowDown(ip: string) {
   recent.set(ip, [...times, now]);
 }
 
-function resetEmail(name: string, link: string, lang: Lang) {
+function resetEmail(name: string, link: string, lang: Lang, byAdmin = false) {
   const es = lang === "es";
   const hello = es ? `¡Hola, ${name}!` : `Hello, ${name}!`;
   const lines = es
-    ? ["Alguien (esperamos que tú) pidió una contraseña nueva para tu cuenta de Thorgrim.", "Elígela con este enlace (funciona una vez y dura una hora):", "Si no fuiste tú, ignora este correo: tu contraseña no cambia.", "— Thorgrim"]
-    : ["Someone (we hope you) asked for a new password for your Thorgrim account.", "Choose it with this link (it works once and lasts an hour):", "If it wasn't you, ignore this email: your password stays as it is.", "— Thorgrim"];
+    ? [
+        byAdmin ? "El administrador de tu club te envía un enlace para elegir una contraseña nueva de Thorgrim." : "Alguien (esperamos que tú) pidió una contraseña nueva para tu cuenta de Thorgrim.",
+        `Elígela con este enlace (funciona una vez y dura ${byAdmin ? "un día" : "una hora"}):`,
+        byAdmin ? "Hasta que la elijas, tu contraseña actual sigue funcionando." : "Si no fuiste tú, ignora este correo: tu contraseña no cambia.",
+        "— Thorgrim",
+      ]
+    : [
+        byAdmin ? "Your club admin sent you a link to choose a new Thorgrim password." : "Someone (we hope you) asked for a new password for your Thorgrim account.",
+        `Choose it with this link (it works once and lasts ${byAdmin ? "a day" : "an hour"}):`,
+        byAdmin ? "Until you choose it, your current password keeps working." : "If it wasn't you, ignore this email: your password stays as it is.",
+        "— Thorgrim",
+      ];
   const subject = es ? "Tu contraseña nueva de Thorgrim" : "Your new Thorgrim password";
   const button = es ? "Elegir contraseña" : "Choose a password";
   const text = [hello, "", lines[0], lines[1], link, "", lines[2], lines[3]].join("\n");
@@ -75,9 +89,30 @@ async function sendLink(email: string, lang: Lang, origin: string) {
   // Expired links go; a link sent a moment ago isn't sent again.
   for (const r of all) if (Date.parse(r.expiresAt) < now) await resets.delete(r.id);
   if (all.some((r) => r.userId === account.id && now - Date.parse(r.createdAt) < RESEND_MS)) return;
-  const token = crypto.randomBytes(32).toString("base64url");
-  await resets.save({ id: hash(token), userId: account.id, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + TTL_MS).toISOString() });
+  const token = await issue(account.id, TTL_MS);
   await sendMail({ to: account.email, ...resetEmail(account.name, `${origin}/#/reset/${token}`, lang) });
+}
+
+/** A new link for an account; only its hash is kept. */
+async function issue(userId: string, ttlMs: number): Promise<string> {
+  const token = crypto.randomBytes(32).toString("base64url");
+  const now = Date.now();
+  await resets.save({ id: hash(token), userId, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + ttlMs).toISOString() });
+  return token;
+}
+
+/**
+ * From the admin's profile: a link for a player to choose a new password,
+ * emailed to them in their language when email is set up, and returned so
+ * the admin can also send it themselves. Their current password keeps
+ * working until they use it.
+ */
+export async function adminResetLink(account: Account, origin: string): Promise<{ link: string; emailed: boolean }> {
+  if (account.disabled) throw new UserError("Switch the account on first.");
+  const link = `${origin}/#/reset/${await issue(account.id, ADMIN_TTL_MS)}`;
+  const lang = await langOf(userPrefix(account.id, !!account.owner)).catch((): Lang => "en");
+  const emailed = mailReady() && (await sendMail({ to: account.email, ...resetEmail(account.name, link, lang, true) }));
+  return { link, emailed };
 }
 
 async function find(token: unknown): Promise<PasswordReset | undefined> {

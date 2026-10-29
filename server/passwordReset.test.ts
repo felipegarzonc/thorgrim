@@ -37,7 +37,9 @@ vi.mock("./mail.ts", async (importOriginal) => ({
   },
 }));
 
-const { finishReset, requestReset, resetValid } = await import("./passwordReset.ts");
+const { adminResetLink, finishReset, requestReset, resetValid } = await import("./passwordReset.ts");
+const { listAccounts } = await import("./accounts.ts");
+const { blobs } = await import("./blobs.ts");
 const linkToken = (text: string) => /#\/reset\/([A-Za-z0-9_-]+)/.exec(text)?.[1] ?? "";
 let ip = 0;
 const nextIp = () => `10.0.0.${++ip}`;
@@ -100,6 +102,32 @@ describe("forgotten passwords", () => {
     const same = nextIp();
     for (let i = 0; i < 5; i++) await requestReset("nobody@example.com", "en", "https://thorgrim.co", same);
     await expect(requestReset("nobody@example.com", "en", "https://thorgrim.co", same)).rejects.toMatchObject({ status: 429 });
+  });
+
+  it("lets an admin send a link that lasts a day, in the player's language, and also shows it", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-30T10:00:00Z"));
+    await blobs().write("settings/prefs.json", JSON.stringify({ lang: "es" }), "application/json"); // Ana (the owner) uses Spanish
+    const ana = (await listAccounts()).find((a) => a.id === "ana")!;
+    const r = await adminResetLink(ana, "https://thorgrim.co");
+    expect(r.emailed).toBe(true);
+    expect(sent.at(-1)?.text).toContain("El administrador de tu club");
+    expect(sent.at(-1)?.text).toContain(r.link);
+    const token = linkToken(r.link);
+    vi.setSystemTime(new Date("2026-10-31T09:59:00Z"));
+    expect(await resetValid(token)).toBe(true);
+    vi.setSystemTime(new Date("2026-10-31T10:01:00Z"));
+    expect(await resetValid(token)).toBe(false);
+    // Without email, the admin still gets the link to send.
+    mailOn = false;
+    sent.length = 0;
+    const quiet = await adminResetLink(ana, "https://thorgrim.co");
+    expect(quiet).toMatchObject({ emailed: false });
+    expect(await resetValid(linkToken(quiet.link))).toBe(true);
+    expect(sent).toEqual([]);
+    // A switched-off account gets none.
+    const ben = (await listAccounts()).find((a) => a.id === "ben")!;
+    await expect(adminResetLink(ben, "https://thorgrim.co")).rejects.toThrow(/Switch the account on/);
   });
 
   it("tells the player to ask an admin when this Thorgrim can't send email", async () => {

@@ -387,6 +387,7 @@ function PlayersAdmin({ selfId }: { selfId: string }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string>();
   const [temp, setTemp] = useState<{ name: string; password: string }>();
+  const [resetLink, setResetLink] = useState<{ name: string; email: string; link: string; emailed: boolean; copied?: boolean }>();
   const [defLimit, setDefLimit] = useState<string>();
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -497,6 +498,33 @@ function PlayersAdmin({ selfId }: { selfId: string }) {
             New password for <b>{temp.name}</b>: <code>{temp.password}</code> (shown only now; they can change it in their profile).
           </p>
         )}
+        {resetLink && (
+          <div className="notice small">
+            <p>
+              Reset link for <b>{resetLink.name}</b>
+            </p>
+            {resetLink.emailed ? (
+              <p>
+                Emailed to <b>{resetLink.email}</b>. You can also send it yourself:
+              </p>
+            ) : (
+              <p>This Thorgrim can't send email: send it yourself (WhatsApp, email…):</p>
+            )}
+            <p translate="no">
+              <code style={{ wordBreak: "break-all" }}>{resetLink.link}</code>
+            </p>
+            <p className="row">
+              <button
+                type="button"
+                className="small"
+                onClick={() => void navigator.clipboard?.writeText(resetLink.link).then(() => setResetLink({ ...resetLink, copied: true }))}
+              >
+                {resetLink.copied ? "Copied" : "Copy link"}
+              </button>
+              <span className="muted">It works once, for a day. Their current password keeps working until they use it.</span>
+            </p>
+          </div>
+        )}
         {error && <p className="error small">{error}</p>}
         <ul className="players">
           {players?.map((p) => (
@@ -541,11 +569,25 @@ function PlayersAdmin({ selfId }: { selfId: string }) {
                       run(async () => {
                         if (!confirm(`Give ${p.name} a new password? Their current one stops working.`)) return;
                         const r = await api<{ password: string }>(`/admin/users/${p.id}/password`, { method: "POST" });
+                        setResetLink(undefined);
                         setTemp({ name: p.name, password: r.password });
                       })
                     }
                   >
                     New password
+                  </button>
+                  <button
+                    type="button"
+                    className="small"
+                    onClick={() =>
+                      run(async () => {
+                        const r = await api<{ link: string; emailed: boolean }>(`/admin/users/${p.id}/reset-link`, { method: "POST" });
+                        setTemp(undefined);
+                        setResetLink({ name: p.name, email: p.email, ...r });
+                      })
+                    }
+                  >
+                    Send reset link
                   </button>
                   <button type="button" className="small" onClick={() => patch(p.id, { role: p.role === "admin" ? "player" : "admin" })}>
                     {p.role === "admin" ? "Make player" : "Make admin"}
