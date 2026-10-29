@@ -8,7 +8,7 @@
 // the report update it (syncPost).
 
 import crypto from "node:crypto";
-import { result, sideRoundVp, tacticSteps } from "../shared/scoring.ts";
+import { result, roundPlayed, sideRoundVp, tacticSteps } from "../shared/scoring.ts";
 import { flipGame } from "../shared/perspective.ts";
 import type { ArmyList, BattleDetail, FeedPost, FeedPostView, Game } from "../shared/types.ts";
 import { blobs } from "./blobs.ts";
@@ -17,6 +17,7 @@ import { noticesIn, notify, seenIn } from "./notices.ts";
 import { doubleTurns, gameBadges, playerBadges, reportSides, runningScore, type ReportSides } from "../shared/report.ts";
 import { changeGame, gameLists, isGamePhoto, myGames, viewGame, type OpenGame } from "./sharedGames.ts";
 import { Collection, newId } from "./store.ts";
+import { UserError } from "./errors.ts";
 import { clubSpace, getClub, listClubs } from "./clubs.ts";
 import { translate, type Lang } from "../shared/i18n/index.ts";
 import { headToHead, type ClubResult } from "../shared/ladder.ts";
@@ -40,14 +41,8 @@ async function inClub<T>(clubId: string | undefined, fn: () => Promise<T>): Prom
 export const REACTIONS = ["⚔️", "🔥", "😂", "👏", "💀"];
 const MAX_PHOTOS = 8;
 
-export class FeedError extends Error {
-  constructor(
-    message: string,
-    readonly status = 400,
-  ) {
-    super(message);
-  }
-}
+/** A club feature's error for the player (see server/errors.ts). */
+export class FeedError extends UserError {}
 
 /** What's new for the signed-in member: unread notices and posts by others since they last looked. */
 /** New notices and club posts (no club yet: just the notices). */
@@ -148,11 +143,11 @@ export function scoreDetail(game: Game): Pick<BattleDetail, "rounds" | "tactics"
   const steps = (side: "me" | "opponent", card: string) => [...tacticSteps(rounds, side, card)];
   return {
     rounds: rounds.flatMap((r, i) =>
-      r.first
+      roundPlayed(r)
         ? [
             {
               round: i + 1,
-              first: r.first,
+              ...(r.first ? { first: r.first } : {}),
               ...(r.priority ? { priority: r.priority } : {}),
               me: { vp: sideRoundVp(r.me, game.battleplan, i + 1), scored: r.me.scored, tactics: r.me.tactics.map((t) => `${t.card}: ${t.step}`) },
               opponent: { vp: sideRoundVp(r.opponent, game.battleplan, i + 1), scored: r.opponent.scored, tactics: r.opponent.tactics.map((t) => `${t.card}: ${t.step}`) },
@@ -393,8 +388,13 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
  * post in the club and everyone else to the public report, which invites
  * them to ask for access.
  */
-export async function reportPage(token: string, lang: Lang, origin: string): Promise<string> {
-  const found = await publicPost(token).catch(() => undefined);
+/** JSON for an inline <script>: no "</script>" or "<!--" can close or confuse it. */
+const scriptJson = (v: unknown) => JSON.stringify(v).replace(/</g, "\\u003c");
+
+export async function reportPage(rawToken: string, lang: Lang, origin: string): Promise<string> {
+  // The token comes straight from the link: anything but a real token's shape is dropped, never echoed.
+  const token = /^[a-f0-9]{32}$/.test(rawToken) ? rawToken : "";
+  const found = token ? await publicPost(token).catch(() => undefined) : undefined;
   const p = found?.post;
   const t = (s: string) => translate(s, lang);
   const [a, b] = p?.sides ?? [];
@@ -429,7 +429,7 @@ export async function reportPage(token: string, lang: Lang, origin: string): Pro
   // Members (signed in on this phone) open the post in the club; everyone else the public report.
   var member = false;
   try { member = !!(localStorage.getItem("thorgrim-session") || localStorage.getItem("aos-coach-access-key")); } catch (e) {}
-  location.replace(member && ${JSON.stringify(member)} ? ${JSON.stringify(member)} : ${JSON.stringify(visitor)});
+  location.replace(member && ${scriptJson(member)} ? ${scriptJson(member)} : ${scriptJson(visitor)});
 </script>
 </head>
 <body style="margin:0;background:#0f1115;color:#ece6da;font-family:system-ui,sans-serif">

@@ -95,6 +95,18 @@ describe("simulate", () => {
     expect(sim.killChance).toBeGreaterThan(0.99);
     expect(sim.expectedModelsSlain).toBeCloseTo(3, 1);
   });
+  it("refuses numbers no unit has, and runs fewer times for a huge one", () => {
+    const base: AttackProfile = { attacks: "2", hit: 3, wound: 3, rend: 1, damage: "2", crit: "none" };
+    expect(() => simulate([{ ...base, models: 1e9 }], { save: 4 })).toThrow(/too big/);
+    expect(() => simulate([{ ...base, attacks: "100000D6" }], { save: 4 })).toThrow(/too big/);
+    expect(() => simulate([{ ...base, damage: "1e300" }], { save: 4 })).toThrow(/too big/);
+    expect(() => simulate(Array(1000).fill(base), { save: 4 })).toThrow(/profiles/);
+    // A big real unit still gets thousands of runs (plenty for the odds); an enormous one gets fewer.
+    expect(simulate([{ ...base, attacks: "4", damage: "D3", models: 40 }], { save: 4, ward: 5 }, 20000, mulberry32(3)).runs).toBeGreaterThan(10000);
+    const started = Date.now();
+    expect(simulate([{ ...base, attacks: "10D6", damage: "D6", models: 100 }], { save: 4, ward: 5 }, 100000, mulberry32(4)).runs).toBeLessThan(5000);
+    expect(Date.now() - started).toBeLessThan(10_000);
+  });
 });
 
 describe("2D6", () => {

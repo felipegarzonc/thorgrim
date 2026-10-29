@@ -29,7 +29,7 @@ vi.mock("./accounts.ts", async (importOriginal) => ({
 
 const ana: UserCtx = { id: "ana", name: "Ana", isAdmin: true, prefix: "" };
 const ben: UserCtx = { id: "ben", name: "Ben", isAdmin: false, prefix: "users/ben/" };
-const phone = (n: string) => ({ endpoint: `https://push.example/${n}`, keys: { p256dh: "p", auth: "a" } });
+const phone = (n: string) => ({ endpoint: `https://fcm.googleapis.com/fcm/send/${n}`, keys: { p256dh: "p", auth: "a" } });
 
 describe("phone notifications", () => {
   let push: typeof import("./push.ts");
@@ -47,21 +47,27 @@ describe("phone notifications", () => {
     await expect(runAs(ben, () => push.subscribe({} as never))).rejects.toThrow(/push subscription/);
   });
 
+  it("only sends to the browsers' push services, never to other addresses", async () => {
+    for (const endpoint of ["https://169.254.169.254/latest/meta-data", "https://localhost/x", "https://fcm.googleapis.com.evil.test/x", "https://fcm.googleapis.com:8443/x", "https://evil.test/?fcm.googleapis.com"])
+      await expect(runAs(ben, () => push.subscribe({ endpoint, keys: { p256dh: "p", auth: "a" } }))).rejects.toThrow(/push subscription/);
+    for (const endpoint of ["https://updates.push.services.mozilla.com/wpush/v2/x", "https://web.push.apple.com/x", "https://wns2-par02p.notify.windows.com/w/?token=x"]) expect(push.isPushEndpoint(endpoint)).toBe(true);
+  });
+
   it("sends what lands in Activity to the member's phones, and forgets phones that went away", async () => {
     await runAs(ben, () => push.subscribe(phone("ben-phone")));
     await runAs(ben, () => push.subscribe(phone("ben-old-tablet")));
-    gone = new Set(["https://push.example/ben-old-tablet"]);
+    gone = new Set(["https://fcm.googleapis.com/fcm/send/ben-old-tablet"]);
     await runAs(ana, () => notices.notify(["ben", "ana"], "Ana commented on your report", "#/club/p1"));
-    expect(sent.map((s) => s.endpoint)).toEqual(["https://push.example/ben-phone"]);
+    expect(sent.map((s) => s.endpoint)).toEqual(["https://fcm.googleapis.com/fcm/send/ben-phone"]);
     expect(JSON.parse(sent[0].payload)).toEqual({ title: "Thorgrim", body: "Ana commented on your report", href: "#/club/p1" });
     // The old tablet is forgotten: the next notice goes to the phone only, without trying it.
     sent.length = 0;
     gone = new Set();
     await runAs(ana, () => notices.notify(["ben"], "Again", "#/club"));
-    expect(sent.map((s) => s.endpoint)).toEqual(["https://push.example/ben-phone"]);
+    expect(sent.map((s) => s.endpoint)).toEqual(["https://fcm.googleapis.com/fcm/send/ben-phone"]);
     // Turned off on the phone: nothing more.
     sent.length = 0;
-    await runAs(ben, () => push.unsubscribe("https://push.example/ben-phone"));
+    await runAs(ben, () => push.unsubscribe("https://fcm.googleapis.com/fcm/send/ben-phone"));
     await runAs(ana, () => notices.notify(["ben"], "Quiet", "#/club"));
     expect(sent).toEqual([]);
   });

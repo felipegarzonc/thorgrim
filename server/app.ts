@@ -9,13 +9,13 @@ import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import express, { type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
-import { castChance, chargeChance, damageBySave, expectedDamage, simulate, type AttackProfile, type TargetProfile } from "../engine/dice.ts";
+import { castChance, chargeChance, damageBySave, expectedDamage, simulate, workPerRun, type AttackProfile, type TargetProfile } from "../engine/dice.ts";
 import type { Op } from "../shared/patch.ts";
 import type { ArmyList, FeedPost, Game, GameState, LibraryDoc } from "../shared/types.ts";
 import { hasCredentials, loadSavedApiKey, saveApiKey } from "./anthropic.ts";
 import { blobs } from "./blobs.ts";
 import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversation, turnTips, voiceScore, gameReview } from "./coach.ts";
-import { addComment, deleteComment, deletePost, feed, FeedError, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, readPublicCard, readPublicPhoto, reportPage, saveCard, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
+import { addComment, deleteComment, deletePost, feed, getPost, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, readPublicCard, readPublicPhoto, reportPage, saveCard, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
 import { markNoticesRead, myNotices, notify } from "./notices.ts";
 import { publicKey, pushTo, subscribe, unsubscribe } from "./push.ts";
 import { gameData, listRules, warscrollText } from "./data.ts";
@@ -45,11 +45,13 @@ import {
 } from "./accounts.ts";
 import { currentUser, LOCAL_USER, runAs, userPrefix, type UserCtx } from "./context.ts";
 import { jobs, startJob } from "./jobs.ts";
+import { publicError } from "./errors.ts";
 import { addDocument, deleteDocument, docPath, finishUpload, libraryDocs, listDocuments, searchLibrary, startUpload } from "./library.ts";
 import { parseList } from "./listParser.ts";
 import { acceptOffer, bothConfirmed, changeGame, confirmResult, declineOffer, forgetShares, gameLists, joinGame, ladderSides, leaveGame, myGames, myOffers, offerGames, openGame, shareGame, stopSharing, viewGame, type OpenGame } from "./sharedGames.ts";
 import { forgetResult, ladder, listResults, startSeason, syncResult } from "./ladder.ts";
 import { Collection, newId } from "./store.ts";
+import { roundPlayed } from "../shared/scoring.ts";
 import { blankGame } from "./newGame.ts";
 import { rememberLang } from "./lang.ts";
 import { omnissiahStatus } from "./omnissiah.ts";
@@ -86,6 +88,22 @@ app.use((_req, res, next) => {
 
 // Health check for the hosting platform (no data, no auth).
 app.get(["/healthz", "/api/healthz"], (_req, res) => res.json({ ok: true }));
+
+// ---------- the app's address ----------
+// Links that leave the app (invite emails, report previews) use its real
+// address: APP_URL, else the one the host reports. The request's Host header
+// is only a last resort on your own computer, since a client can fake it.
+const fixedOrigin = (() => {
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  const url = process.env.APP_URL?.trim() || process.env.RENDER_EXTERNAL_URL?.trim() || (vercel ? `https://${vercel}` : "");
+  return url.replace(/\/$/, "");
+})();
+if (!fixedOrigin && (process.env.PUBLIC === "1" || process.env.VERCEL)) console.error("Set APP_URL (e.g. https://thorgrim.co): links in emails and shared reports need the app's address.");
+export function appOrigin(req: Request): string {
+  if (fixedOrigin) return fixedOrigin;
+  const host = req.get("host") ?? "";
+  return /^[a-z0-9.-]+(:\d{1,5})?$/i.test(host) ? `${req.protocol}://${host}` : "http://localhost:8787";
+}
 
 // ---------- who is it ----------
 // Online, people sign in with their account (invite-only, email + password).
@@ -315,9 +333,13 @@ app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
   res.json(publicAccount(await updateAccount(target.id, patch)));
 });
 // A new temporary password, shown once to the admin to pass on.
+// An admin's password (the owner's included) only the owner resets: else any admin could take over the owner's account.
 app.post("/api/admin/users/:id/password", requireAdmin, async (req, res) => {
+  const target = (await listAccounts()).find((a) => a.id === param(req, "id"));
+  if (!target) return res.status(404).json({ error: "No such player" });
+  if (target.role === "admin" && target.id !== currentUser().id && !isOwner()) return res.status(403).json({ error: "Only the app's owner can reset an admin's password." });
   const password = crypto.randomBytes(9).toString("base64url");
-  await setLoginPassword(param(req, "id"), password);
+  await setLoginPassword(target.id, password);
   res.json({ password });
 });
 app.get("/api/admin/invites", requireAdmin, async (_req, res) => {
@@ -336,7 +358,7 @@ app.delete("/api/admin/invites/:id", requireAdmin, async (req, res) => {
 });
 app.get("/api/admin/access-requests", requireAdmin, async (_req, res) => res.json({ requests: await listRequests(), mail: mailReady() }));
 app.post("/api/admin/access-requests/:id/approve", requireAdmin, async (req, res) =>
-  res.json(await approveRequest(param(req, "id"), process.env.APP_URL?.trim().replace(/\/$/, "") || `${req.protocol}://${req.get("host")}`)),
+  res.json(await approveRequest(param(req, "id"), appOrigin(req))),
 );
 app.post("/api/admin/access-requests/:id/decline", requireAdmin, async (req, res) => res.json(await declineRequest(param(req, "id"))));
 app.get("/api/admin/omnissiah", requireAdmin, async (_req, res) => res.json(await omnissiahStatus()));
@@ -454,7 +476,8 @@ const startReading = async (doc: LibraryDoc) => {
 app.get("/api/library", async (_req, res) => res.json(newestFirst(await listDocuments()).map((d) => ({ ...d, canEdit: !!currentUser().developer }))));
 
 // Upload in one request (used for small files and by older clients).
-app.post("/api/library", upload.single("file"), requireDeveloper, async (req, res) => {
+// The developer check comes first, so nobody else can make the server take in a 150 MB file.
+app.post("/api/library", requireDeveloper, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file" });
   const doc = await addDocument({
     title: String(req.body.title ?? ""),
@@ -557,19 +580,10 @@ app.get("/api/games/offers", async (_req, res) => res.json(await myOffers()));
 app.post("/api/games/offers", async (req, res) => {
   const to = await findMember(String(req.body?.memberId ?? ""));
   if (!to) return res.status(400).json({ error: "That player isn't in the club." });
-  try {
-    res.json(await offerGames(to, Array.isArray(req.body?.gameIds) ? req.body.gameIds.map(String) : []));
-  } catch (e) {
-    res.status(400).json({ error: (e as Error).message });
-  }
+  res.json(await offerGames(to, Array.isArray(req.body?.gameIds) ? req.body.gameIds.map(String) : []));
 });
 app.post("/api/games/offers/:id/accept", async (req, res) => {
-  let linked: OpenGame[];
-  try {
-    linked = await acceptOffer(param(req, "id"), Array.isArray(req.body?.gameIds) ? req.body.gameIds.map(String) : undefined);
-  } catch (e) {
-    return res.status(400).json({ error: (e as Error).message });
-  }
+  const linked = await acceptOffer(param(req, "id"), Array.isArray(req.body?.gameIds) ? req.body.gameIds.map(String) : undefined);
   // Both players confirmed by now: finished games join the ladder.
   for (const o of linked) if (o.game.finished) await syncResult(o).catch((e: Error) => console.error(`Ladder for linked game ${o.game.id} failed:`, e));
   res.json({ linked: linked.length, ids: linked.map((o) => o.game.id) });
@@ -623,12 +637,7 @@ app.delete("/api/games/:id/share", async (req, res) => {
 app.post("/api/games/:id/confirm", async (req, res) => {
   const o = await openOr404(req, res);
   if (!o) return;
-  let next: OpenGame;
-  try {
-    next = await confirmResult(o);
-  } catch (e) {
-    return res.status(400).json({ error: (e as Error).message });
-  }
+  const next = await confirmResult(o);
   await syncResult(next);
   const { ownerId, playerId } = ladderSides(next);
   const other = currentUser().id === ownerId ? playerId : ownerId;
@@ -730,11 +739,7 @@ app.put("/api/events/:id/tables/:round/:table/result", async (req, res) => {
   res.json(await setTableResult(param(req, "id"), Number(param(req, "round")), Number(param(req, "table")), score));
 });
 app.post("/api/games/join", async (req, res) => {
-  try {
-    res.json({ id: await joinGame(String(req.body?.token ?? "")) });
-  } catch (e) {
-    res.status(404).json({ error: (e as Error).message });
-  }
+  res.json({ id: await joinGame(String(req.body?.token ?? "")) });
 });
 // The creator deletes the game; a player who joined just leaves it.
 app.delete("/api/games/:id", async (req, res) => {
@@ -805,7 +810,7 @@ app.post("/api/games/:id/review", async (req, res) => {
   const o = await openOr404(req, res);
   if (!o) return;
   const game = viewGame(o);
-  if (!game.state.rounds?.some((r) => r.first)) return res.status(400).json({ error: "Play a battle round first." });
+  if (!game.state.rounds?.some(roundPlayed)) return res.status(400).json({ error: "Play a battle round first." });
   const [myList, opponentList] = await gameLists(o);
   await checkBudget();
   res.json({ job: await startJob("review", () => gameReview({ game, myList, opponentList })) });
@@ -885,12 +890,8 @@ app.get("/api/club/unread", async (_req, res) => res.json(await unread()));
 // Phone notifications: the key phones subscribe with, and each phone's subscription.
 app.get("/api/push/key", async (_req, res) => res.json({ key: await publicKey() }));
 app.post("/api/push/subscribe", async (req, res) => {
-  try {
-    await subscribe(req.body?.subscription);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(400).json({ error: (e as Error).message });
-  }
+  await subscribe(req.body?.subscription);
+  res.json({ ok: true });
 });
 app.post("/api/push/unsubscribe", async (req, res) => {
   await unsubscribe(String(req.body?.endpoint ?? ""));
@@ -927,7 +928,7 @@ const sendReportPage = async (req: Request, res: Response, token: string, lang: 
   res
     .type("html")
     .set("cache-control", "public, max-age=300")
-    .send(await reportPage(token, lang, process.env.APP_URL?.trim().replace(/\/$/, "") || `${req.protocol}://${req.get("host")}`));
+    .send(await reportPage(token, lang, appOrigin(req)));
 app.get("/api/public/report-page/:token", (req, res) => sendReportPage(req, res, param(req, "token"), req.query.lang === "es" ? "es" : "en"));
 app.get("/api/public/reports/:token/photo/:n", async (req, res) => {
   const data = await readPublicPhoto(param(req, "token"), Number(param(req, "n")));
@@ -938,11 +939,19 @@ app.get("/api/public/reports/:token/photo/:n", async (req, res) => {
 
 app.post("/api/calc/damage", (req, res) => {
   const { profiles, target, runs } = req.body as { profiles: AttackProfile[]; target: TargetProfile; runs?: number };
-  res.json({
-    perProfile: profiles.map((p) => expectedDamage(p, target)),
-    bySave: damageBySave(profiles, { ward: target.ward, saveMod: target.saveMod, rerollSaves: target.rerollSaves }),
-    simulation: simulate(profiles, target, Math.min(runs ?? 20000, 100000)),
-  });
+  let out: unknown;
+  // The engine only throws about the numbers it was given (a bad dice expression, a unit too big): safe to show.
+  try {
+    workPerRun(profiles, target ?? {});
+    out = {
+      perProfile: profiles.map((p) => expectedDamage(p, target)),
+      bySave: damageBySave(profiles, { ward: target.ward, saveMod: target.saveMod, rerollSaves: target.rerollSaves }),
+      simulation: simulate(profiles, target, Math.min(runs ?? 20000, 100000)),
+    };
+  } catch (e) {
+    return res.status(400).json({ error: (e as Error).message });
+  }
+  res.json(out);
 });
 app.post("/api/calc/charge", (req, res) => res.json(chargeChance(Number(req.body.gap), req.body)));
 app.post("/api/calc/cast", (req, res) => res.json(castChance(Number(req.body.castingValue), req.body)));
@@ -958,15 +967,16 @@ if (fs.existsSync(path.join(dist, "index.html"))) {
   app.get(/^\/(?!api).*/, (_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+// Players see messages written for them (server/errors.ts); anything unexpected is logged and stays on the server.
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof AuthError) return res.status(err.status).json({ error: err.message, needsLogin: err.status === 401 });
-  if (err instanceof FeedError) return res.status(err.status).json({ error: err.message });
   if (/authentication method/i.test(err.message)) {
     return res.status(503).json({ error: "Thorgrim needs your Claude API key.", needsKey: true });
   }
   if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
     return res.status(502).json({ error: "Claude rejected the API key. Paste a valid one below.", needsKey: true });
   }
-  console.error(err);
-  res.status(500).json({ error: err.message });
+  const { status, message, expected } = publicError(err);
+  if (!expected) console.error(`${req.method} ${req.path} failed:`, err);
+  res.status(status).json({ error: message });
 });

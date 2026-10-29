@@ -3,7 +3,7 @@
 
 import { doubleTurns } from "./report.ts";
 import { BATTLE_ROUNDS, baseFaction, TACTIC_VP } from "./season.ts";
-import { result, sideRoundVp, tacticSteps } from "./scoring.ts";
+import { result, roundPlayed, sideRoundVp, tacticSteps } from "./scoring.ts";
 import type { Game } from "./types.ts";
 
 type Side = "me" | "opponent";
@@ -82,7 +82,7 @@ export function playerStats(games: Game[], factionOf: (g: Game, side: Side) => s
       tactics.set(t.card, x);
     }
     recs.slice(0, BATTLE_ROUNDS).forEach((r, i) => {
-      if (!r.first) return;
+      if (!roundPlayed(r)) return;
       rounds[i].me += sideRoundVp(r.me, g.battleplan, i + 1);
       rounds[i].opponent += sideRoundVp(r.opponent, g.battleplan, i + 1);
       rounds[i].n++;

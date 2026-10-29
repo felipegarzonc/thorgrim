@@ -39,6 +39,14 @@ export function diff(a: unknown, b: unknown, path: Path = [], counter: (path: Pa
 }
 
 const BAD_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+/** Longest a list in a game can get through edits. */
+const MAX_ITEMS = 5000;
+/**
+ * In a list, only a position up to its end (to add one). Anything else, like
+ * "length" or position 1000000000, would blow the saved game up to gigabytes.
+ */
+const badIndex = (parent: unknown, k: string | number) =>
+  Array.isArray(parent) && !(typeof k === "number" && Number.isInteger(k) && k >= 0 && k <= parent.length && k < MAX_ITEMS);
 
 /** A copy of `target` with the edits applied. Edits with a broken path are skipped. */
 export function applyOps<T>(target: T, ops: Op[]): T {
@@ -49,6 +57,10 @@ export function applyOps<T>(target: T, ops: Op[]): T {
     let ok = true;
     for (let i = 0; i < op.path.length - 1; i++) {
       const k = op.path[i];
+      if (badIndex(parent, k)) {
+        ok = false;
+        break;
+      }
       if (parent[k] === undefined || parent[k] === null) parent[k] = typeof op.path[i + 1] === "number" ? [] : {};
       if (typeof parent[k] !== "object") {
         ok = false;
@@ -58,14 +70,16 @@ export function applyOps<T>(target: T, ops: Op[]): T {
     }
     if (!ok) continue;
     const k = op.path[op.path.length - 1];
+    if (badIndex(parent, k)) continue;
     if ("del" in op) {
       if (Array.isArray(parent) && typeof k === "number") parent[k] = undefined;
       else delete parent[k];
     } else if ("inc" in op) {
       if (typeof op.inc === "number" && Number.isFinite(op.inc)) parent[k] = (typeof parent[k] === "number" ? (parent[k] as number) : 0) + op.inc;
     } else if ("push" in op) {
-      if (Array.isArray(parent[k])) (parent[k] as unknown[]).push(op.push);
-      else parent[k] = [op.push];
+      const list = parent[k];
+      if (!Array.isArray(list)) parent[k] = [op.push];
+      else if (list.length < MAX_ITEMS) list.push(op.push);
     } else if ("set" in op) {
       parent[k] = op.set;
     }

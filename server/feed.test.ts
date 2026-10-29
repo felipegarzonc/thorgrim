@@ -241,3 +241,38 @@ describe("club feed", () => {
     expect(await runAs(ana, () => feed.readPostPhoto(post.id, 0))).toBeUndefined();
   });
 });
+
+describe("shared report page", () => {
+  it("never echoes a made-up token into the page", async () => {
+    const { reportPage } = await import("./feed.ts");
+    const html = await reportPage('x"</script><script>alert(document.domain)</script>', "en", "https://thorgrim.co");
+    expect(html).not.toContain("alert(document.domain)");
+    expect(html.match(/<script>/g)).toHaveLength(1);
+    expect(html).toContain('"/#/r/"');
+  });
+});
+
+describe("rounds scored without a priority roll", () => {
+  it("count on the score sheet, the round-by-round totals and the coach's facts", async () => {
+    const { scoreDetail } = await import("./feed.ts");
+    const { reportFacts, reportSides, runningScore } = await import("../shared/report.ts");
+    const g = finishedGame();
+    // Round 4: alone on the table, the player scored 10 without saying who went first.
+    g.state.rounds = [...g.state.rounds!, { ...emptyRound(), me: side(10, { tactics: [{ card: "Smokescreen", step: "strike" }] }), opponent: side(0) }];
+    const d = scoreDetail(g);
+    expect(d.rounds.map((r) => r.round)).toEqual([1, 2, 3, 4]);
+    expect(d.rounds[3]).toMatchObject({ round: 4, me: { vp: 15 } });
+    expect(d.rounds[3].first).toBeUndefined();
+    expect(runningScore(g).at(-1)).toEqual({ me: 50, opponent: 22 });
+    const facts = reportFacts(g, reportSides(g, undefined, undefined));
+    expect(facts).toContain("Round 4: Ana: 15 VP");
+    expect(facts).toContain("Score after round 4: Ana 50, Ben 22.");
+  });
+
+  it("an empty round with nobody going first still doesn't count", async () => {
+    const { roundPlayed } = await import("../shared/scoring.ts");
+    expect(roundPlayed(emptyRound())).toBe(false);
+    expect(roundPlayed({ ...emptyRound(), first: "me" })).toBe(true);
+    expect(roundPlayed({ ...emptyRound(), opponent: side(0, { scored: ["Hold One"] }) })).toBe(true);
+  });
+});

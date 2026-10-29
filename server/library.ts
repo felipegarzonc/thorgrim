@@ -11,6 +11,7 @@ import { extractText, getDocumentProxy } from "unpdf";
 import type { LibraryDoc } from "../shared/types.ts";
 import { blobs } from "./blobs.ts";
 import { currentUser } from "./context.ts";
+import { UserError } from "./errors.ts";
 import { Collection, newId } from "./store.ts";
 
 // The shared library lives at the root (the admin's books); each invited
@@ -105,10 +106,10 @@ export async function startUpload(input: NewDoc, apiPathFor: (id: string) => str
 /** Step 2: the file is in storage, read it. */
 export async function finishUpload(id: string): Promise<LibraryDoc> {
   const doc = await libraryDocs.get(id);
-  if (!doc) throw new Error("No such document");
+  if (!doc) throw new UserError("No such document", 404);
   if (!doc.uploading) return doc;
   const buffer = await blobs().read(docPath(doc));
-  if (!buffer) throw new Error("The file did not arrive. Try uploading it again.");
+  if (!buffer) throw new UserError("The file did not arrive. Try uploading it again.");
   return process(doc, buffer);
 }
 

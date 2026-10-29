@@ -25,7 +25,9 @@ import { langNote } from "./lang.ts";
 import type { Lang } from "../shared/i18n/index.ts";
 import { baseFaction } from "../shared/season.ts";
 import { metaDescriptions, metaSchemas, omnissiahGet, omnissiahReady, runMetaTool, type MetaTool } from "./omnissiah.ts";
+import { UserError } from "./errors.ts";
 import { Collection } from "./store.ts";
+import { lessonsFor } from "./lessons.ts";
 
 type Msg = Anthropic.Beta.BetaMessageParam;
 
@@ -352,6 +354,9 @@ async function dossier(ctx: CoachContext): Promise<string> {
   }
   if (ctx.myList) parts.push(listDossier(ctx.myList), "");
   if (ctx.opponentList) parts.push(listDossier(ctx.opponentList), "");
+  // A failure here must not stop the coach: lessons are a bonus.
+  const lessons = await lessonsFor(ctx.game?.id, ctx.opponentList?.faction || ctx.game?.opponentFaction).catch(() => "");
+  if (lessons) parts.push(lessons, "");
   parts.push("</dossier>");
   return parts.filter((p) => p !== undefined).join("\n");
 }
@@ -684,8 +689,8 @@ export async function turnTips(ctx: CoachContext, round: number, side: "me" | "o
   });
   await recordUsage(response.usage, coach.price);
   console.log(`turn tips: ${Date.now() - started} ms, stop ${response.stop_reason}, ${response.usage?.output_tokens ?? "?"} output tokens`);
-  if (response.stop_reason === "refusal") throw new Error("Thorgrim couldn't write tips for this turn.");
-  if (response.stop_reason === "max_tokens") throw new Error("Thorgrim's answer was cut off. Try again.");
+  if (response.stop_reason === "refusal") throw new UserError("Thorgrim couldn't write tips for this turn.", 502);
+  if (response.stop_reason === "max_tokens") throw new UserError("Thorgrim's answer was cut off. Try again.", 502);
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)
@@ -774,8 +779,8 @@ export async function gamePlan(ctx: CoachContext, opts: { replan?: boolean } = {
     .finalMessage();
   await recordUsage(response.usage, coach.price);
   console.log(`game plan: ${Date.now() - started} ms, stop ${response.stop_reason}, ${response.usage?.output_tokens ?? "?"} output tokens`);
-  if (response.stop_reason === "refusal") throw new Error("Thorgrim couldn't write a plan for this game.");
-  if (response.stop_reason === "max_tokens") throw new Error("The plan came out too long. Try again.");
+  if (response.stop_reason === "refusal") throw new UserError("Thorgrim couldn't write a plan for this game.", 502);
+  if (response.stop_reason === "max_tokens") throw new UserError("The plan came out too long. Try again.", 502);
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)
@@ -831,8 +836,8 @@ export async function battleReport(ctx: CoachContext, photoPaths: string[]): Pro
     .finalMessage();
   await recordUsage(response.usage, HAIKU_PRICE);
   console.log(`battle report: ${Date.now() - started} ms, stop ${response.stop_reason}, ${response.usage?.output_tokens ?? "?"} output tokens`);
-  if (response.stop_reason === "refusal") throw new Error("Thorgrim couldn't write a report for this game.");
-  if (response.stop_reason === "max_tokens") throw new Error("The report came out too long. Try again.");
+  if (response.stop_reason === "refusal") throw new UserError("Thorgrim couldn't write a report for this game.", 502);
+  if (response.stop_reason === "max_tokens") throw new UserError("The report came out too long. Try again.", 502);
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)
@@ -928,7 +933,7 @@ export async function voiceScore(game: Game, round: number, said: string): Promi
     })
     .finalMessage();
   await recordUsage(response.usage, HAIKU_PRICE);
-  if (response.stop_reason !== "end_turn") throw new Error("Couldn't understand that. Try again.");
+  if (response.stop_reason !== "end_turn") throw new UserError("Couldn't understand that. Try again.", 502);
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)
@@ -971,7 +976,7 @@ export async function gameReview(ctx: CoachContext): Promise<{ verdict: string; 
     })
     .finalMessage();
   await recordUsage(response.usage, HAIKU_PRICE);
-  if (response.stop_reason !== "end_turn") throw new Error("Thorgrim couldn't review this game. Try again.");
+  if (response.stop_reason !== "end_turn") throw new UserError("Thorgrim couldn't review this game. Try again.", 502);
   const text = response.content
     .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)

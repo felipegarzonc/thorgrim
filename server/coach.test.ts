@@ -218,3 +218,31 @@ describe("conversation upkeep", () => {
     expect((marked[2].content as any)[0].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
   });
 });
+
+describe.skipIf(!hasData)("lessons from earlier games", () => {
+  it("brings the player's past reviews into the next game's plan, the same matchup first", async () => {
+    const { gamePlan } = await import("./coach.ts");
+    const { runAs } = await import("./context.ts");
+    const { Collection } = await import("./store.ts");
+    const player = { id: "lessons-player", name: "Ana", isAdmin: false, prefix: "users/lessons-player/" };
+    const state = (vp: { me: number; opponent: number }) => ({
+      round: 5, attacker: "me", firstThisRound: "me", activePlayer: "me", phase: "End of Turn",
+      cp: { me: 0, opponent: 0 }, vp, fury: { me: 0, opponent: 0 }, rage: { me: 0, opponent: 0 },
+      tactics: [], opponentTactics: [], units: {}, objectives: "", notes: "",
+    });
+    const base = { name: "", myListId: "", opponentListId: "", battleplan: "Into the Fire", battleplanNotes: "", references: [], log: [] };
+    const review = (tryNext: string) => ({ verdict: "", lost: [], tryNext, writtenAt: "", basis: "" });
+    await runAs(player, async () => {
+      const games = new Collection<any>("games");
+      await games.save({ ...base, id: "past1", createdAt: "2026-10-01", opponentFaction: "Seraphon", state: state({ me: 60, opponent: 70 }), review: review("Kill the Saurus screen first.") });
+      await games.save({ ...base, id: "past2", createdAt: "2026-09-01", opponentFaction: "Skaven", state: state({ me: 40, opponent: 80 }), review: review("Keep the Stonehorn out of Warp Lightning range.") });
+      replies.push({ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ summary: "", ourStrengths: [], theirThreats: [], deployment: [], rounds: [], tactics: [], priority: [], avoid: [] }) }] });
+      const before = calls.length;
+      await gamePlan({ game: { ...base, id: "now", createdAt: "2026-10-20", opponentFaction: "Skaven", state: state({ me: 0, opponent: 0 }) } as any });
+      const prompt = JSON.stringify(calls[before].messages[0].content);
+      expect(prompt).toContain("Lessons from my earlier games");
+      expect(prompt.indexOf("Warp Lightning range")).toBeLessThan(prompt.indexOf("Saurus screen"));
+      expect(prompt).toContain("lost 40-80");
+    });
+  });
+});

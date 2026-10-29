@@ -3,10 +3,10 @@
 // saves its result, and the page polls for it. A phone that locks its screen
 // or drops signal mid-way gets the answer when it checks again.
 
-import Anthropic from "@anthropic-ai/sdk";
 import { waitUntil } from "@vercel/functions";
 import { AuthError } from "./accounts.ts";
 import { currentUser, runAs } from "./context.ts";
+import { publicError } from "./errors.ts";
 import { Collection, newId } from "./store.ts";
 
 export interface Job<T = unknown> {
@@ -37,13 +37,9 @@ export async function startJob<T>(kind: string, work: () => Promise<T>): Promise
       await jobs.save({ ...job, status: "done", result, finishedAt: new Date().toISOString() });
     } catch (e) {
       console.error(`${kind} job failed:`, e);
-      const error =
-        e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError
-          ? "Claude rejected the API key. The admin can paste a valid one on the Thorgrim page."
-          : /authentication method/i.test((e as Error).message)
-            ? "Thorgrim needs a Claude API key (the admin adds it on the Thorgrim page)."
-            : (e as Error).message || "The request to Thorgrim failed.";
-      await jobs.save({ ...job, status: "failed", error, code: e instanceof AuthError ? e.status : 500, finishedAt: new Date().toISOString() });
+      // The page shows the job's error: only messages meant for the player (server/errors.ts).
+      const { status, message } = publicError(e);
+      await jobs.save({ ...job, status: "failed", error: message, code: e instanceof AuthError ? e.status : status, finishedAt: new Date().toISOString() });
     }
   });
   // On Vercel, keep the function alive after the response until the work ends.
