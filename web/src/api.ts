@@ -120,6 +120,39 @@ export async function apiFile(path: string): Promise<{ blob: Blob; name: string 
   return { blob: await res.blob(), name };
 }
 
+/**
+ * A signed-in POST answered with server-sent events: calls `onEvent` for each
+ * event as it arrives, and resolves with the data of the "done" event (an
+ * "error" event rejects with its message).
+ */
+export async function apiStream<T>(path: string, json: unknown, onEvent: (event: string, data: unknown) => void): Promise<T> {
+  const res = await fetch(`/api${path}`, { method: "POST", headers: { ...(await requestHeaders()), "content-type": "application/json" }, body: JSON.stringify(json) });
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && (data as { needsLogin?: boolean }).needsLogin) window.dispatchEvent(new Event(LOGIN_EVENT));
+    throw new Error(errorText(res, data));
+  }
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    // Events are separated by a blank line: "event: <name>\ndata: <json>".
+    let cut: number;
+    while ((cut = buffer.indexOf("\n\n")) >= 0) {
+      const raw = buffer.slice(0, cut);
+      buffer = buffer.slice(cut + 2);
+      const event = /^event: (.*)$/m.exec(raw)?.[1] ?? "message";
+      const data = JSON.parse(/^data: (.*)$/m.exec(raw)?.[1] ?? "null") as unknown;
+      if (event === "done") return data as T;
+      if (event === "error") throw new Error((data as { error?: string })?.error ?? "Thorgrim couldn't answer.");
+      onEvent(event, data);
+    }
+  }
+  throw new Error("The answer was cut off. Try again.");
+}
+
 export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}, retried = false): Promise<T> {
   const headers = await requestHeaders();
   let body = init.body;

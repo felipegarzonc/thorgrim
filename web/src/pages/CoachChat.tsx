@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { api } from "../api.ts";
+import { api, apiStream } from "../api.ts";
 import { SpeakButton, VoiceButton } from "../media.tsx";
 import { feedback } from "../sound.ts";
 import { Card, Markdown, useMeta } from "../ui.tsx";
@@ -11,6 +11,19 @@ interface Entry {
   tools?: string[];
   at: string;
 }
+
+/** What Thorgrim is doing while a tool runs. */
+const TOOL_LABEL: Record<string, string> = {
+  search_rules: "Searching the rules…",
+  read_rules_pages: "Reading the rules…",
+  lookup_warscroll: "Reading a warscroll…",
+  faction_rules: "Reading the army rules…",
+  damage_calc: "Running the numbers…",
+  charge_odds: "Working out the charge…",
+  cast_odds: "Working out the cast…",
+  web_search: "Searching the web…",
+  web_fetch: "Reading a page…",
+};
 
 const PRESET_LABEL: Record<string, string> = {
   pregame: "Pre-game brief requested",
@@ -31,6 +44,9 @@ export function CoachChat(props: {
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  // The answer as it's being written, and the tool Thorgrim is using right now.
+  const [live, setLive] = useState("");
+  const [using, setUsing] = useState<string>();
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -49,8 +65,16 @@ export function CoachChat(props: {
     setEntries((e) => [...e, { role: "user", text: shown, at: new Date().toISOString() }]);
     setQuestion("");
     moment("Asked Thorgrim");
+    setLive("");
+    setUsing(undefined);
     try {
-      const answer = await api<Entry>(`/coach/${props.convoId}`, { method: "POST", json: body });
+      const answer = await apiStream<Entry>(`/coach/${props.convoId}/stream`, body, (event, data) => {
+        if (event === "step") setLive("");
+        else if (event === "text") {
+          setUsing(undefined);
+          setLive((t) => t + (data as { text: string }).text);
+        } else if (event === "tool") setUsing((data as { name: string }).name);
+      });
       // Reload so the stored transcript (with preset prompts) is shown.
       const all = await api<Entry[]>(`/coach/${props.convoId}`);
       setEntries(all.length ? all : (e) => [...e, answer]);
@@ -59,6 +83,8 @@ export function CoachChat(props: {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+      setLive("");
+      setUsing(undefined);
     }
   };
 
@@ -89,7 +115,13 @@ export function CoachChat(props: {
             {e.tools && e.tools.length > 0 && <p className="tools">used: {e.tools.join(", ")}</p>}
           </div>
         ))}
-        {busy && <div className="bubble coach thinking">Thinking… (checking rules and running the numbers)</div>}
+        {busy && live && (
+          <div className="bubble coach" translate="no">
+            <Markdown text={live} />
+            {using && <p className="tools">{TOOL_LABEL[using] ?? "Checking…"}</p>}
+          </div>
+        )}
+        {busy && !live && <div className="bubble coach thinking">{using ? (TOOL_LABEL[using] ?? "Checking…") : "Thinking… (checking rules and running the numbers)"}</div>}
         <div ref={bottom} />
       </div>
       {error && <p className="error">{error}</p>}

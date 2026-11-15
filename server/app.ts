@@ -878,17 +878,42 @@ app.get("/api/games/:id/photo", async (req, res) => {
   const data = await blobs().read(p);
   return data ? res.type("image/jpeg").send(data) : res.status(404).end();
 });
-app.post("/api/coach/:id", async (req, res) => {
+// A question to Thorgrim: its game (or the general chat), the question or preset, and how hard to think.
+async function coachQuestion(req: Request, res: Response) {
   const id = param(req, "id");
   const o = id === "general" ? undefined : await openGame(id);
   const game = o && viewGame(o);
-  if (id !== "general" && !game) return res.status(404).json({ error: "Game not found" });
+  if (id !== "general" && !game) return void res.status(404).json({ error: "Game not found" });
   const preset = req.body.preset as keyof typeof PROMPTS | undefined;
   const question = preset ? PROMPTS[preset] : String(req.body.question ?? "").trim();
-  if (!question) return res.status(400).json({ error: "Empty question" });
+  if (!question) return void res.status(400).json({ error: "Empty question" });
   const [myList, opponentList] = o ? await gameLists(o) : [undefined, undefined];
-  const answer = await askCoach(id, { game, myList, opponentList }, question, { effort: preset ? "high" : (req.body.effort ?? "medium") });
-  res.json(answer);
+  const effort: "low" | "medium" | "high" = preset ? "high" : ["low", "medium", "high"].includes(req.body.effort) ? req.body.effort : "medium";
+  return { id, ctx: { game, myList, opponentList }, question, effort };
+}
+app.post("/api/coach/:id", async (req, res) => {
+  const q = await coachQuestion(req, res);
+  if (q) res.json(await askCoach(q.id, q.ctx, q.question, { effort: q.effort }));
+});
+// The same, with the answer sent as it's written (server-sent events): "step" (a new step: start its text
+// again), "text" (more of it), "tool" (a tool it runs), then "done" with the answer kept, or "error".
+app.post("/api/coach/:id/stream", async (req, res) => {
+  const q = await coachQuestion(req, res);
+  if (!q) return;
+  res.status(200).set({ "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache, no-transform", "x-accel-buffering": "no" });
+  res.flushHeaders();
+  const send = (event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  try {
+    const answer = await askCoach(q.id, q.ctx, q.question, { effort: q.effort, onEvent: (e) => send(e.type, e) });
+    send("done", answer);
+  } catch (e) {
+    const err = e as Error;
+    const needsKey = /authentication method/i.test(err.message) || e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError;
+    const { status, message, expected } = publicError(e);
+    if (!expected) console.error(`Coach stream failed:`, e);
+    send("error", { status, error: message, ...(needsKey ? { needsKey: true } : {}) });
+  }
+  res.end();
 });
 
 // ---------- club feed (server/feed.ts) and notifications ----------
