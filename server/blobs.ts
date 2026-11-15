@@ -21,15 +21,20 @@ export interface BlobStore {
   read(p: string): Promise<Buffer | undefined>;
   write(p: string, data: Buffer | string, contentType?: string): Promise<void>;
   remove(p: string): Promise<void>;
-  /** File names (not paths) directly inside a folder. */
+  /** File names (not paths) directly inside a folder ("" for the top level). */
   list(folder: string): Promise<string[]>;
   /** The same, with when each file last changed (ms since epoch), without reading them. */
   listTimes(folder: string): Promise<{ name: string; updatedAt: number }[]>;
+  /** Folder names directly inside a folder ("" for the top level). */
+  folders(folder: string): Promise<string[]>;
   /** Lets the browser upload a large file directly (bypassing body limits). */
   uploadTarget(p: string, contentType: string, apiPath: string): Promise<UploadTarget>;
   /** A short-lived link to download a file, or null to stream it through the API. */
   downloadUrl(p: string): Promise<string | null>;
 }
+
+/** A folder to list: "" is the top level, anything else must be a safe path. */
+const dir = (p: string) => (p === "" ? "" : safe(p));
 
 const safe = (p: string) => {
   const parts = p.split("/");
@@ -58,12 +63,16 @@ export class FileBlobStore implements BlobStore {
     if (fs.existsSync(f)) fs.unlinkSync(f);
   }
   async list(folder: string) {
-    const d = this.full(folder);
+    const d = path.join(this.root, dir(folder));
     return fs.existsSync(d) ? fs.readdirSync(d).filter((n) => !n.endsWith(".tmp") && fs.statSync(path.join(d, n)).isFile()) : [];
   }
   async listTimes(folder: string) {
-    const d = this.full(folder);
+    const d = path.join(this.root, dir(folder));
     return (await this.list(folder)).map((name) => ({ name, updatedAt: fs.statSync(path.join(d, name)).mtimeMs }));
+  }
+  async folders(folder: string) {
+    const d = path.join(this.root, dir(folder));
+    return fs.existsSync(d) ? fs.readdirSync(d).filter((n) => fs.statSync(path.join(d, n)).isDirectory()) : [];
   }
   async uploadTarget(_p: string, contentType: string, apiPath: string) {
     return { url: apiPath, viaApi: true, headers: { "content-type": contentType } };
@@ -106,11 +115,15 @@ export class SupabaseBlobStore implements BlobStore {
   private ready: Promise<void> | null = null;
   private gate = new Gate(Number(process.env.SUPABASE_MAX_REQUESTS) || 6);
   constructor(
-    storageUrl: string,
-    serviceKey: string,
+    private storageUrl: string,
+    private serviceKey: string,
     readonly bucket = "thorgrim",
   ) {
     this.client = new StorageClient(storageUrl, { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` });
+  }
+  /** Another private bucket of the same Supabase project. */
+  sibling(bucket: string) {
+    return new SupabaseBlobStore(this.storageUrl, this.serviceKey, bucket);
   }
   /** A storage request through the gate; when Supabase is busy, once more after a short wait. */
   private async call<R extends { error: { message: string } | null }>(fn: () => Promise<R>): Promise<R> {
@@ -164,13 +177,24 @@ export class SupabaseBlobStore implements BlobStore {
     await this.ensureBucket();
     const files: { name: string; updatedAt: number }[] = [];
     for (let offset = 0; ; offset += 1000) {
-      const { data, error } = await this.call(() => this.files.list(safe(folder), { limit: 1000, offset }));
-      if (error) throw new Error(`Supabase storage list ${folder}: ${error.message}`);
+      const { data, error } = await this.call(() => this.files.list(dir(folder), { limit: 1000, offset }));
+      if (error) throw new Error(`Supabase storage list ${folder || "/"}: ${error.message}`);
       // Folders come back with a null id; keep files only.
       for (const o of data) if (o.id) files.push({ name: o.name, updatedAt: Date.parse(o.updated_at ?? o.created_at ?? "") || 0 });
       if (data.length < 1000) break;
     }
     return files;
+  }
+  async folders(folder: string) {
+    await this.ensureBucket();
+    const names: string[] = [];
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await this.call(() => this.files.list(dir(folder), { limit: 1000, offset }));
+      if (error) throw new Error(`Supabase storage list ${folder || "/"}: ${error.message}`);
+      for (const o of data) if (!o.id) names.push(o.name);
+      if (data.length < 1000) break;
+    }
+    return names;
   }
   async uploadTarget(p: string, contentType: string) {
     await this.ensureBucket();
@@ -200,4 +224,18 @@ export function blobs(): BlobStore {
     store = new FileBlobStore(path.resolve(process.env.STORAGE_DIR ?? "storage"));
   }
   return store;
+}
+
+let backupStore: BlobStore | null = null;
+
+/**
+ * Where backups go (server/backup.ts): online, a separate private bucket
+ * ("<bucket>-backups"), so emptying or deleting the app's bucket doesn't take
+ * them too; on your computer, a "<storage>-backups" folder next to storage.
+ */
+export function backupBlobs(): BlobStore {
+  if (backupStore) return backupStore;
+  const main = blobs();
+  backupStore = main instanceof SupabaseBlobStore ? main.sibling(`${main.bucket}-backups`) : new FileBlobStore(`${(main as FileBlobStore).root.replace(/[\\/]+$/, "")}-backups`);
+  return backupStore;
 }

@@ -62,7 +62,8 @@ import { allAccounts, clubMembers, findMember } from "./members.ts";
 import { addMembers, clubFor, createClub, getClub, isLeader, isOwner, joinClub, myClubs, removeMember, renameClub, setLeader, type Club } from "./clubs.ts";
 import { approve as approveRequest, decline as declineRequest, listRequests, requestAccess } from "./access.ts";
 import { mailReady } from "./mail.ts";
-import { cronAllowed, CRON_USER, daily as cronDaily, weekly as cronWeekly } from "./cron.ts";
+import { cronAllowed, CRON_USER, daily as cronDaily, keepAlive, weekly as cronWeekly } from "./cron.ts";
+import { makeBackup } from "./backup.ts";
 import { addPhoto as addShowcasePhoto, deleteArmy, deletePhoto as deleteShowcasePhoto, readPhoto as readShowcasePhoto, saveArmy, showcaseOf } from "./showcase.ts";
 import { accept as acceptChallenge, challenge, decline as declineChallenge, myChallenges, withdraw as withdrawChallenge } from "./challenges.ts";
 import { createEvent, deleteEvent, editEvent, finishEvent, getEvent, joinEvent, leaveEvent, listEvents, pairRound, setTableResult, tableGame, unpairRound } from "./events.ts";
@@ -178,7 +179,12 @@ app.use("/api", async (req, res, next) => {
   if (missingPassword) return res.status(503).json({ error: "Set APP_ACCESS_KEY (the app password, 8+ characters) in the hosting settings, then redeploy." });
   if (req.path.startsWith("/auth/")) return next(); // sign-in routes check for themselves
   // Scheduled work (server/cron.ts): only with Vercel's CRON_SECRET, run as Thorgrim.
-  if (req.path.startsWith("/cron/")) return cronAllowed(req.get("authorization")) ? runAs(CRON_USER, () => next()) : res.status(401).json({ error: "Not allowed" });
+  if (req.path.startsWith("/cron/")) {
+    if (cronAllowed(req.get("authorization"))) return runAs(CRON_USER, () => next());
+    // Vercel calls the daily job even when CRON_SECRET isn't set: keep Supabase awake anyway (server/cron.ts).
+    if (req.path === "/cron/daily") await keepAlive().catch((e: Error) => console.error("Keep-alive failed:", e.message));
+    return res.status(401).json({ error: "Not allowed" });
+  }
   if (req.path.startsWith("/public/")) return next(); // shared battle reports: anyone with the link
   if (tooMany(req)) return res.status(429).json({ error: "Too many wrong passwords. Try again in 15 minutes." });
   try {
@@ -387,6 +393,12 @@ app.post("/api/admin/access-requests/:id/approve", requireAdmin, async (req, res
   res.json(await approveRequest(param(req, "id"), appOrigin(req))),
 );
 app.post("/api/admin/access-requests/:id/decline", requireAdmin, async (req, res) => res.json(await declineRequest(param(req, "id"))));
+// A backup of every record, made now and downloaded (server/backup.ts). The owner only: it holds every player's data.
+app.get("/api/admin/backup", requireAdmin, async (_req, res) => {
+  if (!isOwner()) return res.status(403).json({ error: "Only the app's owner can download a backup." });
+  const b = await makeBackup();
+  res.set({ "content-type": "application/gzip", "content-disposition": `attachment; filename="${b.name}"`, "cache-control": "no-store" }).send(b.data);
+});
 app.get("/api/admin/omnissiah", requireAdmin, async (_req, res) => res.json(await omnissiahStatus()));
 app.get("/api/admin/settings", requireAdmin, async (_req, res) => res.json(await accountSettings()));
 app.put("/api/admin/settings", requireAdmin, async (req, res) => {
