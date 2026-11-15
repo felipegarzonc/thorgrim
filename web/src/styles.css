@@ -1722,6 +1722,21 @@ body.sheet-open {
 .priority .segbtn button {
   min-width: 5.4rem;
 }
+/* the next round, before anyone says who goes first */
+.priority.round-waiting {
+  border-color: var(--me-line);
+  border-style: solid;
+}
+.round-start {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-bottom: 0.3rem;
+}
+.round-start b {
+  color: var(--me-text);
+  font-size: 1.05rem;
+}
 .question {
   flex-wrap: wrap;
 }

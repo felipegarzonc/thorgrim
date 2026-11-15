@@ -1573,7 +1573,13 @@ function RoundStep(props: {
           <span className="order-change">Change</span>
         </button>
       ) : (
-      <Group className="priority">
+      <Group className={`priority ${canStart ? "round-waiting" : ""}`}>
+        {canStart && (
+          <div className="round-start">
+            <b>Start round {n}</b>
+            <span className="muted small">{n > 1 ? "Roll off for priority: the winner picks who takes the first turn." : "Pick who takes the first turn."}</span>
+          </div>
+        )}
         {n > 1 && (
           <div className="question">
             <span>Who won priority this battle round?</span>
@@ -1589,6 +1595,7 @@ function RoundStep(props: {
             {seizeNote("me") ? `You going first: ${seizeNote("me")}.` : `Opponent going first: ${seizeNote("opponent")}.`} No battle tactics in that turn.
           </p>
         )}
+        {canStart && <p className="small accent-text" style={{ margin: "0.3rem 0 0" }}>The round starts when you pick who went first: then the turn tracker, CP and rage dice appear.</p>}
         {future && !rec?.first && <p className="small muted" style={{ margin: "0.3rem 0 0" }}>Finish round {liveRound || 1} first; you can still fill this in.</p>}
       </Group>
       )}
