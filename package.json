@@ -13,7 +13,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build:server": "esbuild server/app.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist-server/app.mjs",
-    "vercel-build": "npm run data:fetch && npm run build && npm run build:server",
+    "vercel-build": "node --run data:fetch && node --run build && node --run build:server",
     "library": "tsx scripts/library.ts",
     "library:battleplans": "tsx scripts/upload-battleplans.ts",
     "e2e": "vite build && playwright test -c e2e"
@@ -52,5 +52,8 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
+  },
+  "allowScripts": {
+    "esbuild": false
   }
 }
