@@ -16,9 +16,21 @@ vi.mock("@anthropic-ai/sdk", () => {
           calls.push(structuredClone(params));
           return replies.shift();
         },
+        // Like the SDK's stream: "text" listeners get each text block in pieces, then finalMessage() the reply.
         stream: (params: any) => {
           calls.push(structuredClone(params));
-          return { finalMessage: async () => replies.shift() };
+          const onText: ((delta: string) => void)[] = [];
+          return {
+            on(event: string, cb: (delta: string) => void) {
+              if (event === "text") onText.push(cb);
+              return this;
+            },
+            finalMessage: async () => {
+              const reply = replies.shift();
+              for (const b of reply?.content ?? []) if (b.type === "text") for (const piece of [b.text.slice(0, 3), b.text.slice(3)]) onText.forEach((cb) => cb(piece));
+              return reply;
+            },
+          };
         },
       },
     };
@@ -95,6 +107,55 @@ describe.skipIf(!hasData)("askCoach loop", () => {
     await askCoach("g2", {}, "bad");
     const result = calls.at(-1).messages.at(-1).content[0];
     expect(result.is_error).toBe(true);
+  });
+});
+
+describe.skipIf(!hasData)("answers as they're written", () => {
+  const steps = () => [
+    {
+      stop_reason: "tool_use",
+      content: [
+        { type: "text", text: "Let me check." },
+        { type: "tool_use", id: "s1", name: "charge_odds", input: { gap_inches: 6 } },
+      ],
+    },
+    { stop_reason: "end_turn", content: [{ type: "text", text: "Charge: 72% to make it." }] },
+  ];
+
+  it("tells each step, its text and the tools it runs, and keeps the last step's text", async () => {
+    const { askCoach } = await import("./coach.ts");
+    replies.push(...steps());
+    const events: string[] = [];
+    const answer = await askCoach("live-1", {}, "Can I make a 6 inch charge?", {
+      onEvent: (e) => events.push(e.type === "text" ? `text:${e.text}` : e.type === "tool" ? `tool:${e.name}` : e.type),
+    });
+    expect(events).toEqual(["step", "text:Let", "text: me check.", "tool:charge_odds", "step", "text:Cha", "text:rge: 72% to make it."]);
+    expect(answer.text).toBe("Charge: 72% to make it.");
+  });
+
+  it("sends them to the page as server-sent events, then the answer", async () => {
+    delete process.env.APP_ACCESS_KEY;
+    const app = (await import("./app.ts")).default;
+    const srv = app.listen(0);
+    try {
+      replies.push(...steps());
+      const port = (srv.address() as { port: number }).port;
+      const res = await fetch(`http://127.0.0.1:${port}/api/coach/general/stream`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: "Can I make a 6 inch charge?" }),
+      });
+      expect(res.headers.get("content-type")).toContain("text/event-stream");
+      const body = await res.text();
+      const events = body.trim().split("\n\n").map((raw) => /^event: (.*)$/m.exec(raw)![1]);
+      expect(events).toEqual(["step", "text", "text", "tool", "step", "text", "text", "done"]);
+      expect(JSON.parse(/^data: (.*)$/m.exec(body.trim().split("\n\n").at(-1)!)![1])).toMatchObject({ role: "coach", text: "Charge: 72% to make it." });
+      // A game that isn't there is a plain error, before any stream.
+      const missing = await fetch(`http://127.0.0.1:${port}/api/coach/nope/stream`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question: "x" }) });
+      expect(missing.status).toBe(404);
+    } finally {
+      srv.close();
+    }
   });
 });
 

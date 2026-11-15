@@ -505,11 +505,18 @@ export function compactHistory(messages: Msg[], keep = 10): { messages: Msg[]; c
 
 // ---------- the loop ----------
 
+/**
+ * What the coach is doing while it answers, for a page that shows it live:
+ * a new step (its text so far is replaced), a piece of that step's text, or a
+ * tool it runs. The answer kept is the last step's text, as before.
+ */
+export type CoachEvent = { type: "step" } | { type: "text"; text: string } | { type: "tool"; name: string };
+
 export async function askCoach(
   convoId: string,
   ctx: CoachContext,
   question: string,
-  opts: { effort?: "low" | "medium" | "high" } = {},
+  opts: { effort?: "low" | "medium" | "high"; onEvent?: (e: CoachEvent) => void } = {},
 ): Promise<TranscriptEntry> {
   await checkBudget();
   const convo = (await conversations.get(convoId)) ?? { id: convoId, messages: [], transcript: [] };
@@ -543,8 +550,10 @@ export async function askCoach(
   let finalText = "";
 
   const coach = coachModel();
+  const emit = opts.onEvent ?? (() => undefined);
   for (let iteration = 0; iteration < 12; iteration++) {
-    const response = await anthropic().beta.messages.create({
+    // Streamed, so a page can show the words as they come; finalMessage() is the same reply create() gave.
+    const stream = anthropic().beta.messages.stream({
       model: coach.model,
       max_tokens: 16000,
       system: SYSTEM + langNote(),
@@ -554,11 +563,19 @@ export async function askCoach(
       output_config: { effort: opts.effort ?? "medium" },
       ...coach.extra,
     });
+    if (opts.onEvent) {
+      emit({ type: "step" });
+      stream.on("text", (delta) => emit({ type: "text", text: delta }));
+    }
+    const response = await stream.finalMessage();
     await recordUsage(response.usage, coach.price);
     messages.push({ role: "assistant", content: response.content as Block[] });
 
     for (const block of response.content) {
-      if (block.type === "server_tool_use") toolsUsed.push(`${block.name}`);
+      if (block.type === "server_tool_use") {
+        toolsUsed.push(`${block.name}`);
+        emit({ type: "tool", name: block.name });
+      }
     }
     if (response.stop_reason === "pause_turn") continue;
     if (response.stop_reason === "refusal") {
@@ -580,6 +597,7 @@ export async function askCoach(
     const results: Anthropic.Beta.BetaToolResultBlockParam[] = [];
     for (const tu of toolUses) {
       toolsUsed.push(tu.name);
+      emit({ type: "tool", name: tu.name });
       try {
         results.push({ type: "tool_result", tool_use_id: tu.id, content: await runTool(tu.name, tu.input) });
       } catch (err) {
