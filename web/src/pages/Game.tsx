@@ -1622,6 +1622,7 @@ function RoundStep(props: {
           n={n}
           mutate={mutate}
           isLive={isLive}
+          showFury={isLive || canStart}
           name={names[side]}
           faction={factions[side]}
         />
@@ -2031,6 +2032,7 @@ function SideBlock({
   n,
   mutate,
   isLive,
+  showFury,
   name,
   faction,
   folded,
@@ -2040,6 +2042,8 @@ function SideBlock({
   n: number;
   mutate: Mutate;
   isLive: boolean;
+  /** Fury and rage carry over between rounds: shown in the round in play and the next one, before it starts. */
+  showFury?: boolean;
   name: string;
   faction: string;
   /** The player waiting for their turn: one line until opened. */
@@ -2086,7 +2090,7 @@ function SideBlock({
             <small>cp</small>
           </span>
         </div>
-        {isLive && (
+        {showFury && (
           <div className="cp-row two">
             <Counter label="Fury" value={s.fury[side]} onChange={(v) => mutate((g) => ({ ...g, state: { ...g.state, fury: { ...g.state.fury, [side]: Math.min(7, v) } } }))} />
             <Counter label="Rage dice" value={s.rage[side]} onChange={(v) => mutate((g) => ({ ...g, state: { ...g.state, rage: { ...g.state.rage, [side]: v } } }))} />
