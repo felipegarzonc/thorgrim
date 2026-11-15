@@ -6,13 +6,14 @@
   "description": "Personal Age of Sigmar coach: army data, rules library, game tracker and an AI coach.",
   "scripts": {
     "data": "tsx scripts/build-data.ts",
+    "data:fetch": "tsx scripts/fetch-data.ts",
     "dev": "concurrently -n server,web -c blue,green \"tsx watch server/index.ts\" \"vite\"",
     "build": "vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build:server": "esbuild server/app.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=dist-server/app.mjs",
-    "vercel-build": "npm run data && npm run build && npm run build:server",
+    "vercel-build": "npm run data:fetch && npm run build && npm run build:server",
     "library": "tsx scripts/library.ts",
     "library:battleplans": "tsx scripts/upload-battleplans.ts",
     "e2e": "vite build && playwright test -c e2e"
