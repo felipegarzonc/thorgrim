@@ -2,7 +2,7 @@
 // invite links, monthly coach limits, switching accounts off, new passwords.
 
 import { useEffect, useState } from "react";
-import { accessKey, api, setCurrentClub, signOut } from "../api.ts";
+import { accessKey, api, apiFile, setCurrentClub, signOut } from "../api.ts";
 import { Card, Icon, Seg, useLoad, useMeta, useRefreshOnReturn } from "../ui.tsx";
 import { langSetting, setLangSetting } from "../i18n.ts";
 import { shareText, shareUrl } from "../links.ts";
@@ -303,9 +303,45 @@ export function ProfilePage() {
       )}
 
       {meta?.canCreateClubs && me.accounts && <ClubsAdmin />}
+      {meta?.canCreateClubs && me.accounts && <BackupCard />}
       {meta?.user?.isAdmin && me.accounts && <AccessRequests />}
       {meta?.user?.isAdmin && me.accounts && <PlayersAdmin selfId={me.user.id} />}
     </div>
+  );
+}
+
+/** The owner's copy of every record (server/backup.ts): weekly by email, or now. */
+function BackupCard() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const download = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const { blob, name } = await apiFile("/admin/backup");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="Backups">
+      <p className="small muted">
+        Every Monday Thorgrim saves a copy of all records (players, clubs, lists, games, reports; not photos or rule books) to a separate private bucket and emails it to you. It holds
+        everyone's data: keep it private.
+      </p>
+      <button type="button" className="small" disabled={busy} onClick={download}>
+        {busy ? "Preparing…" : "Download a backup now"}
+      </button>
+      {error && <p className="small error">{error}</p>}
+    </Card>
   );
 }
 

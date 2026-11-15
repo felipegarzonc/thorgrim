@@ -14,14 +14,26 @@ const gmail = () =>
 
 export const mailReady = () => Boolean(resend() || gmail());
 
-export async function sendMail(m: { to: string; subject: string; text: string; html: string }): Promise<boolean> {
+export interface Attachment {
+  filename: string;
+  content: Buffer;
+}
+
+export async function sendMail(m: { to: string; subject: string; text: string; html: string; attachments?: Attachment[] }): Promise<boolean> {
   try {
     const r = resend();
     if (r) {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { authorization: `Bearer ${r.key}`, "content-type": "application/json" },
-        body: JSON.stringify({ from: r.from, to: [m.to], subject: m.subject, text: m.text, html: m.html }),
+        body: JSON.stringify({
+          from: r.from,
+          to: [m.to],
+          subject: m.subject,
+          text: m.text,
+          html: m.html,
+          ...(m.attachments?.length ? { attachments: m.attachments.map((a) => ({ filename: a.filename, content: a.content.toString("base64") })) } : {}),
+        }),
       });
       if (!res.ok) console.error(`Email to ${m.to} failed: HTTP ${res.status} ${await res.text().catch(() => "")}`);
       return res.ok;
@@ -29,7 +41,7 @@ export async function sendMail(m: { to: string; subject: string; text: string; h
     const g = gmail();
     if (g) {
       const transport = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: g.user, pass: g.pass } });
-      await transport.sendMail({ from: `Thorgrim <${g.user}>`, to: m.to, subject: m.subject, text: m.text, html: m.html });
+      await transport.sendMail({ from: `Thorgrim <${g.user}>`, to: m.to, subject: m.subject, text: m.text, html: m.html, attachments: m.attachments });
       return true;
     }
     return false;

@@ -21,6 +21,9 @@ import { notify } from "./notices.ts";
 import { remindConfirmations } from "./sharedGames.ts";
 import { factionAlerts, watchOmnissiah, weeklyChronicle } from "./metaWatch.ts";
 import { announceWinners, settleAll } from "./glory.ts";
+import { pingAuth } from "./accounts.ts";
+import { blobs } from "./blobs.ts";
+import { runBackup } from "./backup.ts";
 
 /** Who scheduled work runs as: nobody's space, so every member hears it. */
 export const CRON_USER: UserCtx = { id: "thorgrim", name: "Thorgrim", isAdmin: true, prefix: "" };
@@ -31,7 +34,19 @@ export const cronAllowed = (authorization: string | undefined) => {
   return !!secret && secret.length >= 16 && authorization === `Bearer ${secret}`;
 };
 
+/**
+ * A free Supabase project pauses after a week without activity, and while it
+ * is paused nobody can sign in. A daily look at storage and at the accounts
+ * keeps it awake. It runs even when the daily call comes without the
+ * CRON_SECRET (see server/app.ts): it reads nothing it returns.
+ */
+export async function keepAlive() {
+  await blobs().list("settings");
+  await pingAuth();
+}
+
 export async function daily(now = new Date()) {
+  await keepAlive().catch((e: Error) => console.error("Keep-alive failed:", e.message));
   const today = now.toISOString().slice(0, 10);
   const spaces = [...new Set((await allAccounts()).map((m) => m.prefix))];
   const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
@@ -119,5 +134,10 @@ export async function weekly(now = new Date()) {
     chronicle: await weeklyChronicle(now).catch((e: Error) => ({ error: e.message })),
     alerts: await factionAlerts(now).catch((e: Error) => ({ error: e.message })),
   };
-  return { sent: clubs.reduce((s, c) => s + c.sent, 0), clubs, meta };
+  // The weekly backup (server/backup.ts): a failure here mustn't stop the digest either.
+  const backup = await runBackup(now).catch((e: Error) => {
+    console.error("Weekly backup failed:", e);
+    return { error: e.message };
+  });
+  return { sent: clubs.reduce((s, c) => s + c.sent, 0), clubs, meta, backup };
 }

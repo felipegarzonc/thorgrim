@@ -99,7 +99,8 @@ function refresh(): Promise<boolean> {
   return refreshing;
 }
 
-export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}, retried = false): Promise<T> {
+/** Who is asking (session or app password), in which language and club; the session renewed first when it's about to end. */
+async function requestHeaders(): Promise<Record<string, string>> {
   const s = session();
   if (s && s.expires_at * 1000 < Date.now() + 60_000) await refresh();
   const headers: Record<string, string> = {};
@@ -108,6 +109,19 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
   else if (accessKey()) headers["x-access-key"] = accessKey();
   headers["x-lang"] = currentLang();
   if (currentClub()) headers["x-club"] = currentClub();
+  return headers;
+}
+
+/** A signed-in download: the file and the name the server gave it. */
+export async function apiFile(path: string): Promise<{ blob: Blob; name: string }> {
+  const res = await fetch(`/api${path}`, { headers: await requestHeaders() });
+  if (!res.ok) throw new Error(errorText(res, await res.json().catch(() => ({}))));
+  const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "download";
+  return { blob: await res.blob(), name };
+}
+
+export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}, retried = false): Promise<T> {
+  const headers = await requestHeaders();
   let body = init.body;
   if (init.json !== undefined) {
     headers["content-type"] = "application/json";

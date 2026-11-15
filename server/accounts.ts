@@ -164,6 +164,11 @@ export async function userIdFromToken(token: string): Promise<string> {
   return u.id;
 }
 
+/** A light request to Supabase Auth (it reads its user table): part of the daily keep-alive. */
+export async function pingAuth() {
+  if (accountsEnabled()) await gotrue("/admin/users?page=1&per_page=1");
+}
+
 /** After a password reset: sign out the account's other sessions (a phone someone else holds), and forget cached tokens. */
 export async function signOutOthers(accessToken: string) {
   tokenCache.clear();

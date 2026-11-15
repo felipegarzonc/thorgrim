@@ -119,6 +119,11 @@ export const ES_PHRASES: Record<string, string> = {
     "Ya se usó o caducó. Pide uno nuevo desde la pantalla de entrar, o pídeselo al administrador de tu club.",
   "The same again": "Repítela",
   "Save and sign in": "Guardar y entrar",
+  Backups: "Copias de seguridad",
+  "Every Monday Thorgrim saves a copy of all records (players, clubs, lists, games, reports; not photos or rule books) to a separate private bucket and emails it to you. It holds everyone's data: keep it private.":
+    "Cada lunes Thorgrim guarda una copia de todos los registros (jugadores, clubes, listas, partidas, crónicas; no fotos ni libros de reglas) en un bucket privado aparte y te la envía por email. Contiene los datos de todos: guárdala en privado.",
+  "Download a backup now": "Descargar una copia ahora",
+  "Only the app's owner can download a backup.": "Solo el dueño de la app puede descargar una copia.",
   "Send reset link": "Enviar enlace para restablecer",
   "Reset link for": "Enlace para restablecer de",
   "Emailed to": "Enviado por email a",
