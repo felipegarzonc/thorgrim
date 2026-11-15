@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { allianceOf, isBattleplanDoc, NUMBERED_BATTLEPLANS } from "../shared/season.ts";
-import { derive, emptyRound, nextTacticStep, result, startRound, totalVp } from "../shared/scoring.ts";
+import { derive, emptyRound, nextTacticStep, result, setAttacker, startingFury, startRound, totalVp } from "../shared/scoring.ts";
 import type { GameState } from "../shared/types.ts";
 
 const baseState = (): GameState => ({
@@ -92,5 +92,31 @@ describe("season lookups", () => {
     expect(isBattleplanDoc({ title: "What's Yours Is Ours card", category: "battleplan" }, "What's Yours is Ours")).toBe(true);
     expect(isBattleplanDoc({ title: "Into the Fire", category: "battletome" }, "Into the Fire")).toBe(false);
     expect(isBattleplanDoc({ title: "Warped Ruins", category: "map" }, "Into the Fire")).toBe(false);
+  });
+});
+
+describe("attacker and defender", () => {
+  it("gives the attacker fury 1 and the defender fury 2", () => {
+    expect(startingFury("me")).toEqual({ me: 1, opponent: 2 });
+    expect(startingFury("opponent")).toEqual({ me: 2, opponent: 1 });
+  });
+
+  it("moves the starting fury (and who acts first) when the attacker changes before the battle", () => {
+    const s = setAttacker(baseState(), "opponent");
+    expect(s).toMatchObject({ attacker: "opponent", fury: { me: 2, opponent: 1 }, firstThisRound: "opponent", activePlayer: "opponent" });
+    expect(setAttacker(s, "me").fury).toEqual({ me: 1, opponent: 2 });
+  });
+
+  it("fixes an attacker set late in round 1, but not fury or rage that play already changed", () => {
+    const started = startRound({ battleplan: "", state: baseState() }, 1, "me");
+    expect(started.rage).toEqual({ me: 1, opponent: 2 });
+    // Set late, nothing spent yet: fury and the round's rage dice follow.
+    expect(setAttacker(started, "opponent")).toMatchObject({ attacker: "opponent", fury: { me: 2, opponent: 1 }, rage: { me: 2, opponent: 1 } });
+    // Rage already spent: the dice stay as they are, fury still follows.
+    const spent = { ...started, rage: { me: 0, opponent: 2 } };
+    expect(setAttacker(spent, "opponent")).toMatchObject({ fury: { me: 2, opponent: 1 }, rage: { me: 0, opponent: 2 } });
+    // From round 2 only the label changes.
+    const r2 = startRound({ battleplan: "", state: started }, 2, "opponent");
+    expect(setAttacker(r2, "opponent")).toMatchObject({ attacker: "opponent", fury: r2.fury, rage: r2.rage });
   });
 });

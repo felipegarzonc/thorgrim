@@ -112,6 +112,32 @@ export function startRound(game: Pick<Game, "battleplan" | "state">, round: numb
   });
 }
 
+/** Fury at the start of the battle: the attacker begins on 1, the defender on 2. */
+export const startingFury = (attacker: Side): Record<Side, number> => ({ me: attacker === "me" ? 1 : 2, opponent: attacker === "opponent" ? 1 : 2 });
+
+const same = (a: Record<Side, number>, b: Record<Side, number>) => a.me === b.me && a.opponent === b.opponent;
+
+/**
+ * Pick the attacker. Before the first battle round its fury follows; once
+ * round 1 has started (the attacker was set late), fury and the round's rage
+ * dice still follow while they are untouched, i.e. still the old attacker's
+ * starting values. From round 2, or once play changed them, they stay.
+ */
+export function setAttacker(s: GameState, attacker: Side): GameState {
+  if (attacker === s.attacker) return s;
+  const before = startingFury(s.attacker);
+  const after = startingFury(attacker);
+  const started = (s.rounds ?? []).some((r) => r.first);
+  if (!started) return { ...s, attacker, fury: after, ...(s.phase === "Deployment" ? { firstThisRound: attacker, activePlayer: attacker } : {}) };
+  if (s.round !== 1) return { ...s, attacker };
+  return {
+    ...s,
+    attacker,
+    ...(same(s.fury, before) ? { fury: after } : {}),
+    ...(same(s.rage, before) ? { rage: after } : {}),
+  };
+}
+
 /** Result from my side, once the game is over. */
 export function result(game: Pick<Game, "state" | "finished">): "win" | "loss" | "draw" | null {
   if (!game.finished) return null;

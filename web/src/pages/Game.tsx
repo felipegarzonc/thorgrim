@@ -4,7 +4,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { baseFaction, BATTLE_ROUNDS, CORE_COMMANDS, isBattleplanDoc, SEASON_ABILITIES, NUMBERED_BATTLEPLANS, scoringFor, SEASON_TACTICS, SEIZE_EXCEPTION_LEAD, TACTIC_VP } from "../../../shared/season.ts";
-import { derive, emptyRound, nextTacticStep, planBasis, result, roundPlayed, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
+import { derive, emptyRound, nextTacticStep, planBasis, result, roundPlayed, setAttacker, sideRoundVp, startRound, tacticSteps } from "../../../shared/scoring.ts";
 import { PHASES, type ArmyList, type FactionRule, type Game, type GamePlan, type GameState, type GlossaryEntry, type LibraryDoc, type Phase, type SideRound, type TacticProgress, type TacticStep, type TurnTips, type Unit } from "../../../shared/types.ts";
 import { applyOps, diff } from "../../../shared/patch.ts";
 import { clockTimes, formatClock, passClock, toggleClock } from "../../../shared/clock.ts";
@@ -1016,20 +1016,35 @@ function BcpResult({ game, names }: { game: Game; names: Record<Side, string> })
 
 // ---------- battleplan ----------
 
+/** Attacker or defender: it sets each side's starting fury (attacker 1, defender 2) and their deployment on the map. */
+function AttackerQuestion({ game, mutate }: { game: Game; mutate: Mutate }) {
+  const s = game.state;
+  const pick = (a: Side) => mutate((g) => ({ ...g, state: setAttacker(g.state, a) }), `Attacker: ${a === "me" ? "me" : "the opponent"}.`);
+  return (
+    <section className="card attacker-question" aria-label="Attacker and defender">
+      <div className="question">
+        <span>Who is the attacker?</span>
+        <Seg label="Attacker" value={s.attacker} options={[["me", "You"], ["opponent", "Opponent"]]} onChange={pick} />
+      </div>
+      <p className="muted small" style={{ margin: 0 }}>
+        The attacker starts with fury 1, the defender with fury 2. Now: you {s.fury.me}, opponent {s.fury.opponent}.
+      </p>
+    </section>
+  );
+}
+
 function BattleplanStep({ game, mutate }: { game: Game; mutate: Mutate }) {
   const [docs] = useLoad<LibraryDoc[]>("/library");
   const [notes, setNotes] = useState(game.battleplanNotes);
   const pick = (name: string) => mutate((g) => ({ ...g, battleplan: name }), `Battleplan: ${name}.`);
   // The battleplan card / map from the rules library, matched by title: nothing to set up.
   const images = (docs ?? []).filter((d) => d.kind === "image" && isBattleplanDoc(d, game.battleplan));
-  const setAttacker = (a: Side) =>
-    mutate((g) => ({
-      ...g,
-      state: { ...g.state, attacker: a, ...(g.state.phase === "Deployment" ? { fury: { me: a === "me" ? 1 : 2, opponent: a === "opponent" ? 1 : 2 } } : {}) },
-    }));
   return (
     <div className="stack">
       <h1 className="step-heading">Battleplan</h1>
+      <AttackerQuestion game={game} mutate={mutate} />
+
+      <h3>Battleplan</h3>
       <button type="button" className="outline wide" onClick={() => pick(NUMBERED_BATTLEPLANS[Math.floor(Math.random() * NUMBERED_BATTLEPLANS.length)].name)}>
         <Icon name="games" /> Randomize
       </button>
@@ -1047,15 +1062,6 @@ function BattleplanStep({ game, mutate }: { game: Game; mutate: Mutate }) {
           );
         })}
       </ul>
-
-      <h3>Attacker</h3>
-      <div className="question">
-        <span>Who is the attacker?</span>
-        <Seg label="Attacker" value={game.state.attacker} options={[["me", "You"], ["opponent", "Opponent"]]} onChange={setAttacker} />
-      </div>
-      <p className="muted small" style={{ marginTop: 0 }}>
-        Starting fury: attacker 1, defender 2.
-      </p>
 
       {game.battleplan && (
         <>
@@ -1557,6 +1563,7 @@ function RoundStep(props: {
   return (
     <div className="stack">
       <Scoreboard game={game} names={names} factions={factions} isLive={isLive} />
+      {n === 1 && !rec?.first && <AttackerQuestion game={game} mutate={mutate} />}
       {orderKnown && !editOrder ? (
         <button type="button" className="order-summary" onClick={() => setEditOrder(true)}>
           <span className="grow">
@@ -1566,7 +1573,13 @@ function RoundStep(props: {
           <span className="order-change">Change</span>
         </button>
       ) : (
-      <Group className="priority">
+      <Group className={`priority ${canStart ? "round-waiting" : ""}`}>
+        {canStart && (
+          <div className="round-start">
+            <b>Start round {n}</b>
+            <span className="muted small">{n > 1 ? "Roll off for priority: the winner picks who takes the first turn." : "Pick who takes the first turn."}</span>
+          </div>
+        )}
         {n > 1 && (
           <div className="question">
             <span>Who won priority this battle round?</span>
@@ -1582,6 +1595,7 @@ function RoundStep(props: {
             {seizeNote("me") ? `You going first: ${seizeNote("me")}.` : `Opponent going first: ${seizeNote("opponent")}.`} No battle tactics in that turn.
           </p>
         )}
+        {canStart && <p className="small accent-text" style={{ margin: "0.3rem 0 0" }}>The round starts when you pick who went first: then the turn tracker, CP and rage dice appear.</p>}
         {future && !rec?.first && <p className="small muted" style={{ margin: "0.3rem 0 0" }}>Finish round {liveRound || 1} first; you can still fill this in.</p>}
       </Group>
       )}
@@ -1615,6 +1629,7 @@ function RoundStep(props: {
           n={n}
           mutate={mutate}
           isLive={isLive}
+          showFury={isLive || canStart}
           name={names[side]}
           faction={factions[side]}
         />
@@ -1697,6 +1712,7 @@ function Scoreboard({ game, names, factions, isLive }: { game: Game; names: Reco
               <span>
                 <b>{names[side]}</b>
                 <small>{factions[side] ? baseFaction(factions[side]) : "No army yet"}</small>
+                <small className="role-tag">{s.attacker === side ? "Attacker" : "Defender"}</small>
               </span>
             </div>
             {isLive && <span className={`turn-tag ${active ? "on" : ""}`}>{active ? (side === "me" ? "YOUR TURN" : "THEIR TURN") : "WAITING"}</span>}
@@ -2023,6 +2039,7 @@ function SideBlock({
   n,
   mutate,
   isLive,
+  showFury,
   name,
   faction,
   folded,
@@ -2032,6 +2049,8 @@ function SideBlock({
   n: number;
   mutate: Mutate;
   isLive: boolean;
+  /** Fury and rage carry over between rounds: shown in the round in play and the next one, before it starts. */
+  showFury?: boolean;
   name: string;
   faction: string;
   /** The player waiting for their turn: one line until opened. */
@@ -2078,7 +2097,7 @@ function SideBlock({
             <small>cp</small>
           </span>
         </div>
-        {isLive && (
+        {showFury && (
           <div className="cp-row two">
             <Counter label="Fury" value={s.fury[side]} onChange={(v) => mutate((g) => ({ ...g, state: { ...g.state, fury: { ...g.state.fury, [side]: Math.min(7, v) } } }))} />
             <Counter label="Rage dice" value={s.rage[side]} onChange={(v) => mutate((g) => ({ ...g, state: { ...g.state, rage: { ...g.state.rage, [side]: v } } }))} />

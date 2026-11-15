@@ -76,13 +76,21 @@ The app also has each battleplan built in (`shared/battleplans.ts`): the twist a
 
 Alternative: the repository also has a Dockerfile and a Render blueprint (`render.yaml`) for a server with a persistent disk (Render Starter, about $7/month plus disk). Set `APP_ACCESS_KEY` there too.
 
+## Army data
+
+The warscrolls, points and battle tactic cards come from the community BSData files. On 12 November 2026 BSData took its repositories off GitHub after a Games Workshop DMCA notice, so they can no longer be downloaded (`npm run data` fails).
+
+Online deploys use a copy kept in the app's private Supabase bucket instead: `npm run data:fetch` (part of the Vercel build) reads it from `build-data/aos.json`. To put it there once, in Supabase open **Storage → thorgrim**, create the folder `build-data` and upload `aos.json` into it. Or, with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env`, run `npm run data:fetch -- --upload` next to a `data/aos.json`. Keep this file out of the GitHub repository: it is public.
+
+A computer that already has `data/aos.json` keeps it; new installs need a copy of that file in `data/`.
+
 ## Manual setup (for development)
 
 Requires Node 22+.
 
 ```bash
 npm install
-npm run data          # downloads BSData and builds data/aos.json (re-run after each Battlescroll)
+# Army data: put a copy of data/aos.json in data/ (see "Army data": BSData can no longer be downloaded)
 cp .env.example .env  # then put your Claude API key in ANTHROPIC_API_KEY
 npm run dev           # http://localhost:5173 (server on :8787)
 ```
