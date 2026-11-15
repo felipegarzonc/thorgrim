@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "npm ci",
+  "installCommand": "env -u npm_config_cache_dir npm_config_cache=\"${npm_config_cache_dir:-$HOME/.npm}\" npm ci",
   "buildCommand": "node --run vercel-build",
   "outputDirectory": "dist",
   "functions": {
