@@ -41,7 +41,13 @@ async function main() {
   let raw: Buffer | undefined = fs.existsSync(FILE) ? fs.readFileSync(FILE) : undefined;
   if (!raw) {
     raw = await blobs().read(STORED);
-    if (!raw) throw new Error(`The army data isn't in storage yet: upload data/aos.json to the "${process.env.SUPABASE_BUCKET?.trim() || "thorgrim"}" bucket at ${STORED} (README: Army data).`);
+    if (!raw) {
+      // Say where it looked: a build without the Supabase settings looks in an empty local folder.
+      if (blobs().kind !== "supabase")
+        throw new Error("The army data can't be fetched: this build has no SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY, so it looked in an empty local folder. In Vercel, set both for this environment (Production / Preview) and redeploy.");
+      const host = (process.env.SUPABASE_URL ?? "").trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+      throw new Error(`The army data isn't in storage yet: no ${STORED} in the "${process.env.SUPABASE_BUCKET?.trim() || "thorgrim"}" bucket of ${host}. Upload data/aos.json there with exactly that folder and name (README: Army data).`);
+    }
   }
   const data = valid(raw);
   data.builtAt = new Date().toISOString();
