@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
-import { api, CLUB_SEEN, LOGIN_EVENT, mediaExpiry, setMediaToken } from "./api.ts";
+import { api, CLUB_SEEN, LOGIN_EVENT, mediaExpiry, OFFLINE_EVENT, setMediaToken } from "./api.ts";
 import { HomePage } from "./pages/Home.tsx";
 import { Icon, MetaContext, useOnRefresh, type IconName, type Meta } from "./ui.tsx";
 import { PullToRefresh } from "./gestures.tsx";
@@ -97,6 +97,18 @@ export function App() {
 
   const [needLogin, setNeedLogin] = useState(false);
   const [newVersion, setNewVersion] = useState(false);
+  // No signal: pages show what this phone kept (api.ts), until the connection is back.
+  const [offline, setOffline] = useState(false);
+  useEffect(() => {
+    const on = () => setOffline(true);
+    const off = () => setOffline(false);
+    window.addEventListener(OFFLINE_EVENT, on);
+    window.addEventListener("online", off);
+    return () => {
+      window.removeEventListener(OFFLINE_EVENT, on);
+      window.removeEventListener("online", off);
+    };
+  }, []);
   const loadedBuild = useRef<string>("");
   const [unread, setUnread] = useState({ notices: 0, posts: 0 });
   useOnRefresh(() => (meta?.user ? api<typeof unread>("/club/unread").then(setUnread).catch(() => undefined) : undefined));
@@ -220,6 +232,7 @@ export function App() {
     <MetaContext.Provider value={meta}>
       {update}
       <main>
+        {offline && <p className="notice small offline-note">No signal: showing what this phone kept. Changes to your game are sent when the signal is back.</p>}
         {error && <p className="error">Server error: {error}. Is the server running and `npm run data` done?</p>}
         {TITLES[tab] && (
           <div className="page-head">

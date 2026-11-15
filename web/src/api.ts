@@ -48,6 +48,7 @@ export function session(): Session | null {
 export const setSession = (s: Session | null) => write(SESSION, s ? JSON.stringify(s) : null);
 
 export function signOut() {
+  forgetOfflineCopies();
   setSession(null);
   setAccessKey("");
   setMediaToken("");
@@ -153,7 +154,82 @@ export async function apiStream<T>(path: string, json: unknown, onEvent: (event:
   throw new Error("The answer was cut off. Try again.");
 }
 
+// ---------- copies for the table without signal ----------
+// What a game needs (the app's info, the games, each game opened, its lists
+// and warscrolls) is kept on this phone as it loads. With no connection at
+// all, those copies answer instead, so a game opens and can be played; the
+// game screen sends its changes once the signal is back (see Game.tsx). Only
+// a missing connection uses them, never an error the server answered with.
+// Signing out forgets them.
+
+const OFFLINE = "thorgrim-offline:";
+const OFFLINE_INDEX = "thorgrim-offline-index";
+const OFFLINE_MAX = 120;
+export const OFFLINE_EVENT = "thorgrim-offline-copy";
+const keptForTable = (path: string) => /^\/(meta|lists|games|units\/[^/?]+|games\/[a-z0-9-]+(\/lists(\?.*)?)?)$/i.test(path);
+
+function offlineIndex(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_INDEX) ?? "[]") as string[];
+  } catch {
+    return [];
+  }
+}
+function keepOffline(path: string, data: unknown) {
+  const index = offlineIndex().filter((p) => p !== path);
+  index.push(path);
+  const save = () => {
+    while (index.length > OFFLINE_MAX) localStorage.removeItem(OFFLINE + index.shift());
+    localStorage.setItem(OFFLINE + path, JSON.stringify(data));
+    localStorage.setItem(OFFLINE_INDEX, JSON.stringify(index));
+  };
+  try {
+    save();
+  } catch {
+    // The phone's storage is full: drop the oldest half and try once more; failing that, just don't keep it.
+    try {
+      for (const old of index.splice(0, Math.floor(index.length / 2))) localStorage.removeItem(OFFLINE + old);
+      save();
+    } catch {
+      /* not kept */
+    }
+  }
+}
+function offlineCopy<T>(path: string): T | undefined {
+  try {
+    const raw = localStorage.getItem(OFFLINE + path);
+    return raw === null ? undefined : (JSON.parse(raw) as T);
+  } catch {
+    return undefined;
+  }
+}
+export function forgetOfflineCopies() {
+  try {
+    for (const p of offlineIndex()) localStorage.removeItem(OFFLINE + p);
+    localStorage.removeItem(OFFLINE_INDEX);
+  } catch {
+    /* nothing kept */
+  }
+}
+/** No connection at all (not an answer from the server): fetch fails with a TypeError. */
+const noConnection = (e: unknown) => e instanceof TypeError || (typeof navigator !== "undefined" && navigator.onLine === false);
+
 export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}, retried = false): Promise<T> {
+  const read = (!init.method || init.method === "GET") && keptForTable(path);
+  if (!read) return apiRequest<T>(path, init, retried);
+  try {
+    const data = await apiRequest<T>(path, init, retried);
+    keepOffline(path, data);
+    return data;
+  } catch (e) {
+    const copy = noConnection(e) ? offlineCopy<T>(path) : undefined;
+    if (copy === undefined) throw e;
+    window.dispatchEvent(new Event(OFFLINE_EVENT));
+    return copy;
+  }
+}
+
+async function apiRequest<T>(path: string, init: RequestInit & { json?: unknown } = {}, retried = false): Promise<T> {
   const headers = await requestHeaders();
   let body = init.body;
   if (init.json !== undefined) {
@@ -163,7 +239,7 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
   const res = await fetch(`/api${path}`, { ...init, body, headers: { ...headers, ...(init.headers as Record<string, string>) } });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && (data as { needsLogin?: boolean }).needsLogin) {
-    if (!retried && session() && (await refresh())) return api<T>(path, init, true);
+    if (!retried && session() && (await refresh())) return apiRequest<T>(path, init, true);
     window.dispatchEvent(new Event(LOGIN_EVENT));
   }
   if (!res.ok) throw new Error(errorText(res, data));

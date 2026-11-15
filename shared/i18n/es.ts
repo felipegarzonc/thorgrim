@@ -119,6 +119,7 @@ export const ES_PHRASES: Record<string, string> = {
     "Ya se usó o caducó. Pide uno nuevo desde la pantalla de entrar, o pídeselo al administrador de tu club.",
   "The same again": "Repítela",
   "Save and sign in": "Guardar y entrar",
+  "No signal: showing what this phone kept. Changes to your game are sent when the signal is back.": "Sin señal: mostrando lo que este teléfono guardó. Los cambios de tu partida se envían cuando vuelva la señal.",
   "Searching the rules…": "Buscando en las reglas…",
   "Reading the rules…": "Leyendo las reglas…",
   "Reading a warscroll…": "Leyendo un warscroll…",

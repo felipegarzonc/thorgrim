@@ -10,7 +10,7 @@ import { applyOps, diff } from "../../../shared/patch.ts";
 import { clockTimes, formatClock, passClock, toggleClock } from "../../../shared/clock.ts";
 import { applyVoice, describeChange, type VoiceChange } from "../../../shared/voice.ts";
 import { rivalRecord } from "../../../shared/stats.ts";
-import { api, pendingJob, runJob, waitForJob, withKey } from "../api.ts";
+import { api, OFFLINE_EVENT, pendingJob, runJob, waitForJob, withKey } from "../api.ts";
 import { gameDate, sideInfo } from "../gameView.tsx";
 import { shrinkPhoto, VoiceButton } from "../media.tsx";
 import { armyColor, Avatar, Counter, FactionPicker, Group, Icon, RulesText, Seg, Sheet, useLoad, useMeta } from "../ui.tsx";
@@ -150,6 +150,12 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
   const queueSend = () => {
     saving.current = saving.current.then(send);
   };
+  // Opened from what this phone kept (no signal, see api.ts): say so in the badge; back online, it syncs.
+  useEffect(() => {
+    const kept = () => setSync((s) => (s.state === "saved" ? { state: "offline" } : s));
+    window.addEventListener(OFFLINE_EVENT, kept);
+    return () => window.removeEventListener(OFFLINE_EVENT, kept);
+  }, []);
   // Not saved yet: try again every few seconds, and as soon as the phone is back online.
   useEffect(() => {
     if (sync.state !== "offline" && sync.state !== "error") return;
