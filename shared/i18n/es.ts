@@ -493,7 +493,7 @@ export const ES_PHRASES: Record<string, string> = {
   "Delete this game and its conversation with Thorgrim?": "¿Borrar esta partida y su conversación con Thorgrim?",
   Randomize: "Al azar",
   "Who is the attacker?": "¿Quién es el atacante?",
-  "Starting fury: attacker 1, defender 2.": "Furia inicial: atacante 1, defensor 2.",
+  Defender: "Defensor",
   "Card photo": "Foto de la carta",
   "Pick a battleplan to see its map and rules.": "Elige un plan de batalla para ver su mapa y reglas.",
   "Notes for Thorgrim": "Notas para Thorgrim",
@@ -1326,6 +1326,7 @@ export const ES_PHRASES: Record<string, string> = {
 /** Text with names and numbers in it. */
 export const ES_PATTERNS: [RegExp, string][] = [
   [/^Edit (.+)$/, "Editar $1"],
+  [/^The attacker starts with fury 1, the defender with fury 2\. Now: you (\d+), opponent (\d+)\.$/, "El atacante empieza con furia 1, el defensor con furia 2. Ahora: tú $1, rival $2."],
   [/^Finish and confirm (\d+)–(\d+)$/, "Terminar y confirmar $1–$2"],
   [/^Updated (\d+) min ago$/, "Actualizado hace $1 min"],
   [/^No changes for (\d+) (min|h)$/, "Sin cambios hace $1 $2"],

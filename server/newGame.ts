@@ -1,6 +1,7 @@
 // A new game, before anything is played.
 
 import type { ArmyList, Game, GameState } from "../shared/types.ts";
+import { startingFury } from "../shared/scoring.ts";
 import { newId } from "./store.ts";
 
 const tacticsFrom = (list?: ArmyList) =>
@@ -15,7 +16,7 @@ function newState(attacker: GameState["attacker"]): GameState {
     phase: "Deployment",
     cp: { me: 0, opponent: 0 },
     vp: { me: 0, opponent: 0 },
-    fury: { me: attacker === "me" ? 1 : 2, opponent: attacker === "opponent" ? 1 : 2 },
+    fury: startingFury(attacker),
     rage: { me: 0, opponent: 0 },
     tactics: [],
     opponentTactics: [],
