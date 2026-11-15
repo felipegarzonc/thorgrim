@@ -80,7 +80,7 @@ Alternative: the repository also has a Dockerfile and a Render blueprint (`rende
 
 The warscrolls, points and battle tactic cards come from the community BSData files. On 12 November 2026 BSData took its repositories off GitHub after a Games Workshop DMCA notice, so they can no longer be downloaded (`npm run data` fails).
 
-Online deploys use a copy kept in the app's private Supabase bucket instead: `npm run data:fetch` (part of the Vercel build) reads it from `build-data/aos.json`. To put it there once, in Supabase open **Storage → thorgrim**, create the folder `build-data` and upload `aos.json` into it. Or, with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env`, run `npm run data:fetch -- --upload` next to a `data/aos.json`. Keep this file out of the GitHub repository: it is public.
+Online deploys use a copy kept in the app's private Supabase bucket instead: `npm run data:fetch` (part of the Vercel build) reads it from `build-data/aos.json`. To put it there once, in Supabase open **Storage → thorgrim**, create the folder `build-data` and upload `aos.json` into it. Or, with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env`, run `npm run data:fetch -- --upload` next to a `data/aos.json`. If a 10 MB file can't be uploaded or downloaded whole, gzip it and upload the pieces as `build-data/aos.json.gz.part1`, `.part2`, …: the build joins them. Keep this file out of the GitHub repository: it is public.
 
 A computer that already has `data/aos.json` keeps it; new installs need a copy of that file in `data/`.
 
