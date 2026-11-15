@@ -207,6 +207,18 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
     window.location.hash = `#/games/${id}/${to}`;
     window.scrollTo(0, 0);
   }, !!game && battleAt >= 0 && !sheet);
+  // Playing together: when the round in play moves on (the other phone started it), a phone still on the
+  // previous round's page follows. Opening the game, or a phone on another page, stays where it is.
+  const liveRound = game ? (game.state.phase === "Deployment" ? 0 : game.state.round) : 0;
+  const lastLive = useRef(liveRound);
+  useEffect(() => {
+    const was = lastLive.current;
+    lastLive.current = liveRound;
+    if (was > 0 && liveRound > was && (OLD_STEPS[step ?? ""] ?? step) === `round-${was}`) {
+      window.location.hash = `#/games/${id}/round-${liveRound}`;
+      window.scrollTo(0, 0);
+    }
+  }, [liveRound]);
   if (!game) return <p className="muted game-loading">{sync.state === "error" ? `Could not open the game: ${sync.error}` : "Loading…"}</p>;
   const isPlayer = game.access?.role === "player";
   // After making or stopping the join link: take the server's copy.
