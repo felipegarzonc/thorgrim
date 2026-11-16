@@ -7220,6 +7220,53 @@ body {
   white-space: nowrap;
 }
 
+/* The admin's month-by-month cost of the coach. */
+.usage-month summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0;
+  cursor: pointer;
+  list-style: none;
+}
+.usage-month summary::-webkit-details-marker {
+  display: none;
+}
+.usage-month-name {
+  width: 4.6rem;
+  font-variant-numeric: tabular-nums;
+}
+.usage-month-bar {
+  flex: 1;
+  height: 0.5rem;
+  border-radius: 99px;
+  background: var(--panel-3);
+  overflow: hidden;
+}
+.usage-month-bar span {
+  display: block;
+  height: 100%;
+  background: var(--brass);
+  border-radius: 99px;
+}
+.usage-players {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0 0 0 0.4rem;
+  border-left: 2px solid var(--line);
+}
+.usage-players li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.2rem 0.4rem;
+}
+.restore-backup {
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--line);
+}
+
 /* Printing the results (or saving them as PDF): only the score sheet, dark on white. */
 @media print {
   :root {

@@ -39,6 +39,7 @@ import {
   signIn,
   signOutOthers,
   updateAccount,
+  usageByMonth,
   usageOf,
   userIdFromToken,
   type Account,
@@ -344,6 +345,8 @@ app.get("/api/admin/users", requireAdmin, async (_req, res) => {
     await Promise.all(accounts.map(async (a) => ({ ...publicAccount(a), disabled: !!a.disabled, createdAt: a.createdAt, monthlyLimitUsd: a.monthlyLimitUsd, limitUsd: await limitFor(a.id), usage: await usageOf(a.id) }))),
   );
 });
+// What Thorgrim cost month by month, and who used it (server/accounts.ts usageByMonth).
+app.get("/api/admin/usage", requireAdmin, async (_req, res) => res.json(await usageByMonth(await listAccounts())));
 app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
   const b = req.body as { monthlyLimitUsd?: number | null | "default"; disabled?: boolean; role?: "admin" | "player"; name?: string };
   const target = (await listAccounts()).find((a) => a.id === param(req, "id"));

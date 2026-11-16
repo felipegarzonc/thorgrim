@@ -304,9 +304,53 @@ export function ProfilePage() {
 
       {meta?.canCreateClubs && me.accounts && <ClubsAdmin />}
       {meta?.canCreateClubs && me.accounts && <BackupCard />}
+      {meta?.user?.isAdmin && me.accounts && <UsageByMonth />}
       {meta?.user?.isAdmin && me.accounts && <AccessRequests />}
       {meta?.user?.isAdmin && me.accounts && <PlayersAdmin selfId={me.user.id} />}
     </div>
+  );
+}
+
+interface MonthUsage {
+  month: string;
+  requests: number;
+  costUsd: number;
+  players: { id: string; name: string; requests: number; costUsd: number }[];
+}
+
+/** The admin's view of what Thorgrim cost: each month's total, and who used it when a month is opened. */
+function UsageByMonth() {
+  const [months] = useLoad<MonthUsage[]>("/admin/usage");
+  if (!months) return null;
+  const top = Math.max(0.01, ...months.map((m) => m.costUsd));
+  return (
+    <Card title="Thorgrim's cost by month">
+      <p className="small muted">Everyone's coach requests, estimated from Claude's prices. Open a month to see who used it.</p>
+      {months.map((m, i) => (
+        <details key={m.month} className="usage-month" open={i === 0 && m.players.length > 0}>
+          <summary>
+            <span className="usage-month-name">{m.month}</span>
+            <span className="usage-month-bar" aria-hidden="true">
+              <span style={{ width: `${(m.costUsd / top) * 100}%` }} />
+            </span>
+            <b>{usd(m.costUsd)}</b>
+          </summary>
+          {m.players.length ? (
+            <ul className="usage-players">
+              {m.players.map((p) => (
+                <li key={p.id}>
+                  <span className="grow">{p.name}</span>
+                  <span className="muted small">{`${p.requests} requests`}</span>
+                  <b>{usd(p.costUsd)}</b>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="small muted">Nobody used Thorgrim this month.</p>
+          )}
+        </details>
+      ))}
+    </Card>
   );
 }
 

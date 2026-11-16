@@ -211,6 +211,28 @@ const emptyUsage = (): Usage => ({ requests: 0, inputTokens: 0, outputTokens: 0,
 
 export const usageOf = (userId: string, m = month()) => readJson<Usage>(usagePath(userId, m), emptyUsage());
 
+export interface MonthUsage {
+  month: string;
+  requests: number;
+  costUsd: number;
+  /** Who used Thorgrim that month, biggest spender first. */
+  players: { id: string; name: string; requests: number; costUsd: number }[];
+}
+
+/** The last `months` months (this one first): what everyone spent on Claude, and who. */
+export async function usageByMonth(accounts: Pick<Account, "id" | "name">[], months = 6, now = new Date()): Promise<MonthUsage[]> {
+  const out: MonthUsage[] = [];
+  for (let i = 0; i < months; i++) {
+    const m = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1)).toISOString().slice(0, 7);
+    const players = (await Promise.all(accounts.map(async (a) => ({ id: a.id, name: a.name, ...(await usageOf(a.id, m)) }))))
+      .filter((p) => p.requests > 0)
+      .map((p) => ({ id: p.id, name: p.name, requests: p.requests, costUsd: p.costUsd }))
+      .sort((a, b) => b.costUsd - a.costUsd);
+    out.push({ month: m, requests: players.reduce((n, p) => n + p.requests, 0), costUsd: players.reduce((n, p) => n + p.costUsd, 0), players });
+  }
+  return out;
+}
+
 /** Add one Claude response to the current user's usage this month. */
 export async function recordUsage(usage: Anthropic.Beta.BetaUsage | undefined, price: typeof PRICE = PRICE) {
   if (!usage) return;
