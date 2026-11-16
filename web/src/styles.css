@@ -5652,6 +5652,12 @@ button:active:not(:disabled),
 .score-card.active {
   animation: glow 3s ease-in-out infinite;
 }
+.score-card.tappable {
+  cursor: pointer;
+}
+.score-card.tappable:active {
+  transform: scale(0.98);
+}
 .turn-in {
   animation: slide-in 0.35s ease both;
 }
