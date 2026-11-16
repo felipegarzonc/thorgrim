@@ -79,15 +79,22 @@ export function derive(game: Pick<Game, "battleplan" | "state">): GameState {
  * Start battle round `round`: record who went first (and who won priority),
  * work out seizing the initiative and the underdog, and give each player
  * their CP (4, +1 for the underdog). Rage dice refill from the fury level.
+ * Called again for the round in play, it corrects who went first.
  */
 export function startRound(game: Pick<Game, "battleplan" | "state">, round: number, first: Side, priority?: Side): GameState {
   const s = game.state;
   const rounds = [...(s.rounds ?? [])];
   while (rounds.length < round) rounds.push(emptyRound());
+  // The underdog is decided by the score when the round begins: points already
+  // scored in this round (who went first was corrected mid-round) don't count.
+  const earlier = rounds.slice(0, round - 1);
+  const vpBefore = { me: totalVp(earlier, game.battleplan, "me"), opponent: totalVp(earlier, game.battleplan, "opponent") };
+  // The same correction keeps the rage dice as they are; only a new round refills them.
+  const restarting = s.phase !== "Deployment" && s.round === round && !!rounds[round - 1].first;
   const r =
     round === 1
       ? { seized: null, underdog: null, cp: { me: 4, opponent: 4 } }
-      : newBattleRound({ firstThisRound: rounds[round - 2].first ?? s.firstThisRound, vp: derive(game).vp }, first);
+      : newBattleRound({ firstThisRound: rounds[round - 2].first ?? s.firstThisRound, vp: vpBefore }, first);
   const rec = rounds[round - 1];
   rounds[round - 1] = {
     ...rec,
@@ -107,7 +114,7 @@ export function startRound(game: Pick<Game, "battleplan" | "state">, round: numb
       phase: "Start of Turn",
       underdog: r.underdog,
       seizedInitiative: r.seized,
-      rage: { me: s.fury.me, opponent: s.fury.opponent },
+      rage: restarting ? s.rage : { me: s.fury.me, opponent: s.fury.opponent },
     },
   });
 }
