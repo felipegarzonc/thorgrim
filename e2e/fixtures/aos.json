@@ -1,0 +1,196 @@
+{
+ "source": "made-up data for the end-to-end tests (no real warscrolls)",
+ "commit": "test",
+ "builtAt": "2026-01-01T00:00:00.000Z",
+ "units": {
+  "t-warden": {
+   "id": "t-warden",
+   "name": "Oak Warden",
+   "faction": "Test Grove",
+   "keywords": [
+    "HERO",
+    "INFANTRY"
+   ],
+   "stats": {
+    "move": "6\"",
+    "health": "5",
+    "save": "4+",
+    "control": "2"
+   },
+   "models": 1,
+   "weapons": [
+    {
+     "name": "Test Blade",
+     "kind": "melee",
+     "attacks": "4",
+     "hit": "3+",
+     "wound": "3+",
+     "rend": "1",
+     "damage": "2",
+     "ability": "-"
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Test Stand",
+     "kind": "Ability (Passive)",
+     "effect": "This unit has a made-up ability for the tests."
+    }
+   ]
+  },
+  "t-hunters": {
+   "id": "t-hunters",
+   "name": "Grove Hunters",
+   "faction": "Test Grove",
+   "keywords": [
+    "INFANTRY"
+   ],
+   "stats": {
+    "move": "6\"",
+    "health": "5",
+    "save": "4+",
+    "control": "2"
+   },
+   "models": 3,
+   "weapons": [
+    {
+     "name": "Test Blade",
+     "kind": "melee",
+     "attacks": "4",
+     "hit": "3+",
+     "wound": "3+",
+     "rend": "1",
+     "damage": "2",
+     "ability": "-"
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Test Stand",
+     "kind": "Ability (Passive)",
+     "effect": "This unit has a made-up ability for the tests."
+    }
+   ]
+  },
+  "t-chief": {
+   "id": "t-chief",
+   "name": "Ash Chief",
+   "faction": "Test Horde",
+   "keywords": [
+    "HERO",
+    "INFANTRY"
+   ],
+   "stats": {
+    "move": "6\"",
+    "health": "5",
+    "save": "4+",
+    "control": "2"
+   },
+   "models": 1,
+   "weapons": [
+    {
+     "name": "Test Blade",
+     "kind": "melee",
+     "attacks": "4",
+     "hit": "3+",
+     "wound": "3+",
+     "rend": "1",
+     "damage": "2",
+     "ability": "-"
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Test Stand",
+     "kind": "Ability (Passive)",
+     "effect": "This unit has a made-up ability for the tests."
+    }
+   ]
+  },
+  "t-raiders": {
+   "id": "t-raiders",
+   "name": "Ash Raiders",
+   "faction": "Test Horde",
+   "keywords": [
+    "INFANTRY"
+   ],
+   "stats": {
+    "move": "6\"",
+    "health": "5",
+    "save": "4+",
+    "control": "2"
+   },
+   "models": 10,
+   "weapons": [
+    {
+     "name": "Test Blade",
+     "kind": "melee",
+     "attacks": "4",
+     "hit": "3+",
+     "wound": "3+",
+     "rend": "1",
+     "damage": "2",
+     "ability": "-"
+    }
+   ],
+   "abilities": [
+    {
+     "name": "Test Stand",
+     "kind": "Ability (Passive)",
+     "effect": "This unit has a made-up ability for the tests."
+    }
+   ]
+  }
+ },
+ "factions": {
+  "Test Grove": {
+   "name": "Test Grove",
+   "units": [
+    {
+     "id": "t-warden",
+     "points": 380
+    },
+    {
+     "id": "t-hunters",
+     "points": 220
+    }
+   ],
+   "rules": [
+    {
+     "group": "Battle Traits",
+     "entry": "Test Grove Trait",
+     "ability": {
+      "name": "Test Grove Trait",
+      "kind": "Ability (Passive)",
+      "effect": "A made-up battle trait for the tests."
+     }
+    }
+   ]
+  },
+  "Test Horde": {
+   "name": "Test Horde",
+   "units": [
+    {
+     "id": "t-chief",
+     "points": 300
+    },
+    {
+     "id": "t-raiders",
+     "points": 150
+    }
+   ],
+   "rules": [
+    {
+     "group": "Battle Traits",
+     "entry": "Test Horde Trait",
+     "ability": {
+      "name": "Test Horde Trait",
+      "kind": "Ability (Passive)",
+      "effect": "A made-up battle trait for the tests."
+     }
+    }
+   ]
+  }
+ },
+ "core": []
+}
