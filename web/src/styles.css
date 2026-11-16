@@ -7267,6 +7267,57 @@ body {
   border-top: 1px solid var(--line);
 }
 
+/* The results' turn-by-turn story. */
+.timeline-round h3 {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.timeline ol,
+.timeline ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.timeline-turn {
+  border-left: 3px solid var(--army, var(--line-2));
+  padding: 0.35rem 0 0.35rem 0.7rem;
+  margin-bottom: 0.45rem;
+}
+.timeline-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.timeline-tag {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+.timeline-gain {
+  color: var(--brass);
+  font-weight: 700;
+}
+.timeline-total {
+  min-width: 3.4rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.timeline-turn ul li {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  padding: 0.1rem 0;
+  color: var(--muted);
+}
+.timeline-turn p {
+  margin: 0.1rem 0 0;
+}
+
 /* Printing the results (or saving them as PDF): only the score sheet, dark on white. */
 @media print {
   :root {

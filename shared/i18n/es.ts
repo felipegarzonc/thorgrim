@@ -590,6 +590,9 @@ export const ES_PHRASES: Record<string, string> = {
   "YOUR TURN": "TU TURNO",
   "THEIR TURN": "SU TURNO",
   WAITING: "ESPERA",
+  "Turn by turn": "Turno a turno",
+  "Scored nothing.": "No puntuó.",
+  "Other points": "Otros puntos",
   "Thorgrim's cost by month": "Costo de Thorgrim por mes",
   "Everyone's coach requests, estimated from Claude's prices. Open a month to see who used it.": "Las consultas de todos al coach, estimadas con los precios de Claude. Abre un mes para ver quién lo usó.",
   "Nobody used Thorgrim this month.": "Nadie usó Thorgrim este mes.",
@@ -1368,6 +1371,7 @@ export const ES_PHRASES: Record<string, string> = {
 
 /** Text with names and numbers in it. */
 export const ES_PATTERNS: [RegExp, string][] = [
+  [/^(\d+) CP spent$/, "$1 CP gastados"],
   [/^(\d+) requests$/, "$1 consultas"],
   [/^Backup of (.+): (\d+) records\.$/, "Copia del $1: $2 registros."],
   [/^Restoring brings back (\d+) missing now and puts (\d+) changed since back to how they were\. (\d+) are the same already; (\d+) made since stay\.$/, "Restaurar recupera $1 que faltan ahora y devuelve $2 cambiados a como estaban. $3 ya están igual; $4 creados después se quedan."],
