@@ -82,7 +82,14 @@ function useHashRoute(): string[] {
   };
   const [route, setRoute] = useState(read);
   useEffect(() => {
-    const on = () => setRoute(read());
+    let section = read()[0];
+    const on = () => {
+      const next = read();
+      // Another section of the app opens at its top, not wherever the last page was scrolled to.
+      if (next[0] !== section) window.scrollTo(0, 0);
+      section = next[0];
+      setRoute(next);
+    };
     window.addEventListener("hashchange", on);
     return () => window.removeEventListener("hashchange", on);
   }, []);
