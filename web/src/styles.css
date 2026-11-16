@@ -5819,16 +5819,6 @@ button:active:not(:disabled),
 .reference .collapsible > summary .ico {
   color: var(--ref);
 }
-.score-below {
-  align-self: center;
-  background: transparent;
-  border: 0;
-  color: var(--me-text);
-  font-size: 0.95rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
 .end-turn {
   margin-top: 0.3rem;
 }
