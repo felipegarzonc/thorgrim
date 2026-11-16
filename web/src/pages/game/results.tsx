@@ -16,7 +16,7 @@ import { CountUp, Sparks } from "../../motion.tsx";
 import { feedbackOnce } from "../../sound.ts";
 import { VpLines } from "../../vpChart.tsx";
 import { ScoreSheet } from "../../scoreSheet.tsx";
-import { doubleTurns, gameBadges, reportSides, runningScore } from "../../../../shared/report.ts";
+import { doubleTurns, gameBadges, reportSides, runningScore, timeline } from "../../../../shared/report.ts";
 import { type Mutate } from "./common.tsx";
 import { BcpResult } from "./setup.tsx";
 
@@ -73,6 +73,56 @@ export function LadderConfirm({ game, saved, changed, names }: { game: Game; sav
 }
 
 /** Each side's VP round by round (see vpChart.tsx). */
+/** The game turn by turn: who scored what in each turn, and the score after it. */
+export function Timeline({ game, names, colors }: { game: Game; names: Record<Side, string>; colors: Record<Side, string> }) {
+  const turns = timeline(game);
+  if (!turns.length) return null;
+  const rounds = [...new Set(turns.map((t) => t.round))];
+  return (
+    <details className="card collapsible timeline">
+      <summary>
+        <h2>Turn by turn</h2>
+        <Icon name="down" />
+      </summary>
+      {rounds.map((n) => (
+        <section key={n} className="timeline-round">
+          <h3>{`Round ${n}`}</h3>
+          <ol>
+            {turns
+              .filter((t) => t.round === n)
+              .map((t) => (
+                <li key={t.side} className="timeline-turn" style={{ ["--army" as string]: colors[t.side] }}>
+                  <div className="timeline-head">
+                    <b translate="no">{names[t.side]}</b>
+                    {t.doubleTurn && <span className="timeline-tag">Double turn</span>}
+                    <span className="grow" />
+                    <span className="timeline-gain">{t.vp > 0 ? `+${t.vp}` : t.vp}</span>
+                    <span className="timeline-total" translate="no">
+                      {t.total.me}–{t.total.opponent}
+                    </span>
+                  </div>
+                  {t.scored.length ? (
+                    <ul>
+                      {t.scored.map((x, i) => (
+                        <li key={i}>
+                          <span className="grow">{x.label}</span>
+                          <span className="muted">{x.vp > 0 ? `+${x.vp}` : x.vp}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="small muted">Scored nothing.</p>
+                  )}
+                  {t.cpSpent > 0 && <p className="small muted">{`${t.cpSpent} CP spent`}</p>}
+                </li>
+              ))}
+          </ol>
+        </section>
+      ))}
+    </details>
+  );
+}
+
 export function VpChart({ game, names, colors }: { game: Game; names: Record<Side, string>; colors: Record<Side, string> }) {
   return <VpLines totals={runningScore(game)} doubles={doubleTurns(game)} names={names} colors={colors} />;
 }
@@ -247,6 +297,7 @@ export function ResultsStep({
         </a>
       )}
       {rounds.some(roundPlayed) && <VpChart game={game} names={{ me: me.name, opponent: opp.name }} colors={{ me: armyColor(me.faction), opponent: armyColor(opp.faction) }} />}
+      <Timeline game={game} names={{ me: me.name, opponent: opp.name }} colors={{ me: armyColor(me.faction), opponent: armyColor(opp.faction) }} />
       {badges.length > 0 && (
         <div className="post-badges">
           {badges.map((b) => (

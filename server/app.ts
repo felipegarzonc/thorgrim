@@ -39,6 +39,7 @@ import {
   signIn,
   signOutOthers,
   updateAccount,
+  usageByMonth,
   usageOf,
   userIdFromToken,
   type Account,
@@ -63,7 +64,7 @@ import { addMembers, clubFor, createClub, getClub, isLeader, isOwner, joinClub, 
 import { approve as approveRequest, decline as declineRequest, listRequests, requestAccess } from "./access.ts";
 import { mailReady } from "./mail.ts";
 import { cronAllowed, CRON_USER, daily as cronDaily, keepAlive, weekly as cronWeekly } from "./cron.ts";
-import { makeBackup } from "./backup.ts";
+import { listBackups, makeBackup, readBackup, restoreBackup, restorePlan, storedBackup } from "./backup.ts";
 import { addPhoto as addShowcasePhoto, deleteArmy, deletePhoto as deleteShowcasePhoto, readPhoto as readShowcasePhoto, saveArmy, showcaseOf } from "./showcase.ts";
 import { accept as acceptChallenge, challenge, decline as declineChallenge, myChallenges, withdraw as withdrawChallenge } from "./challenges.ts";
 import { createEvent, deleteEvent, editEvent, finishEvent, getEvent, joinEvent, leaveEvent, listEvents, pairRound, setTableResult, tableGame, unpairRound } from "./events.ts";
@@ -344,6 +345,8 @@ app.get("/api/admin/users", requireAdmin, async (_req, res) => {
     await Promise.all(accounts.map(async (a) => ({ ...publicAccount(a), disabled: !!a.disabled, createdAt: a.createdAt, monthlyLimitUsd: a.monthlyLimitUsd, limitUsd: await limitFor(a.id), usage: await usageOf(a.id) }))),
   );
 });
+// What Thorgrim cost month by month, and who used it (server/accounts.ts usageByMonth).
+app.get("/api/admin/usage", requireAdmin, async (_req, res) => res.json(await usageByMonth(await listAccounts())));
 app.patch("/api/admin/users/:id", requireAdmin, async (req, res) => {
   const b = req.body as { monthlyLimitUsd?: number | null | "default"; disabled?: boolean; role?: "admin" | "player"; name?: string };
   const target = (await listAccounts()).find((a) => a.id === param(req, "id"));
@@ -398,6 +401,20 @@ app.get("/api/admin/backup", requireAdmin, async (_req, res) => {
   if (!isOwner()) return res.status(403).json({ error: "Only the app's owner can download a backup." });
   const b = await makeBackup();
   res.set({ "content-type": "application/gzip", "content-disposition": `attachment; filename="${b.name}"`, "cache-control": "no-store" }).send(b.data);
+});
+// Restoring one (server/backup.ts): a kept backup by name, or the file itself. First what it would do, then, with the word typed, doing it.
+app.get("/api/admin/backups", requireAdmin, async (_req, res) => {
+  if (!isOwner()) return res.status(403).json({ error: "Only the app's owner can restore a backup." });
+  res.json(await listBackups());
+});
+app.post("/api/admin/restore", requireAdmin, express.raw({ type: "application/gzip", limit: "4mb" }), async (req, res) => {
+  if (!isOwner()) return res.status(403).json({ error: "Only the app's owner can restore a backup." });
+  const uploaded = Buffer.isBuffer(req.body) && req.body.length > 0;
+  const backup = readBackup(uploaded ? (req.body as Buffer) : await storedBackup(req.query.name ?? (req.body as { name?: unknown })?.name));
+  if (req.query.confirm !== "RESTORE") return res.json({ done: false, ...(await restorePlan(backup)) });
+  const done = await restoreBackup(backup);
+  console.log(`Backup restored by the owner: ${done.records} records from ${done.createdAt}; today's saved first as ${done.savedFirst}.`);
+  res.json({ done: true, ...done });
 });
 app.get("/api/admin/omnissiah", requireAdmin, async (_req, res) => res.json(await omnissiahStatus()));
 app.get("/api/admin/settings", requireAdmin, async (_req, res) => res.json(await accountSettings()));

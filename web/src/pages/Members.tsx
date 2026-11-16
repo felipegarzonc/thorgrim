@@ -8,7 +8,7 @@ import { api, withKey } from "../api.ts";
 import { moment } from "../analytics.tsx";
 import { shrinkPhoto } from "../media.tsx";
 import { Avatar, FactionPicker, Icon, Sheet, useLoad, useMeta, useRefreshOnReturn } from "../ui.tsx";
-import { Carousel } from "./Club.tsx";
+import { Carousel } from "./club/posts.tsx";
 import { Skeleton } from "../motion.tsx";
 import { ArmyVote, GloryCard, type Votes } from "./Glory.tsx";
 

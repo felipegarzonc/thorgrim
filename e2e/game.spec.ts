@@ -45,6 +45,11 @@ test("score a game and post its report to the club", async ({ page }) => {
   // Results, then finish the game.
   await page.goto(`${gameUrl}/results`);
   await expect(page.locator(".victory-title")).toHaveText("VICTORY");
+  // The game turn by turn: my turn scored 6 and left it 6-0.
+  await page.locator(".timeline summary").click();
+  await expect(page.locator(".timeline-turn").first()).toContainText("Goy");
+  await expect(page.locator(".timeline-turn").first().locator(".timeline-gain")).toHaveText("+6");
+  await expect(page.locator(".timeline-turn").first().locator(".timeline-total")).toHaveText("6–0");
   await expect.poll(cues).toContain("victory");
   await page.getByRole("button", { name: "Finish game" }).click();
   await expect(page).toHaveURL(/#\/games$/);

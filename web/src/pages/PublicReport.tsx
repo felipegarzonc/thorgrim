@@ -4,8 +4,9 @@
 import { useEffect, useState } from "react";
 import type { BattleDetail, FeedPost } from "../../../shared/types.ts";
 import { publicApi } from "../api.ts";
-import { PostBody } from "./Club.tsx";
-import { RequestAccess, ThorgrimSeal } from "./Landing.tsx";
+import { PostBody } from "./club/posts.tsx";
+import { RequestAccess } from "./Landing.tsx";
+import { ThorgrimSeal } from "./landing/common.tsx";
 import { Skeleton } from "../motion.tsx";
 
 type PublicPost = Pick<FeedPost, "title" | "story" | "photos" | "sides" | "battleplan" | "points" | "date" | "badges" | "createdAt" | "updatedAt" | "result"> & {

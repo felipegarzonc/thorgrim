@@ -3,7 +3,7 @@
 // log), and the highlights shown as badges on a club feed post. The coach
 // writes the story from these facts only (server/coach.ts, battleReport).
 
-import { baseFaction } from "./season.ts";
+import { baseFaction, scoringFor, TACTIC_VP } from "./season.ts";
 import { result, roundPlayed, sideRoundVp } from "./scoring.ts";
 import type { ArmyList, Game } from "./types.ts";
 
@@ -36,8 +36,60 @@ export function runningScore(game: Game): { me: number; opponent: number }[] {
   return out;
 }
 
+/** One player's turn in the story of the game: what they scored in it, and the score after it. */
+export interface TimelineTurn {
+  round: number;
+  /** 1 or 2: the order in the round (by who went first; without that, me then the opponent). */
+  turn: 1 | 2;
+  side: Side;
+  /** Went first right after going second: a double turn. */
+  doubleTurn: boolean;
+  scored: { label: string; vp: number }[];
+  vp: number;
+  cpSpent: number;
+  /** The score once this turn was over. */
+  total: Record<Side, number>;
+}
+
+/** The game turn by turn, from the round records: who scored what, when, and the score as it grew. */
+export function timeline(game: Pick<Game, "battleplan" | "state">): TimelineTurn[] {
+  const rounds = game.state.rounds ?? [];
+  const doubles = doubleTurns(game);
+  const total: Record<Side, number> = { me: 0, opponent: 0 };
+  const out: TimelineTurn[] = [];
+  rounds.forEach((rec, i) => {
+    if (!roundPlayed(rec)) return;
+    const round = i + 1;
+    const lines = scoringFor(game.battleplan, round) ?? [];
+    const order: Side[] = rec.first === "opponent" ? ["opponent", "me"] : ["me", "opponent"];
+    order.forEach((side, t) => {
+      const sr = rec[side];
+      const scored = [
+        // In the battleplan's own order; a line recorded under an older wording still counts in the total below.
+        ...lines.filter((l) => sr.scored.includes(l.label)).map((l) => ({ label: l.label, vp: l.vp })),
+        ...sr.tactics.map((x) => ({ label: `${x.step[0].toUpperCase()}${x.step.slice(1)} of ${x.card}`, vp: TACTIC_VP })),
+      ];
+      const vp = sideRoundVp(sr, game.battleplan, round);
+      const rest = vp - scored.reduce((n, x) => n + x.vp, 0);
+      if (rest !== 0) scored.push({ label: "Other points", vp: rest });
+      total[side] = Math.max(0, total[side] + vp);
+      out.push({
+        round,
+        turn: (t + 1) as 1 | 2,
+        side,
+        doubleTurn: t === 0 && doubles.some((d) => d.round === round && d.side === side),
+        scored,
+        vp,
+        cpSpent: sr.cpSpent,
+        total: { ...total },
+      });
+    });
+  });
+  return out;
+}
+
 /** Who took a double turn in which round (went first right after going second). */
-export function doubleTurns(game: Game): { round: number; side: Side }[] {
+export function doubleTurns(game: Pick<Game, "state">): { round: number; side: Side }[] {
   const rounds = game.state.rounds ?? [];
   return rounds.flatMap((rec, i) => (i > 0 && rec.first && rounds[i - 1].first && rec.first === other(rounds[i - 1].first!) ? [{ round: i + 1, side: rec.first }] : []));
 }
