@@ -1580,7 +1580,13 @@ function RoundStep(props: {
 
   return (
     <div className="stack">
-      <Scoreboard game={game} names={names} factions={factions} isLive={isLive} />
+      <Scoreboard
+        game={game}
+        names={names}
+        factions={factions}
+        isLive={isLive}
+        switchTurn={(side) => (feedback("turn"), update({ activePlayer: side, phase: "Start of Turn" }, `${names[side]}'s turn.`))}
+      />
       {n === 1 && !rec?.first && <AttackerQuestion game={game} mutate={mutate} />}
       {orderKnown && !editOrder ? (
         <button type="button" className="order-summary" onClick={() => setEditOrder(true)}>
@@ -1691,7 +1697,8 @@ function RoundStep(props: {
 }
 
 /** Both armies at a glance: VP, command points as coins, fury as flames, and whose turn it is. */
-function Scoreboard({ game, names, factions, isLive }: { game: Game; names: Record<Side, string>; factions: Record<Side, string>; isLive: boolean }) {
+/** In a live round, tapping the waiting player's card makes it their turn. */
+function Scoreboard({ game, names, factions, isLive, switchTurn }: { game: Game; names: Record<Side, string>; factions: Record<Side, string>; isLive: boolean; switchTurn?: (side: Side) => void }) {
   const s = game.state;
   const ref = useRef<HTMLElement>(null);
   const [away, setAway] = useState(false);
@@ -1718,8 +1725,22 @@ function Scoreboard({ game, names, factions, isLive }: { game: Game; names: Reco
         const active = isLive && s.activePlayer === side;
         const cp = s.cp[side];
         const fury = s.fury[side];
+        const canSwitch = isLive && !active && !!switchTurn;
         return (
-          <div key={side} className={`score-card ${active ? "active" : ""}`} style={{ ["--army" as string]: armyColor(factions[side]) }}>
+          <div
+            key={side}
+            className={`score-card ${active ? "active" : ""} ${canSwitch ? "tappable" : ""}`}
+            style={{ ["--army" as string]: armyColor(factions[side]) }}
+            {...(canSwitch
+              ? {
+                  role: "button",
+                  tabIndex: 0,
+                  "aria-label": side === "me" ? "Make it your turn" : `Make it ${names[side]}'s turn`,
+                  onClick: () => switchTurn!(side),
+                  onKeyDown: (e: React.KeyboardEvent) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), switchTurn!(side)),
+                }
+              : {})}
+          >
             <div className="score-card-head">
               <Avatar faction={factions[side]} size={2.1} />
               <span>
@@ -1728,7 +1749,7 @@ function Scoreboard({ game, names, factions, isLive }: { game: Game; names: Reco
                 <small className="role-tag">{s.attacker === side ? "Attacker" : "Defender"}</small>
               </span>
             </div>
-            {isLive && <span className={`turn-tag ${active ? "on" : ""}`}>{active ? (side === "me" ? "YOUR TURN" : "THEIR TURN") : "WAITING"}</span>}
+            {isLive && <span className={`turn-tag ${active ? "on" : ""}`}>{active ? (side === "me" ? "YOUR TURN" : "THEIR TURN") : canSwitch ? "WAITING · TAP" : "WAITING"}</span>}
             <div className="score-vp">
               <span className="big-score">
                 <CountUp value={s.vp[side]} />

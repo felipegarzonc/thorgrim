@@ -1279,6 +1279,14 @@ button.accent,
   min-height: 52px;
   padding: 0.4rem 0.75rem;
   font-size: 1rem;
+  /* The same weight on and off, so picking one doesn't resize the control. */
+  font-weight: 600;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+/* Inside the control a press darkens instead of shrinking, which opened gaps at the edges. */
+.segbtn button:active:not(:disabled) {
+  transform: none;
+  filter: brightness(0.9);
 }
 .segbtn button + button {
   border-left: 1px solid var(--line-2);
@@ -1286,7 +1294,6 @@ button.accent,
 .segbtn button.on {
   background: var(--me);
   color: var(--me-ink);
-  font-weight: 600;
 }
 .counter {
   display: grid;
@@ -5644,6 +5651,12 @@ button:active:not(:disabled),
 }
 .score-card.active {
   animation: glow 3s ease-in-out infinite;
+}
+.score-card.tappable {
+  cursor: pointer;
+}
+.score-card.tappable:active {
+  transform: scale(0.98);
 }
 .turn-in {
   animation: slide-in 0.35s ease both;
