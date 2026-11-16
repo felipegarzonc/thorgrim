@@ -301,6 +301,16 @@ export function TacticSeals({ done, next }: { done: Set<TacticStep>; next?: Tact
   );
 }
 
+const AUTO_TIPS_KEY = "thorgrim-auto-tips";
+const AUTO_TIPS_WAIT_MS = 1500;
+function autoTips(): boolean {
+  try {
+    return localStorage.getItem(AUTO_TIPS_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
 /** The live turn: phases, Thorgrim's plan for this phase, and what not to forget. */
 export function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
   const { game, n, mutate, update, saved, armies, units, names, openCoach } = props;
@@ -330,9 +340,32 @@ export function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: strin
       setBusy(false);
     }
   };
+  // A plan for every turn is asked for by itself unless the player turned that off on this phone
+  // (each plan is a request to Claude). It waits a moment first, so a turn switched by mistake
+  // and switched straight back doesn't ask for a plan nobody reads.
+  const [auto, setAuto] = useState(autoTips);
+  const [waiting, setWaiting] = useState(false);
   useEffect(() => {
-    void fetchTips();
-  }, [key, meta?.coachReady]);
+    if (!auto || !meta?.coachReady || tips || asked.current.has(key)) return;
+    setWaiting(true);
+    const t = setTimeout(() => {
+      setWaiting(false);
+      void fetchTips();
+    }, AUTO_TIPS_WAIT_MS);
+    return () => {
+      clearTimeout(t);
+      setWaiting(false);
+    };
+  }, [key, meta?.coachReady, auto]);
+  const toggleAuto = () => {
+    const on = !auto;
+    setAuto(on);
+    try {
+      localStorage.setItem(AUTO_TIPS_KEY, on ? "on" : "off");
+    } catch {
+      /* stays for this visit only */
+    }
+  };
 
   const phaseTips = tips?.phases[s.phase] ?? [];
 
@@ -368,7 +401,7 @@ export function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: strin
           <p className="muted small">
             Add your Claude API key on the <a href="#/ask">Thorgrim</a> page to get a plan for every turn.
           </p>
-        ) : busy && !tips ? (
+        ) : (busy || waiting) && !tips ? (
           <p className="muted small thinking">Planning this turn…</p>
         ) : error ? (
           <p className="error small">
@@ -397,9 +430,16 @@ export function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: strin
             <Icon name="spark" /> Get the plan for this turn
           </button>
         )}
-        <button type="button" className="small ghost accent" onClick={openCoach}>
-          Ask Thorgrim
-        </button>
+        <div className="tips-foot">
+          <button type="button" className="small ghost accent" onClick={openCoach}>
+            Ask Thorgrim
+          </button>
+          {meta?.coachReady && (
+            <button type="button" className="small ghost" role="switch" aria-checked={auto} onClick={toggleAuto}>
+              {auto ? "A plan every turn: on" : "A plan every turn: off"}
+            </button>
+          )}
+        </div>
       </div>
 
       <WhatHappened

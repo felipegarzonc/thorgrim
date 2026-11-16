@@ -27,6 +27,8 @@ export interface PlayerStats {
   games: number;
   /** Per army you played (base faction). */
   armies: (Record3 & { faction: string })[];
+  /** Per army you played against (base faction). */
+  against: (Record3 & { faction: string })[];
   battleplans: (Record3 & { name: string })[];
   /** Per battle tactic card: games picked, average VP scored from it (out of 15), and how often all three steps were done. */
   tactics: { card: string; picked: number; avgVp: number; full: number }[];
@@ -52,6 +54,7 @@ export function playerStats(games: Game[], factionOf: (g: Game, side: Side) => s
     .filter((g) => result(g))
     .sort((a, b) => (a.date ?? a.createdAt).localeCompare(b.date ?? b.createdAt));
   const armies = new Map<string, Record3 & { faction: string }>();
+  const against = new Map<string, Record3 & { faction: string }>();
   const plans = new Map<string, Record3 & { name: string }>();
   const tactics = new Map<string, { card: string; picked: number; vp: number; full: number }>();
   const rounds = Array.from({ length: BATTLE_ROUNDS }, () => ({ me: 0, opponent: 0, n: 0 }));
@@ -66,6 +69,13 @@ export function playerStats(games: Game[], factionOf: (g: Game, side: Side) => s
       const a = armies.get(f) ?? { faction: f, ...empty() };
       add(a, res);
       armies.set(f, a);
+    }
+    const their = factionOf(g, "opponent");
+    if (their) {
+      const f = baseFaction(their);
+      const a = against.get(f) ?? { faction: f, ...empty() };
+      add(a, res);
+      against.set(f, a);
     }
     if (g.battleplan) {
       const p = plans.get(g.battleplan) ?? { name: g.battleplan, ...empty() };
@@ -112,6 +122,7 @@ export function playerStats(games: Game[], factionOf: (g: Game, side: Side) => s
   return {
     games: done.length,
     armies: [...armies.values()].sort(byPlayed),
+    against: [...against.values()].sort(byPlayed),
     battleplans: [...plans.values()].sort(byPlayed),
     tactics: [...tactics.values()]
       .map((t) => ({ card: t.card, picked: t.picked, avgVp: Math.round((t.vp / t.picked) * 10) / 10, full: t.full }))

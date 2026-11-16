@@ -22,6 +22,9 @@ import { PlanStep } from "./game/plan.tsx";
 import { RoundStep } from "./game/round.tsx";
 import { ResultsStep } from "./game/results.tsx";
 
+/** How many changes back Undo can go. */
+const UNDO_MAX = 30;
+const isCoachWriting = (path: (string | number)[]) => ["plan", "review", "report"].includes(String(path[0])) || (path[0] === "state" && path[1] === "tips");
 /** How often an open shared game checks for the other player's changes. */
 const SYNC_MS = 2500;
 
@@ -43,9 +46,14 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
   const [sheet, setSheet] = useState<SheetName | null>(null);
   const meta = useMeta();
   const [sync, setSync] = useState<{ state: SyncState; error?: string }>({ state: "saved" });
+  // The last changes made on this phone, newest last, so a mistaken tap can be taken back.
+  const undoable = useRef<{ before: Game; after: Game }[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
 
   // Open the game; changes this phone made but couldn't send (no signal) go back on top.
   useEffect(() => {
+    undoable.current = [];
+    setCanUndo(false);
     const pending = readPending(id);
     api<Game>(`/games/${id}`)
       .then((g) => {
@@ -194,10 +202,28 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
       const prefix = log.startsWith("Battle round") || s.phase === "Deployment" ? "" : `R${s.round} ${whose} ${s.phase}: `;
       next = { ...next, log: [...next.log, { at: new Date().toISOString(), text: prefix + log }] };
     }
+    // What Thorgrim wrote (plan, tips, review, report) isn't a move to take back.
+    if (diff(cur, next).some((op) => !isCoachWriting(op.path))) {
+      undoable.current = [...undoable.current.slice(-(UNDO_MAX - 1)), { before: cur, after: next }];
+      setCanUndo(true);
+    }
     ref.current = next;
     setGame(next);
     queueSend();
     return saving.current.then(() => undefined);
+  };
+  // Take back the last change: only what it changed goes back, so anything changed since
+  // (by the other player too) stays.
+  const undo = () => {
+    const last = undoable.current.pop();
+    setCanUndo(undoable.current.length > 0);
+    if (!last || !ref.current) return;
+    const back = applyOps(ref.current, diff(last.after, last.before));
+    const next = { ...back, state: passClock(ref.current.state, derive(back)) };
+    ref.current = next;
+    setGame(next);
+    buzz(12);
+    queueSend();
   };
   const update: Update = (patch, log) => void mutate((g) => ({ ...g, state: { ...g.state, ...patch } }), log);
 
@@ -259,6 +285,11 @@ export function GamePage({ id, step }: { id: string; step?: string }) {
         <span className="game-head-title">
           {game.state.vp.me}-{game.state.vp.opponent} {me.name} vs {opp.name}
         </span>
+        {canUndo && (
+          <button type="button" className="icon" aria-label="Undo the last change" onClick={undo}>
+            <Icon name="undo" />
+          </button>
+        )}
         <SyncBadge sync={sync} retry={queueSend} />
         <button type="button" className="icon" aria-label="Ask Thorgrim" onClick={() => setSheet("coach")}>
           <Icon name="coach" />
