@@ -6,13 +6,14 @@ import http from "node:http";
 
 const PORT = Number(process.env.FAKE_CLAUDE_PORT ?? 8898);
 
-function fill(schema, key = "") {
+function fill(schema, key = "", defs = schema?.$defs ?? {}) {
   if (!schema || typeof schema !== "object") return null;
+  if (schema.$ref) return fill(defs[schema.$ref.split("/").pop()], key, defs);
   if (schema.enum) return schema.enum[0];
   switch (schema.type) {
     case "object": {
       const out = {};
-      for (const k of schema.required ?? Object.keys(schema.properties ?? {})) out[k] = fill(schema.properties?.[k], k);
+      for (const k of schema.required ?? Object.keys(schema.properties ?? {})) out[k] = fill(schema.properties?.[k], k, defs);
       return out;
     }
     case "array":

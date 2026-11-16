@@ -68,6 +68,34 @@ describe("round records", () => {
     expect(s.rounds?.[1].priority).toBe("me");
   });
 
+  it("correcting who went first mid-round uses the score from before the round, and keeps spent rage dice", () => {
+    // Round 1: I go first and score 6; the opponent scores nothing.
+    let s = startRound({ battleplan: "Into the Fire", state: baseState() }, 1, "me");
+    s.rounds![0].me.scored = ["Control at least 1 objective", "Control at least 2 objectives"];
+    // Round 2: I go first again (no double turn): the opponent is behind, so the underdog.
+    s = startRound({ battleplan: "Into the Fire", state: s }, 2, "me", "me");
+    expect(s.underdog).toBe("opponent");
+    // During round 2 the opponent scores 10 and takes the lead, and I spend a rage die.
+    s.rounds![1].opponent.scored = ["Control at least 1 objective", "Control at least 2 objectives", "Control more objectives than your opponent"];
+    s = { ...s, rage: { ...s.rage, me: s.rage.me - 1 } };
+    const rageBefore = s.rage;
+    // Picking the same first player again (a correction) must not treat me as the underdog,
+    // because the underdog is decided by the score when the round began.
+    const cleared = { ...s, rounds: s.rounds!.map((r, i) => (i === 1 ? { ...r, me: { ...r.me, cpGained: 0 }, opponent: { ...r.opponent, cpGained: 0 } } : r)) };
+    const again = startRound({ battleplan: "Into the Fire", state: cleared }, 2, "me", "me");
+    expect(again.underdog).toBe("opponent");
+    expect(again.cp).toEqual({ me: 4, opponent: 5 });
+    expect(again.rage).toEqual(rageBefore);
+  });
+
+  it("starting a new round refills the rage dice from the fury level", () => {
+    let s = startRound({ battleplan: "Into the Fire", state: { ...baseState(), fury: { me: 3, opponent: 2 }, rage: { me: 0, opponent: 0 } } }, 1, "me");
+    expect(s.rage).toEqual({ me: 3, opponent: 2 });
+    s = { ...s, rage: { me: 1, opponent: 0 } };
+    s = startRound({ battleplan: "Into the Fire", state: s }, 2, "me", "me");
+    expect(s.rage).toEqual({ me: 3, opponent: 2 });
+  });
+
   it("result counts concessions", () => {
     const state = { ...baseState(), vp: { me: 30, opponent: 40 } };
     expect(result({ state, finished: { conclusion: "played", at: "" } })).toBe("loss");

@@ -216,7 +216,13 @@ const noConnection = (e: unknown) => e instanceof TypeError || (typeof navigator
 
 export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}, retried = false): Promise<T> {
   const read = (!init.method || init.method === "GET") && keptForTable(path);
-  if (!read) return apiRequest<T>(path, init, retried);
+  if (!read) {
+    const data = await apiRequest<T>(path, init, retried);
+    // Saving a game answers with the game as it now is: that becomes this phone's copy,
+    // so without signal the game opens as it was last saved, not as it was last opened.
+    if (init.method === "PATCH" && /^\/games\/[a-z0-9-]+$/i.test(path)) keepOffline(path, data);
+    return data;
+  }
   try {
     const data = await apiRequest<T>(path, init, retried);
     keepOffline(path, data);

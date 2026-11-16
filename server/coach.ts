@@ -714,7 +714,7 @@ export async function turnTips(ctx: CoachContext, round: number, side: "me" | "o
     .map((b) => b.text)
     .join("");
   const parsed = JSON.parse(text) as { headline: string; phases: Record<string, string[]>; glossary?: { name: string; effect: string }[] };
-  return { headline: parsed.headline, phases: parsed.phases, glossary: parsed.glossary ?? [], generatedAt: new Date().toISOString() };
+  return { headline: parsed.headline, phases: parsed.phases, glossary: Array.isArray(parsed.glossary) ? parsed.glossary : [], generatedAt: new Date().toISOString() };
 }
 
 // ---------- the game plan ----------
