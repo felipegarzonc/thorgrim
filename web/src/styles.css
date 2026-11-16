@@ -1934,6 +1934,17 @@ body.sheet-open {
   border-radius: 16px;
   padding: 0.8rem 0.9rem 0.5rem;
 }
+.tips-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.tips-foot [role="switch"] {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
 .tips-head {
   display: flex;
   align-items: center;
@@ -7207,4 +7218,63 @@ body {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/* Printing the results (or saving them as PDF): only the score sheet, dark on white. */
+@media print {
+  :root {
+    --bg: #fff;
+    --bg-deep: #fff;
+    --panel: #fff;
+    --panel-2: #f3f1ec;
+    --panel-3: #e6e2d8;
+    --line: #cfc9bb;
+    --line-2: #b9b3a4;
+    --text: #16130c;
+    --muted: #55504a;
+    --faint: #6f6a60;
+    --me: #8a6412;
+    --me-text: #8a6412;
+    --brass: #8a6412;
+    --brass-soft: #f6efdd;
+    --me-soft: #f6efdd;
+    --me-line: #cfb777;
+    color-scheme: light;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  body * {
+    visibility: hidden;
+    animation: none !important;
+  }
+  .result-card,
+  .result-card * {
+    visibility: visible;
+  }
+  .result-card .tally-cell {
+    background: #fff;
+    border-color: #b9b3a4;
+    color: #16130c;
+  }
+  .result-card .tally-cell.scored {
+    background: #f6efdd;
+    border-color: #8a6412;
+    color: #6b4c0c;
+  }
+  .result-card .tally-cell.none {
+    color: #a09a8c;
+  }
+  .result-card {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

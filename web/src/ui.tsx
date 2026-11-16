@@ -200,6 +200,7 @@ const ICONS = {
   flag: "M5 21V4 M5 4h12l-2 4 2 4H5",
   castle: "M4 21V9h3V6h3v3h4V6h3v3h3v12z M10 21v-4h4v4",
   refresh: "M20 11a8 8 0 1 0-2.3 5.7 M20 4v7h-7",
+  undo: "M9 14L4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3",
   map: "M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z M9 4v14 M15 6v14",
   search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14z M20 20l-4-4",
   speaker: "M4 9h4l5-4v14l-5-4H4z M16 9a4 4 0 0 1 0 6 M18.5 6.5a7.5 7.5 0 0 1 0 11",

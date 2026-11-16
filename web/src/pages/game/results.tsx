@@ -288,6 +288,9 @@ export function ResultsStep({
           <Icon name="coach" /> Review with Thorgrim
         </button>
       </div>
+      <button type="button" className="outline wide print-sheet" onClick={() => window.print()}>
+        <Icon name="lists" /> Print the score sheet or save it as PDF
+      </button>
       {shareMsg && <p className="small muted">{shareMsg}</p>}
       {image && (
         <details className="share-preview">

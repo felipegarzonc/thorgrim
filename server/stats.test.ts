@@ -36,6 +36,12 @@ describe("player stats", () => {
     expect(rivalRecord(games, "DIEGO")).toEqual({ played: 2, won: 1, drawn: 0, lost: 1 });
   });
 
+  it("keeps a record against each army faced", () => {
+    expect(s.against.reduce((n, a) => n + a.played, 0)).toBe(3);
+    expect(s.against[0].played).toBeGreaterThanOrEqual(s.against[s.against.length - 1].played);
+    expect(s.against).toEqual([{ faction: "Skaven", played: 3, won: 1, drawn: 1, lost: 1 }]);
+  });
+
   it("works out armies, tactics, rounds and double turns", () => {
     expect(s.armies).toEqual([{ faction: "Ogor Mawtribes", played: 3, won: 1, drawn: 1, lost: 1 }]);
     expect(s.tactics).toEqual([{ card: "Smokescreen", picked: 1, avgVp: 5, full: 0 }]);

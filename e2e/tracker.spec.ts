@@ -146,3 +146,36 @@ test("with no signal the game opens from this phone's copy and syncs later", asy
     .poll(async () => ((await (await page.request.get(`/api/games/${id}`)).json()) as { state: { vp: { me: number } } }).state.vp.me, { timeout: 20_000 })
     .toBe(Number(scored));
 });
+
+test("undo takes back the last change, one at a time", async ({ page }) => {
+  await newGame(page);
+  const undo = page.getByRole("button", { name: "Undo the last change" });
+  await first(page, "You");
+  await expect(page.locator(".turn-card")).toBeVisible();
+  // End the turn by mistake, then take it back.
+  await page.locator("#end-turn").click();
+  await expect(page.locator(".turn-label")).toContainText("Turn 2 · Diego's turn");
+  await undo.click();
+  await expect(page.locator(".turn-label")).toContainText("Turn 1 · Your turn");
+  // Once more: the round hasn't started. The names set before still stand.
+  await undo.click();
+  await expect(page.locator(".turn-card")).toHaveCount(0);
+  await expect(page.locator(".round-start")).toContainText("Start round 1");
+  await expect(page.locator(".game-head-title")).toContainText("Goy vs Diego");
+  await saved(page);
+});
+
+test("a plan every turn can be turned off on this phone", async ({ page }) => {
+  await newGame(page);
+  await first(page, "You");
+  // On by default: the plan comes by itself.
+  await expect(page.locator(".tips-headline")).toBeVisible();
+  await page.getByRole("switch", { name: "A plan every turn: on" }).click();
+  await page.locator("#end-turn").click();
+  await expect(page.locator(".turn-label")).toContainText("Turn 2");
+  // Off: nothing is asked for until the player wants it.
+  await page.waitForTimeout(2500);
+  await expect(page.locator(".tips-headline")).toHaveCount(0);
+  await page.getByRole("button", { name: "Get the plan for this turn" }).click();
+  await expect(page.locator(".tips-headline")).toBeVisible();
+});

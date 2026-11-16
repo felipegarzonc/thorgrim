@@ -72,6 +72,22 @@ export function StatsPage() {
         </section>
       )}
 
+      {s.against.length > 0 && (
+        <section>
+          <h2 className="section-title">Against each army</h2>
+          <div className="card rivals">
+            {s.against.map((a) => (
+              <div key={a.faction} className="rival">
+                <Avatar faction={a.faction} size={1.6} />
+                <span className="grow">{a.faction}</span>
+                <span className="muted small">{wdl(a)}</span>
+                <b>{pct(a)}</b>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {s.tactics.length > 0 && (
         <section>
           <h2 className="section-title">Battle tactics</h2>
