@@ -1653,7 +1653,7 @@ function RoundStep(props: {
         />
       ))}
 
-      {isLive && s.phase === PLAY_PHASES[PLAY_PHASES.length - 1] && <EndTurn game={game} n={n} update={update} names={names} go={go} />}
+      {isLive && <EndTurn game={game} n={n} update={update} names={names} go={go} />}
 
       {(isLive || (game.battleplan && battleplanInfo(game.battleplan)?.map)) && (
         <h2 className="reference-title">
@@ -1686,11 +1686,6 @@ function RoundStep(props: {
       )}
       </div>
       {!rec?.first && n === liveRound && <p className="muted small">Pick who went first to start the turn tracker.</p>}
-      {n === BATTLE_ROUNDS && liveRound === n && s.activePlayer !== s.firstThisRound && s.phase === "End of Turn" && (
-        <button type="button" className="primary wide" onClick={() => go("results")}>
-          See the results
-        </button>
-      )}
     </div>
   );
 }
@@ -1816,7 +1811,6 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
     void fetchTips();
   }, [key, meta?.coachReady]);
 
-  const lastPhase = phaseIndex === PLAY_PHASES.length - 1;
   const phaseTips = tips?.phases[s.phase] ?? [];
 
   return (
@@ -1827,7 +1821,7 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
         </span>
         <span className="muted small">{s.cp[active]} CP</span>
       </div>
-      <nav className="phase-chips" aria-label="Phases">
+      <nav className="phase-chips" aria-label="Phases: tap one to see its plan">
         {PLAY_PHASES.map((p, i) => (
           <button key={p} type="button" className={i < phaseIndex ? "past" : i === phaseIndex ? "current" : ""} aria-current={i === phaseIndex ? "step" : undefined} onClick={() => update({ phase: p })}>
             {SHORT[p]}
@@ -1908,15 +1902,6 @@ function TurnCard(props: Parameters<typeof RoundStep>[0] & { color: string }) {
 
       <PhaseChecklist game={game} armies={armies} units={units} update={update} />
 
-      {lastPhase ? (
-        <button type="button" className="score-below" onClick={() => document.getElementById("end-turn")?.scrollIntoView({ behavior: "smooth", block: "center" })}>
-          Score the turn below, then end it <Icon name="down" />
-        </button>
-      ) : (
-        <button type="button" className="primary wide" onClick={() => (feedback("phase"), update({ phase: PLAY_PHASES[phaseIndex + 1] }))}>
-          {`Next: ${PLAY_PHASES[phaseIndex + 1]}`} <Icon name="right" />
-        </button>
-      )}
     </section>
   );
 }

@@ -585,7 +585,6 @@ export const ES_PHRASES: Record<string, string> = {
   ": map & twist": ": mapa y giro",
   "Unit damage": "Daño de unidades",
   "Pick who went first to start the turn tracker.": "Elige quién fue primero para empezar a llevar los turnos.",
-  "See the results": "Ver el resultado",
   CP: "PM",
   Scoreboard: "Marcador",
   "YOUR TURN": "TU TURNO",
@@ -1315,7 +1314,6 @@ export const ES_PHRASES: Record<string, string> = {
   "That game isn't being played right now.": "Esa partida no se está jugando ahora.",
   "Unknown cheer.": "Ánimo desconocido.",
   "Meta chronicle": "Crónica del meta",
-  "Score the turn below, then end it": "Puntúa el turno abajo y luego termínalo",
   "Something went wrong": "Algo salió mal",
   "Your games are saved. Reload to carry on.": "Tus partidas están guardadas. Recarga para seguir.",
   // Clubs
