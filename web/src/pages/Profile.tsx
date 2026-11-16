@@ -310,6 +310,111 @@ export function ProfilePage() {
   );
 }
 
+interface RestorePlan {
+  done: boolean;
+  createdAt: string;
+  records: number;
+  missing: number;
+  changed: number;
+  same: number;
+  newer: number;
+  savedFirst?: string;
+}
+/** Vercel takes request bodies up to about 4 MB. */
+const MAX_RESTORE_UPLOAD = 4 * 1024 * 1024;
+
+/** Put a backup's records back: pick a kept one or the emailed file, read what it would do, then type RESTORE. */
+function RestoreBackup() {
+  const [open, setOpen] = useState(false);
+  const [kept] = useLoad<string[]>(open ? "/admin/backups" : null);
+  const [name, setName] = useState("");
+  const [file, setFile] = useState<File>();
+  const [plan, setPlan] = useState<RestorePlan>();
+  const [word, setWord] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const pick = (next: { name?: string; file?: File }) => {
+    setName(next.name ?? "");
+    setFile(next.file);
+    setPlan(undefined);
+    setWord("");
+    setError(undefined);
+  };
+  const run = async (confirm: boolean) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      if (file && file.size > MAX_RESTORE_UPLOAD) throw new Error("That file is too big to upload (over 4 MB). Pick one of the kept backups instead.");
+      const query = `${confirm ? "confirm=RESTORE&" : ""}${file ? "" : `name=${encodeURIComponent(name)}`}`;
+      setPlan(await api<RestorePlan>(`/admin/restore?${query}`, file ? { method: "POST", body: file, headers: { "content-type": "application/gzip" } } : { method: "POST" }));
+      setWord("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!open)
+    return (
+      <button type="button" className="small ghost" onClick={() => setOpen(true)}>
+        Restore from a backup…
+      </button>
+    );
+  const when = plan?.createdAt ? new Date(plan.createdAt).toLocaleString() : "an unknown date";
+  return (
+    <div className="stack restore-backup">
+      <b>Restore from a backup</b>
+      <p className="small muted">For when records were lost or damaged. Records in the backup come back as they were; anything made since stays. Sign-ins and passwords aren't touched.</p>
+      <label className="field">
+        <span>A kept backup</span>
+        <select value={name} onChange={(e) => pick({ name: e.target.value })} aria-label="A kept backup">
+          <option value="">{kept ? (kept.length ? "Choose…" : "None kept yet") : "Loading…"}</option>
+          {(kept ?? []).map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        <span>Or the file from the backup email (.json.gz)</span>
+        <input type="file" accept=".gz,application/gzip" aria-label="Backup file" onChange={(e) => pick({ file: e.target.files?.[0] })} />
+      </label>
+      {(name || file) && !plan?.done && (
+        <button type="button" className="small" disabled={busy} onClick={() => run(false)}>
+          {busy && !plan ? "Reading…" : "See what it would do"}
+        </button>
+      )}
+      {plan && !plan.done && (
+        <div className="stack restore-plan">
+          <p className="small">{`Backup of ${when}: ${plan.records} records.`}</p>
+          <p className="small">{`Restoring brings back ${plan.missing} missing now and puts ${plan.changed} changed since back to how they were. ${plan.same} are the same already; ${plan.newer} made since stay.`}</p>
+          <p className="small muted">Today's records are saved as a backup first, so you can take a restore back.</p>
+          {plan.missing + plan.changed === 0 ? (
+            <p className="small">Nothing to restore: everything in this backup is already as it was.</p>
+          ) : (
+            <>
+              <label className="field">
+                <span>Type RESTORE to go ahead</span>
+                <input value={word} onChange={(e) => setWord(e.target.value)} aria-label="Type RESTORE to go ahead" autoCapitalize="characters" />
+              </label>
+              <button type="button" className="small danger" disabled={busy || word.trim() !== "RESTORE"} onClick={() => run(true)}>
+                {busy ? "Restoring…" : `Restore ${plan.missing + plan.changed} records`}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {plan?.done && (
+        <p className="small" role="status">
+          {`Restored ${plan.missing + plan.changed} records from the backup of ${when}. How things were just before is kept as ${plan.savedFirst}.`}
+        </p>
+      )}
+      {error && <p className="small error">{error}</p>}
+    </div>
+  );
+}
+
 /** The owner's copy of every record (server/backup.ts): weekly by email, or now. */
 function BackupCard() {
   const [busy, setBusy] = useState(false);
@@ -341,6 +446,7 @@ function BackupCard() {
         {busy ? "Preparing…" : "Download a backup now"}
       </button>
       {error && <p className="small error">{error}</p>}
+      <RestoreBackup />
     </Card>
   );
 }

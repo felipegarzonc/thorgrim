@@ -25,7 +25,7 @@ vi.mock("./mail.ts", async (importOriginal) => ({
 }));
 
 const { blobs, backupBlobs } = await import("./blobs.ts");
-const { makeBackup, runBackup } = await import("./backup.ts");
+const { listBackups, makeBackup, readBackup, restoreBackup, restorePlan, runBackup, storedBackup } = await import("./backup.ts");
 const unzip = (b: Buffer) => JSON.parse(zlib.gunzipSync(b).toString("utf8")) as { format: string; files: Record<string, unknown> };
 
 describe("backups", () => {
@@ -64,5 +64,46 @@ describe("backups", () => {
     expect(sent.every((m) => m.to === "ana@example.com")).toBe(true);
     expect(sent).toHaveLength(9);
     expect(unzip(sent.at(-1)!.attachments![0].content).files["games/g1.json"]).toEqual({ id: "g1" });
+  });
+
+  it("restores: lost and changed records come back, newer ones stay, and today's copy is saved first", async () => {
+    const s = blobs();
+    const backup = readBackup((await makeBackup(new Date("2026-11-20T08:00:00Z"))).data);
+    // Since the backup: one game lost, one list changed, one new game made.
+    await s.remove("games/g1.json");
+    await s.write("users/ben/lists/l1.json", JSON.stringify({ id: "l1", name: "changed" }));
+    await s.write("games/g2.json", JSON.stringify({ id: "g2" }));
+    const plan = await restorePlan(backup);
+    expect(plan).toMatchObject({ records: 5, missing: 1, changed: 1, same: 3, newer: 1 });
+    // Looking changes nothing.
+    expect(await s.read("games/g1.json")).toBeFalsy();
+
+    const done = await restoreBackup(backup, new Date("2026-11-21T09:30:00Z"));
+    expect(JSON.parse((await s.read("games/g1.json"))!.toString())).toEqual({ id: "g1" });
+    expect(JSON.parse((await s.read("users/ben/lists/l1.json"))!.toString())).toEqual({ id: "l1" });
+    expect(JSON.parse((await s.read("games/g2.json"))!.toString())).toEqual({ id: "g2" });
+    // The secrets weren't in the backup and are still there.
+    expect((await s.read("settings/secrets.json"))!.toString()).toContain("sk-ant-secret");
+    // How things were just before is kept, so the restore can be taken back.
+    expect(done.savedFirst).toBe("thorgrim-2026-11-21-09-30-before-restore.json.gz");
+    expect(await listBackups()).toContain(done.savedFirst);
+    const before = readBackup(await storedBackup(done.savedFirst));
+    expect(before.files["users/ben/lists/l1.json"]).toEqual({ id: "l1", name: "changed" });
+    expect(before.files["games/g1.json"]).toBeUndefined();
+  });
+
+  it("refuses files that aren't backups, and never writes secrets or outside the records", async () => {
+    expect(() => readBackup(Buffer.from("not a backup"))).toThrow(/isn't a Thorgrim backup/);
+    expect(() => readBackup(zlib.gzipSync(JSON.stringify({ format: "other", files: {} })))).toThrow(/isn't a Thorgrim backup/);
+    const crafted = readBackup(
+      zlib.gzipSync(
+        JSON.stringify({
+          format: "thorgrim-backup-1",
+          files: { "settings/secrets.json": { anthropicKey: "stolen" }, "users/x/settings/secrets.json": {}, "../outside.json": {}, "jobs/j9.json": {}, "games/photo.jpg": {}, "games/ok.json": { id: "ok" } },
+        }),
+      ),
+    );
+    expect(Object.keys(crafted.files)).toEqual(["games/ok.json"]);
+    await expect(storedBackup("../settings/secrets.json")).rejects.toThrow(/kept backups/);
   });
 });
