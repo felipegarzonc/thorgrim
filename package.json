@@ -20,6 +20,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
+    "@fontsource/cinzel": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
     "@supabase/storage-js": "^2.118.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/functions": "^2.2.13",
