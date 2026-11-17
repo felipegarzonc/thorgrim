@@ -438,7 +438,9 @@ const newestFirst = <T extends { createdAt: string }>(xs: T[]) => xs.sort((a, b)
 
 app.get("/api/media-token", (_req, res) => res.json({ media: mediaToken(currentUser().id) }));
 // Which build is live: open pages compare it with the one they loaded and offer a reload.
-app.get("/api/version", (_req, res) => res.json({ builtAt: gameData().builtAt }));
+/** The commit this deploy was built from (Vercel and Render say), short; empty on your own computer. */
+const release = () => (process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.RENDER_GIT_COMMIT ?? "").trim().slice(0, 7);
+app.get("/api/version", (_req, res) => res.json({ builtAt: gameData().builtAt, release: release() }));
 app.get("/api/meta", async (_req, res) => {
   const d = gameData();
   const u = currentUser();
@@ -452,6 +454,7 @@ app.get("/api/meta", async (_req, res) => {
     source: d.source,
     commit: d.commit,
     builtAt: d.builtAt,
+    release: release(),
     factions: Object.keys(d.factions).sort(),
     battleTactics: d.core.filter((r) => r.ability.kind === "Battle Tactic Card").map((r) => ({ name: r.ability.name, ...r.ability.extra })),
     coachReady: hasCredentials(),

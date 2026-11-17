@@ -7318,6 +7318,12 @@ body {
   margin: 0.1rem 0 0;
 }
 
+/* Which version this is, at the foot of the profile. */
+.app-version {
+  text-align: center;
+  margin: 0.4rem 0 0;
+}
+
 /* Printing the results (or saving them as PDF): only the score sheet, dark on white. */
 @media print {
   :root {
