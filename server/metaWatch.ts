@@ -37,6 +37,32 @@ interface RulesChange {
 
 const daysAgo = (now: Date, n: number) => new Date(now.getTime() - n * 86_400_000).toISOString().slice(0, 10);
 
+interface Impact {
+  faction: string;
+  change: { date: string; title: string } | null;
+  topLists: { before: number; after: number } | null;
+  winRate: { change: number | null } | null;
+  units: Record<"entered" | "left" | "rising" | "falling", { name: string }[]> | null;
+}
+
+/** A rules change is still news for the chronicle this long after it. */
+const CHANGE_NEWS_DAYS = 28;
+
+/**
+ * What the latest rules change did to a few armies (the week's movers, else
+ * the best): only while the change is recent, and only what Omnissiah could
+ * compare. Small, because it goes into the chronicle's prompt.
+ */
+async function rulesChangeEffects(now: Date, latest: RulesChange | undefined, factions: string[]) {
+  if (!latest || latest.date < daysAgo(now, CHANGE_NEWS_DAYS)) return [];
+  const answers = await Promise.all(factions.slice(0, 3).map((f) => omnissiahGet<Impact>(`/impact/${encodeURIComponent(f)}`)));
+  return answers.flatMap((a) => {
+    if (!a?.change || (!a.units && a.winRate?.change == null)) return [];
+    const names = (k: "entered" | "left" | "rising" | "falling") => (a.units?.[k] ?? []).slice(0, 3).map((u) => u.name);
+    return [{ faction: a.faction, change: a.change.title, topListsSince: a.topLists?.after ?? 0, winRateChange: a.winRate?.change ?? null, entered: names("entered"), left: names("left"), rising: names("rising"), falling: names("falling") }];
+  });
+}
+
 /** What the chronicle is written from: kept small (it goes into a prompt). */
 async function weekData(now: Date) {
   const [factions, trends, rules, articles] = await Promise.all([
@@ -47,11 +73,15 @@ async function weekData(now: Date) {
   ]);
   if (!factions) return undefined;
   const ranked = factions.factions;
+  const movers = (trends?.factions ?? []).filter((t) => t.weekChange !== null && Math.abs(t.weekChange) >= 3).slice(0, 6);
   return {
     date: now.toISOString().slice(0, 10),
     best: ranked.slice(0, 5),
     worst: ranked.slice(-3),
-    movers: (trends?.factions ?? []).filter((t) => t.weekChange !== null && Math.abs(t.weekChange) >= 3).slice(0, 6),
+    movers,
+    rulesChangeEffects: await rulesChangeEffects(now, rules?.changes[0], (movers.length ? movers : ranked).map((f) => f.faction)),
+    /** For each club's own line under the chronicle (not sent to the writer). */
+    trends: trends?.factions ?? [],
     trendsNote: trends?.note,
     recentEvents: factions.recentEvents.slice(0, 6),
     rulesChangesThisWeek: (rules?.changes ?? []).filter((c) => c.date >= daysAgo(now, 7)),
@@ -65,19 +95,37 @@ async function clubLang(members: { prefix: string }[]): Promise<Lang> {
   return langs.filter((l) => l === "es").length > langs.length / 2 ? "es" : "en";
 }
 
+/**
+ * One line for a club under the week's chronicle: the armies its members play,
+ * with their tournament win rate and how it moved this week. Written here,
+ * from the numbers, so each club gets its own without another request to Claude.
+ */
+export function clubLine(armies: string[], trends: Trend[], lang: Lang): string {
+  const rows = armies
+    .map((a) => trends.find((t) => t.faction.toLowerCase() === a.toLowerCase()))
+    .filter((t): t is Trend => !!t)
+    .sort((a, b) => b.winRate - a.winRate);
+  if (!rows.length) return "";
+  const moved = (t: Trend) => (t.weekChange === null || t.weekChange === 0 ? "" : ` (${t.weekChange > 0 ? "+" : "−"}${Math.abs(t.weekChange)})`);
+  const list = rows.map((t) => `${t.faction} ${t.winRate}%${moved(t)}`).join(", ");
+  return lang === "es" ? `Los ejércitos del club en torneos esta semana: ${list}.` : `Your club's armies in tournaments this week: ${list}.`;
+}
+
 /** Mondays: the chronicle in each club's feed. */
 export async function weeklyChronicle(now = new Date()) {
   if (!omnissiahReady()) return { skipped: "Omnissiah is not set up" };
   const data = await weekData(now);
   if (!data) return { skipped: "Omnissiah had no data" };
+  const { trends: _trends, ...forWriter } = data;
   const written = new Map<Lang, { title: string; story: string }>();
   const posted = await eachClub(async (club) => {
     const members = await clubMembers();
     if (!members.length) return { club: club.name, posted: false };
     const lang = await clubLang(members);
-    if (!written.has(lang)) written.set(lang, await metaChronicle(data, lang));
+    if (!written.has(lang)) written.set(lang, await metaChronicle(forWriter, lang));
     const c = written.get(lang)!;
-    await postChronicle(c.title, c.story, members.map((m) => m.id));
+    const own = clubLine([...new Set((await Promise.all(members.map((m) => armyOf(m.prefix)))).filter((a): a is string => !!a))], data.trends, lang);
+    await postChronicle(c.title, own ? `${c.story}\n\n${own}` : c.story, members.map((m) => m.id));
     return { club: club.name, posted: true, lang };
   });
   return { posted };

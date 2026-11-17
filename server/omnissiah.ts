@@ -35,6 +35,7 @@ export const metaSchemas = {
     faction: z.string().optional().describe("Needed with list_text"),
   }),
   aos_scouting: z.object({ faction: z.string().describe("The player's faction"), opponent: z.string().describe("The opponent's faction") }),
+  aos_rules_impact: z.object({ faction: z.string(), change: z.string().optional().describe("The rules change on or before YYYY-MM-DD; default: the latest") }),
   aos_trends: z.object({}),
   aos_player: z.object({ name: z.string() }),
   aos_top_players: z.object({ faction: z.string().optional() }),
@@ -51,10 +52,12 @@ export const metaDescriptions: Record<MetaTool, string> = {
     "Search AoS articles and news: Tabletop Battles (formerly Goonhammer) weekly competitive round-ups, Woehammer meta stats commentary and top lists, Frontline Gaming tactics, Spikey Bits and Bell of Lost Souls news. Gives titles, links, dates and short excerpts: link the article, don't retell it.",
   aos_rules_updates: "The latest battlescrolls, points updates, errata and FAQs seen in AoS news. Check it before trusting stats: numbers from before the latest change may no longer hold.",
   aos_winners_profile:
-    "What a faction's top tournament lists (X-1 or better) choose: how often each unit, battle tactic card, lore and formation appears, also among undefeated lists. Top lists only, so it shows what top lists pick, not what loses.",
+    "What a faction's top tournament lists (X-1 or better) choose: how often each unit, battle tactic card, lore and formation appears, also among undefeated lists. Top lists only, so it shows what top lists pick, not what loses. Also `pairs`: units top lists bring together (of the lists with the first unit, the % that also bring the second), for synergies.",
   aos_compare_list:
-    "Compare one of the player's saved lists (by name) or a pasted list with its faction's top tournament lists: units most top lists bring that it lacks, how common its units are among them, tactic cards, formations, drops.",
+    "Compare one of the player's saved lists (by name) or a pasted list with its faction's top tournament lists: units most top lists bring that it lacks, how common its units are among them, tactic cards, formations, drops. `partnersMissing` names units the list has whose usual partner in top lists it lacks.",
   aos_scouting: "Before a game: what the opponent's faction brings in top tournament lists, and this matchup's record with its 95% range.",
+  aos_rules_impact:
+    "What the latest rules change (battlescroll, points, errata) did to a faction: its win rate before and after, and which units entered, left, rose or fell among its top tournament lists. Use it for 'what changed for my army' and before trusting older advice.",
   aos_trends: "Each faction's win rate now against a week and four weeks ago (rising and falling armies).",
   aos_player: "A tournament player's recent top results and lists (by name).",
   aos_top_players: "Players with the most X-1 or better results, overall or for one faction.",
@@ -139,6 +142,9 @@ export async function runMetaTool(name: MetaTool, input: unknown): Promise<strin
     }
     case "aos_scouting":
       out = await get("/scouting", { faction: args.faction, opponent: args.opponent });
+      break;
+    case "aos_rules_impact":
+      out = await get(`/impact/${encodeURIComponent(String(args.faction))}`, { change: args.change });
       break;
     case "aos_trends":
       out = await get("/trends");
