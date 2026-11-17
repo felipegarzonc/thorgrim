@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { openAtTop } from "./scrollTop.ts";
-import { api, CLUB_SEEN, LOGIN_EVENT, mediaExpiry, OFFLINE_EVENT, setMediaToken } from "./api.ts";
+import { api, CLUB_SEEN, LOGIN_EVENT, mediaExpiry, OFFLINE_EVENT, setMediaToken, keptCopy } from "./api.ts";
 import { HomePage } from "./pages/Home.tsx";
 import { Icon, MetaContext, useOnRefresh, type IconName, type Meta } from "./ui.tsx";
 import { PullToRefresh } from "./gestures.tsx";
@@ -98,7 +98,8 @@ function useHashRoute(): string[] {
 }
 
 export function App() {
-  const [meta, setMeta] = useState<Meta | null>(null);
+  // What this phone kept from last time opens the app at once; the fresh copy replaces it when it arrives.
+  const [meta, setMeta] = useState<Meta | null>(() => keptCopy<Meta>("/meta") ?? null);
   const [error, setError] = useState<string>();
   const route = useHashRoute();
   const [tab = "home", id, step] = route;

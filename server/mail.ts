@@ -4,7 +4,6 @@
 // myaccount.google.com/apppasswords). Set them in the hosting settings.
 // Without either nothing is sent, and callers show the admin what to send.
 
-import nodemailer from "nodemailer";
 
 const resend = () => (process.env.RESEND_API_KEY?.trim() && process.env.MAIL_FROM?.trim() ? { key: process.env.RESEND_API_KEY.trim(), from: process.env.MAIL_FROM.trim() } : null);
 const gmail = () =>
@@ -40,6 +39,8 @@ export async function sendMail(m: { to: string; subject: string; text: string; h
     }
     const g = gmail();
     if (g) {
+      // Loaded here, not at the top: a cold server answers faster without it, and most sends go through Resend.
+      const { default: nodemailer } = await import("nodemailer");
       const transport = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: g.user, pass: g.pass } });
       await transport.sendMail({ from: `Thorgrim <${g.user}>`, to: m.to, subject: m.subject, text: m.text, html: m.html, attachments: m.attachments });
       return true;

@@ -4,7 +4,6 @@
 // upload, in the background, a few pages per request.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { PDFDocument } from "pdf-lib";
 import type { LibraryDoc } from "../shared/types.ts";
 import { checkBudget, recordUsage } from "./accounts.ts";
 import { anthropic, hasCredentials } from "./anthropic.ts";
@@ -82,6 +81,8 @@ export async function transcribeStep(id: string): Promise<LibraryDoc["transcript
       pages = await transcribeBatch([{ type: "image", source: { type: "base64", media_type: media, data: buffer.toString("base64") } }], batch);
     } else {
       batch = t.pages.slice(t.done, t.done + PAGES_PER_REQUEST);
+      // Loaded here, not at the top: only the rules library splits PDFs, and a cold server answers faster without it.
+      const { PDFDocument } = await import("pdf-lib");
       const source = await PDFDocument.load(buffer, { ignoreEncryption: true });
       const part = await PDFDocument.create();
       for (const page of await part.copyPages(source, batch.map((n) => n - 1))) part.addPage(page);

@@ -4,7 +4,7 @@
 // keeps them in storage (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY override).
 
 import crypto from "node:crypto";
-import webpush from "web-push";
+import type { PushSubscription } from "web-push";
 import { blobs } from "./blobs.ts";
 import { currentUser } from "./context.ts";
 import { Collection } from "./store.ts";
@@ -16,7 +16,7 @@ interface Keys {
 }
 interface Subscription {
   id: string;
-  sub: webpush.PushSubscription;
+  sub: PushSubscription;
   at: string;
 }
 
@@ -24,6 +24,8 @@ const KEYS = "settings/push-keys.json";
 const SUBJECT = process.env.VAPID_SUBJECT ?? "https://github.com/felipegarzonc/thorgrim";
 const subsIn = (prefix: string) => new Collection<Subscription>("push", prefix);
 let keys: Keys | null = null;
+/** Loaded when a notification is first sent, not at the top: a cold server answers faster without it. */
+const webPush = async () => (await import("web-push")).default;
 
 async function vapid(): Promise<Keys> {
   if (keys) return keys;
@@ -32,7 +34,7 @@ async function vapid(): Promise<Keys> {
     const saved = await blobs().read(KEYS);
     if (saved) keys = JSON.parse(saved.toString("utf8")) as Keys;
     else {
-      await blobs().write(KEYS, JSON.stringify(webpush.generateVAPIDKeys()), "application/json");
+      await blobs().write(KEYS, JSON.stringify((await webPush()).generateVAPIDKeys()), "application/json");
       // Read back: if two servers made keys at once, everyone uses the one that was kept.
       keys = JSON.parse((await blobs().read(KEYS))!.toString("utf8")) as Keys;
     }
@@ -58,7 +60,7 @@ export function isPushEndpoint(endpoint: unknown): endpoint is string {
 }
 
 /** This phone wants notifications for the signed-in member. */
-export async function subscribe(sub: webpush.PushSubscription) {
+export async function subscribe(sub: PushSubscription) {
   if (!isPushEndpoint(sub?.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) throw new UserError("That isn't a push subscription.");
   const clean = { endpoint: sub.endpoint, keys: { p256dh: String(sub.keys.p256dh), auth: String(sub.keys.auth) } };
   await subsIn(currentUser().prefix).save({ id: idOf(sub.endpoint), sub: clean, at: new Date().toISOString() });
@@ -74,9 +76,10 @@ export async function pushTo(prefix: string, payload: { title: string; body: str
   const subs = (await subsIn(prefix).list()).filter((s) => isPushEndpoint(s.sub?.endpoint));
   if (!subs.length) return;
   const { publicKey: pub, privateKey } = await vapid();
+  const push = await webPush();
   await Promise.all(
     subs.map((s) =>
-      webpush
+      push
         .sendNotification(s.sub, JSON.stringify(payload), { TTL: 3600, vapidDetails: { subject: SUBJECT, publicKey: pub, privateKey } })
         .catch(async (e: { statusCode?: number }) => {
           if (e.statusCode === 404 || e.statusCode === 410) await subsIn(prefix).delete(s.id);
