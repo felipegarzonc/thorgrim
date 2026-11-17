@@ -1,0 +1,407 @@
+/* The war-table look: game cards, the home chart, and the controls every screen shares. */
+
+/* =========================================================
+   Scoreboard look: home, game cards, the step-by-step game
+   ========================================================= */
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.grow small,
+.pick-list small,
+.toggle-row small,
+.list-item small {
+  display: block;
+  font-size: 0.8rem;
+  margin-top: 0.1rem;
+}
+.wide {
+  width: 100%;
+}
+.section-title {
+  font-family: var(--display);
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+  margin: 0.6rem 0 0.8rem;
+}
+.notice {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem;
+  color: var(--muted);
+}
+.empty h2 {
+  font-size: 1.3rem;
+}
+.empty button {
+  margin-top: 0.5rem;
+}
+button.accent,
+.button.accent {
+  color: var(--me-text);
+}
+
+/* ---------- game cards ---------- */
+
+.game-card {
+  background: var(--panel);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.game-card > a {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.game-card > a:hover {
+  background: #20242b;
+}
+.game-card-body {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 1rem 1.1rem 1.1rem;
+}
+.gc-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.gc-side.right {
+  text-align: right;
+}
+.gc-date {
+  font-size: 0.85rem;
+  margin-bottom: 0.45rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gc-name {
+  font-size: 1.2rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gc-faction {
+  font-size: 0.98rem;
+  margin-top: 0.4rem;
+}
+.gc-side small {
+  font-size: 0.78rem;
+}
+.gc-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 1.2rem;
+}
+.big-score {
+  font-family: var(--display);
+  font-size: clamp(2.2rem, 10vw, 3.3rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.gc-status {
+  margin-top: 0.4rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+}
+.gc-status.win {
+  color: var(--good);
+}
+.gc-status.loss {
+  color: var(--bad);
+}
+.gc-status.draw {
+  color: var(--text);
+}
+.gc-status.live {
+  color: var(--me-text);
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+}
+.gc-actions {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  border-top: 1px solid var(--line-2);
+}
+.gc-actions .button {
+  border-radius: 0;
+  min-height: 3.4rem;
+  letter-spacing: 0.12em;
+}
+
+/* ---------- home: chart & stats ---------- */
+
+.chart-card {
+  padding: 1rem 1rem 0.6rem;
+}
+.chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+.chart .grid {
+  stroke: var(--line-2);
+  stroke-width: 0.6;
+}
+.chart .axis {
+  fill: var(--muted);
+  font-size: 10px;
+}
+.chart .area {
+  fill: var(--me);
+  opacity: 0.16;
+}
+.chart .line {
+  fill: none;
+  stroke: var(--me);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.chart .crosshair {
+  stroke: var(--muted);
+  stroke-width: 0.8;
+  stroke-dasharray: 3 3;
+}
+.chart .dot {
+  fill: var(--me);
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+.chart-tip {
+  min-height: 1.5rem;
+  margin: 0.4rem 0 0;
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+.stat-tile {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 1.2rem 0.8rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.stat-tile b {
+  font-size: 2.2rem;
+  font-weight: 500;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-tile b small {
+  font-size: 1rem;
+  color: var(--muted);
+}
+.stat-tile span {
+  color: var(--muted);
+}
+
+/* ---------- shared controls ---------- */
+
+.segbtn {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #3a3d43;
+  flex: none;
+}
+.segbtn button {
+  border-radius: 0;
+  background: transparent;
+  min-height: 52px;
+  padding: 0.4rem 0.75rem;
+  font-size: 1rem;
+  /* The same weight on and off, so picking one doesn't resize the control. */
+  font-weight: 600;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+/* Inside the control a press darkens instead of shrinking, which opened gaps at the edges. */
+.segbtn button:active:not(:disabled) {
+  transform: none;
+  filter: brightness(0.9);
+}
+.segbtn button + button {
+  border-left: 1px solid var(--line-2);
+}
+.segbtn button.on {
+  background: var(--me);
+  color: var(--me-ink);
+}
+.counter {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr) 2.6rem;
+  min-width: 0;
+  align-items: center;
+  background: #3a3d43;
+  border-radius: 12px;
+  min-height: 4rem;
+}
+.counter button {
+  min-height: 4rem;
+  font-size: 1.6rem;
+  font-weight: 300;
+  padding: 0;
+  color: var(--text);
+}
+.counter button:disabled {
+  opacity: 0.3;
+}
+.counter span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+}
+.counter b {
+  font-size: 1.25rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.counter small {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 0.15rem;
+}
+fieldset.group {
+  border: 2px dashed var(--dash);
+  border-radius: 16px;
+  padding: 0.55rem 0.6rem 0.65rem;
+  margin: 0.2rem 0 0;
+  min-width: 0;
+}
+fieldset.group legend {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.78rem;
+  color: var(--text);
+  padding: 0 0.4rem;
+}
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #f3eee4;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  flex: none;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.12);
+}
+/* An army's crest: its grand alliance's mark, ringed in its colour. */
+.crest {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  flex: none;
+  color: var(--army, var(--faint));
+  border: 1.5px solid var(--army, var(--line-2));
+  background: color-mix(in srgb, var(--army, #4a4e57) 16%, transparent);
+}
+.crest svg {
+  width: 56%;
+  height: 56%;
+}
+.avatar-space {
+  width: 2.4rem;
+  flex: none;
+}
+
+/* sheets: menus, pickers, the coach */
+body.sheet-open {
+  overflow: hidden;
+}
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  animation: sheet-in 0.18s ease-out;
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation: none;
+  }
+}
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: calc(0.6rem + env(safe-area-inset-top)) 0.6rem 0.6rem 1.1rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.sheet-head h2 {
+  font-size: 1.3rem;
+}
+.sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 1rem calc(2rem + env(safe-area-inset-bottom));
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+.pick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pick-list button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  gap: 1rem;
+  min-height: 3.6rem;
+  font-size: 1.08rem;
+  border-radius: 12px;
+  padding: 0.5rem 0.6rem;
+}
+.pick-list button.on {
+  color: var(--me-text);
+}
+.pick-list .step-link button {
+  min-height: 2.8rem;
+  font-size: 0.98rem;
+  color: var(--muted);
+}
+.pick-list .step-link:first-of-type {
+  border-top: 1px solid var(--line);
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+}
+.back-link {
+  color: var(--muted);
+  padding-left: 0.2rem;
+  margin-bottom: 0.4rem;
+}
