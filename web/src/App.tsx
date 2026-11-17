@@ -210,7 +210,9 @@ export function App() {
         <Landing />
       </Wait>
     );
-  if (tab === "signin") return <Redirect to="#/home" />;
+  // Signed in already (known once /meta answered): the sign-in page has nothing to do. Deciding sooner sent
+  // a signed-out visitor who opened the sign-in link away from it, to the landing page.
+  if (tab === "signin" && meta) return <Redirect to="#/home" />;
   if (tab === "play" && id)
     return (
       <Wait>

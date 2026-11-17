@@ -212,12 +212,17 @@ export class SupabaseBlobStore implements BlobStore {
 
 let store: BlobStore | null = null;
 
-/** Supabase when SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set, else a local folder. */
+/**
+ * Supabase when SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set, else a
+ * local folder. BLOB_STORE=local keeps the folder even then: the end-to-end
+ * tests of the screens that need accounts run with a stand-in for Supabase
+ * Auth and no Supabase storage.
+ */
 export function blobs(): BlobStore {
   if (store) return store;
   const url = process.env.SUPABASE_URL?.trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (url && key) {
+  if (url && key && process.env.BLOB_STORE?.trim() !== "local") {
     const storageUrl = process.env.SUPABASE_STORAGE_URL?.trim() || `${url.replace(/\/$/, "")}/storage/v1`;
     store = new SupabaseBlobStore(storageUrl, key, process.env.SUPABASE_BUCKET?.trim() || "thorgrim");
   } else {

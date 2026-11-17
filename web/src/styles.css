@@ -7233,7 +7233,8 @@ body {
   display: none;
 }
 .usage-month-name {
-  width: 4.6rem;
+  flex: none;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 .usage-month-bar {
