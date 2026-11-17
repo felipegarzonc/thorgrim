@@ -1,7 +1,7 @@
 // The app on the phone: its files (versioned by name, so they never change)
 // are kept here once loaded, and the page itself is asked from the network
-// first, falling back to the kept copy offline: the app opens at once, and
-// at the table without signal. The API is never cached.
+// but opens from the kept copy when the network is slow or gone: the app
+// opens at once, and at the table without signal. The API is never cached.
 //
 // And phone notifications: show what the server pushes (a comment, a report
 // of your game, an opponent who joined), and open the app where it points.
@@ -9,6 +9,8 @@
 const FILES = "thorgrim-files-v1";
 const PAGE = "thorgrim-page-v1";
 const KEEP_FILES = 150;
+/** How long the page waits for the network before opening the kept copy. */
+const PAGE_WAIT_MS = 800;
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => {
@@ -50,17 +52,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (req.mode === "navigate" && url.origin === self.location.origin && !url.pathname.startsWith("/api") && !/^\/(es\/)?(r|join|play)\//.test(url.pathname)) {
-    // The page: fresh when there is signal, the kept one when there isn't.
+    // The page: fresh when the signal answers quickly; otherwise the kept one opens at once (and offline),
+    // and the fresh one is kept for next time. A newer version still shows up: the app offers to reload.
+    const fresh = fetch(req).then((res) => {
+      if (res.ok) {
+        const copy = res.clone();
+        void caches.open(PAGE).then((c) => c.put("/", copy));
+      }
+      return res;
+    });
+    event.waitUntil(fresh.then(() => undefined, () => undefined));
     event.respondWith(
-      fetch(req)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            void caches.open(PAGE).then((c) => c.put("/", copy));
-          }
-          return res;
-        })
-        .catch(async () => (await caches.match("/", { cacheName: PAGE })) ?? Response.error()),
+      caches.match("/", { cacheName: PAGE }).then((kept) => {
+        if (!kept) return fresh.catch(() => Response.error());
+        const slow = new Promise((resolve) => setTimeout(() => resolve(kept), PAGE_WAIT_MS));
+        return Promise.race([fresh.then((res) => (res.ok ? res : kept), () => kept), slow]);
+      }),
     );
   }
 });
