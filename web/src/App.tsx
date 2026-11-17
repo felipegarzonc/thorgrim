@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { openAtTop } from "./scrollTop.ts";
 import { api, CLUB_SEEN, LOGIN_EVENT, mediaExpiry, OFFLINE_EVENT, setMediaToken } from "./api.ts";
 import { HomePage } from "./pages/Home.tsx";
 import { Icon, MetaContext, useOnRefresh, type IconName, type Meta } from "./ui.tsx";
@@ -86,7 +87,7 @@ function useHashRoute(): string[] {
     const on = () => {
       const next = read();
       // Another section of the app opens at its top, not wherever the last page was scrolled to.
-      if (next[0] !== section) window.scrollTo(0, 0);
+      if (next[0] !== section) openAtTop();
       section = next[0];
       setRoute(next);
     };
