@@ -19,7 +19,8 @@ vi.mock("@vercel/functions", () => ({ waitUntil: (p: Promise<unknown>) => void p
 const mails: { to: string; subject: string }[] = [];
 vi.mock("./mail.ts", () => ({ sendMail: async (m: { to: string; subject: string }) => (mails.push(m), true), mailReady: () => true }));
 const chronicles: string[] = [];
-vi.mock("./coach.ts", () => ({ metaChronicle: async (_d: unknown, lang: string) => (chronicles.push(lang), { title: lang === "es" ? "Los árboles avanzan" : "The trees march", story: "Sylvaneth rose." }) }));
+const written: Record<string, unknown>[] = [];
+vi.mock("./coach.ts", () => ({ metaChronicle: async (d: Record<string, unknown>, lang: string) => (written.push(d), chronicles.push(lang), { title: lang === "es" ? "Los árboles avanzan" : "The trees march", story: "Sylvaneth rose." }) }));
 
 let omni: Record<string, unknown> = {};
 vi.stubGlobal("fetch", async (url: string) => {
@@ -47,6 +48,9 @@ describe("the meta, brought to the club", () => {
       "/trends": { factions: [{ faction: "Sylvaneth", winRate: 58, games: 70, weekChange: 6.2, monthChange: null, ci: [46, 69] }, { faction: "Ogor Mawtribes", winRate: 51, games: 12, weekChange: -8, monthChange: null, ci: null }] },
       "/rules/changes": { changes: [{ date: "2026-10-22", title: "New Battlescroll", url: "u", source: "Spikey Bits" }] },
       "/articles/latest": { articles: [] },
+      // The battlescroll is four days old: what it did to the week's movers goes to the writer.
+      "/impact/Sylvaneth": { faction: "Sylvaneth", change: { date: "2026-10-22", title: "New Battlescroll" }, topLists: { before: 9, after: 5 }, winRate: { change: 4.5 }, units: { entered: [{ name: "Belthanos" }], left: [], rising: [], falling: [{ name: "Kurnoth Hunters" }] } },
+      "/impact/Ogor%20Mawtribes": { faction: "Ogor Mawtribes", change: { date: "2026-10-22", title: "New Battlescroll" }, topLists: { before: 1, after: 0 }, winRate: null, units: null },
     };
 
     const posted = await runAs(CRON_USER, () => weeklyChronicle(NOW));
@@ -55,6 +59,11 @@ describe("the meta, brought to the club", () => {
     const [post] = await runAs(ben, () => feed());
     expect(post).toMatchObject({ kind: "chronicle", authorName: "Thorgrim", title: "Los árboles avanzan", sides: [] });
     expect((await runAs(ben, () => myNotices()))[0].text).toMatch(/crónica del meta/);
+    // The writer got what the rules change did (only where there was something to compare), not the club's own numbers.
+    expect(written[0].rulesChangeEffects).toEqual([{ faction: "Sylvaneth", change: "New Battlescroll", topListsSince: 5, winRateChange: 4.5, entered: ["Belthanos"], left: [], rising: [], falling: ["Kurnoth Hunters"] }]);
+    expect(written[0]).not.toHaveProperty("trends");
+    // Under the chronicle, the club's own armies, best first, from the numbers.
+    expect(post.story).toBe("Sylvaneth rose.\n\nLos ejércitos del club en torneos esta semana: Sylvaneth 58% (+6.2), Ogor Mawtribes 51% (−8).");
 
     const alerts = await runAs(CRON_USER, () => factionAlerts(NOW));
     // Ben's Sylvaneth moved 6 points on 70 games; Ana's Ogors moved on only 12 (no alert); both hear of the battlescroll.

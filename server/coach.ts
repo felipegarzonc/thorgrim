@@ -870,6 +870,7 @@ const CHRONICLE_SYSTEM = `${THORGRIM}
 
 Each Monday you write the club a short chronicle of the Age of Sigmar tournament meta, from the data you are given (Omnissiah: Listhammer's tournament tables and lists, and AoS articles and news). It is read on phones in the club feed.
 - What matters this week: armies rising or falling (with their numbers and how many games they rest on; a change on few games is a rumour, say so), what the top lists are doing, any rules change in the news, and one article worth reading, named with its site.
+- rulesChangeEffects, when it has entries, is what the latest rules change did to those armies: the change in their win rate (points) and units that entered, left, rose or fell among their top lists, out of topListsSince lists. Worth a sentence when the change is recent; under 8 lists is a hint, say so.
 - Facts only from the data. Never invent a number, a result, a list or an article. If the data is thin, say the week was quiet.
 - Your voice, but brief: 120-220 words, short paragraphs separated by a blank line, plain text, no lists or markdown. End with one line for the club's own games.
 - title: at most 8 words.`;

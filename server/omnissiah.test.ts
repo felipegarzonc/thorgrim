@@ -27,6 +27,8 @@ describe("Omnissiah tools", () => {
     await runMetaTool("aos_tournament_lists", { faction: "ogors", min_wins: 4, limit: 50 });
     expect(calls[0]).toEqual({ url: "https://omni.example/matchup?a=Ogors&b=Skaven", auth: "Bearer secret-key" });
     expect(calls[1].url).toBe("https://omni.example/lists?faction=ogors&minWins=4&limit=10");
+    await runMetaTool("aos_rules_impact", { faction: "Ogor Mawtribes", change: "2026-10-10" });
+    expect(calls[2].url).toBe("https://omni.example/impact/Ogor%20Mawtribes?change=2026-10-10");
     await expect(runMetaTool("aos_faction_meta", { faction: "nope" })).rejects.toThrow(/Unknown faction/);
   });
 });

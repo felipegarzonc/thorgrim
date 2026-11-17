@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { letScroll } from "../scrollTop.ts";
 import { api, apiStream } from "../api.ts";
 import { SpeakButton, VoiceButton } from "../media.tsx";
 import { feedback } from "../sound.ts";
@@ -55,6 +56,7 @@ export function CoachChat(props: {
   // Braces matter: newer Chrome returns a promise from scrollIntoView, and an
   // effect that returns anything but a function breaks React on cleanup.
   useEffect(() => {
+    letScroll();
     bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [entries, busy]);
 
