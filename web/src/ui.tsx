@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ALLIANCES, allianceOf, baseFaction, type Alliance } from "../../shared/season.ts";
-import { api } from "./api.ts";
+import { api, keptCopy } from "./api.ts";
 
 export interface Meta {
   user?: { id: string; name: string; isAdmin: boolean; developer?: boolean };
@@ -59,9 +59,16 @@ export async function refreshAll() {
 }
 
 export function useLoad<T>(path: string | null, deps: unknown[] = []): [T | undefined, () => void, string | undefined] {
-  const [data, setData] = useState<T>();
+  // What this phone kept from last time shows at once; the fresh copy replaces it when it arrives.
+  const [data, setData] = useState<T | undefined>(() => keptCopy<T>(path));
   const [error, setError] = useState<string>();
   const [tick, setTick] = useState(0);
+  const shown = useRef(path);
+  if (shown.current !== path) {
+    // Another page of the same screen (another game, say): its own kept copy, not the last page's data.
+    shown.current = path;
+    setData(keptCopy<T>(path));
+  }
   useEffect(() => {
     if (!path) return;
     track(

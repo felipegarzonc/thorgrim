@@ -203,6 +203,15 @@ function offlineCopy<T>(path: string): T | undefined {
     return undefined;
   }
 }
+/**
+ * What this phone kept for a page, to show at once while the fresh copy
+ * loads (the app opens on what it showed last time, then updates in place).
+ * Undefined for anything not kept, or when nothing was kept yet.
+ */
+export function keptCopy<T>(path: string | null): T | undefined {
+  return path && keptForTable(path) ? offlineCopy<T>(path) : undefined;
+}
+
 export function forgetOfflineCopies() {
   try {
     for (const p of offlineIndex()) localStorage.removeItem(OFFLINE + p);

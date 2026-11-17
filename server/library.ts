@@ -7,7 +7,6 @@
 // finished here, so online body-size limits don't apply.
 
 import path from "node:path";
-import { extractText, getDocumentProxy } from "unpdf";
 import type { LibraryDoc } from "../shared/types.ts";
 import { blobs } from "./blobs.ts";
 import { currentUser } from "./context.ts";
@@ -70,6 +69,8 @@ async function process(doc: LibraryDoc, buffer: Buffer): Promise<LibraryDoc> {
   let pages: string[] = [];
   delete doc.uploading;
   if (doc.kind === "pdf") {
+    // Loaded here, not at the top: only the rules library reads PDFs, and a cold server answers faster without it.
+    const { extractText, getDocumentProxy } = await import("unpdf");
     const pdf = await getDocumentProxy(new Uint8Array(buffer));
     const { totalPages, text } = await extractText(pdf, { mergePages: false });
     doc.pages = totalPages;
