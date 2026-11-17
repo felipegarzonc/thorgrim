@@ -30,8 +30,13 @@ test("gestures", async ({ page, context }) => {
   await page.waitForTimeout(800);
   let reloaded = 0;
   page.on("request", (r) => { if (r.url().endsWith("/api/games")) reloaded++; });
+  // Each step is checked, so a failure says which one broke: the page is at its top, with nothing open over it...
+  await expect.poll(() => page.evaluate(() => ({ scrollY: Math.round(window.scrollY), sheetOpen: !!document.querySelector("[role=dialog], dialog[open]") }))).toEqual({ scrollY: 0, sheetOpen: false });
   await drag(200, 200, 200, 420, 10, true);
+  // ...the pull shows while the finger is down...
+  await expect.poll(() => page.locator(".ptr").evaluate((el) => Math.round(el.getBoundingClientRect().height))).toBeGreaterThanOrEqual(72);
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  // ...and letting go loads the games again.
   await expect.poll(() => reloaded).toBeGreaterThan(0);
   await expect(page.locator(".ptr.busy")).toHaveCount(0);
 });
