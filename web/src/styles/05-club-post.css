@@ -1,0 +1,705 @@
+/* A post in the club: an activity card. */
+
+/* ---------- club post: an activity card ---------- */
+.post-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+.post-lines > span {
+  display: block;
+  line-height: 1.5;
+}
+.post-lines .ico {
+  width: 1rem;
+  height: 1rem;
+  color: var(--brass);
+  vertical-align: -0.17em;
+  margin-right: 0.15rem;
+}
+.post-lines .crest {
+  vertical-align: -0.25em;
+  margin: 0 0.1rem;
+}
+.post-stats {
+  display: flex;
+  justify-content: center;
+  gap: 1.6rem;
+  margin: 0.3rem 0;
+}
+.post-stats span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.post-stats small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.post-stats b {
+  font-family: var(--display);
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+.post-result.win {
+  color: var(--brass);
+}
+/* The carousel: full-width slides, the score sheet first, then the photos. */
+.carousel {
+  margin: 0 -1.1rem;
+}
+.carousel-strip {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.carousel-strip::-webkit-scrollbar {
+  display: none;
+}
+/* As tall as the score sheet (no dead space around it); photos fill that
+   height. A post with only photos gets a near-square frame. */
+.carousel-slide {
+  flex: 0 0 100%;
+  position: relative;
+  min-height: min(75vw, 300px);
+  scroll-snap-align: start;
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.carousel-slide > a {
+  position: absolute;
+  inset: 0;
+}
+.carousel-slide > a,
+.carousel-slide img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.carousel-slide img {
+  object-fit: cover;
+}
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.15rem;
+  padding-top: 0.3rem;
+}
+.carousel-dots button {
+  width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+}
+.carousel-dots button::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-2);
+}
+.carousel-dots button.on::after {
+  width: 18px;
+  border-radius: 4px;
+  background: var(--brass);
+}
+.media-sheet {
+  width: 100%;
+}
+.media-sheet .result-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  padding: 0.5rem 0;
+}
+/* The stat row above already says who, the score and the result. */
+.media-sheet .game-card-body,
+.media-sheet .res-foot {
+  display: none;
+}
+.media-sheet .res-side {
+  padding: 0.3rem 1.1rem;
+}
+.media-sheet .res-side h2 {
+  font-size: 1rem;
+  margin: 0.2rem 0;
+}
+.media-sheet .res-row {
+  min-height: 2rem;
+}
+.media-sheet .res-row .grow {
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-sheet .cells {
+  flex: none;
+  grid-template-columns: repeat(5, 1.5rem);
+}
+.media-sheet .cell {
+  font-size: 0.75rem;
+}
+.media-sheet .res-total {
+  flex: none;
+  width: 2.6rem;
+  font-size: 0.9rem;
+}
+.res-row .grow {
+  min-width: 0;
+}
+
+/* Chess clock: both players' time, the running one lit in the army colour. */
+.chess-clock {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  margin: 0.4rem 0 0.2rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  text-align: left;
+}
+.clock-side {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  opacity: 0.6;
+}
+.clock-side small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clock-side b {
+  font-family: var(--display);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.1rem;
+}
+.chess-clock:not(.running) .clock-side,
+.clock-side.on {
+  opacity: 1;
+}
+.clock-side.on b {
+  color: var(--army, var(--brass));
+}
+.clock-ctl {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--brass);
+  white-space: nowrap;
+}
+.clock-ctl .ico {
+  width: 1rem;
+  height: 1rem;
+}
+.forget-count {
+  color: var(--brass);
+}
+
+/* Scoring by voice. */
+.voice-score {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.4rem 0.5rem;
+  background: var(--panel);
+}
+.voice-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.voice-row input {
+  flex: 1;
+  min-width: 0;
+}
+.voice-found ul {
+  margin: 0.3rem 0 0.5rem;
+  padding-left: 1.1rem;
+}
+.voice-found li {
+  margin: 0.15rem 0;
+}
+.voice-found p {
+  margin: 0.4rem 0 0;
+}
+
+/* Stats page. */
+.more-stats-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.6rem;
+  color: var(--brass);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+.more-stats-link .ico {
+  width: 1rem;
+  height: 1rem;
+}
+.rival-link {
+  color: inherit;
+  text-decoration: none;
+}
+.rival .grow small {
+  display: block;
+}
+.rival-score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.rival-score small {
+  font-size: 0.7rem;
+}
+.stats-note {
+  margin: 0 0 0.4rem;
+}
+.tactic-meter {
+  width: 4.5rem;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.tactic-meter span {
+  display: block;
+  height: 100%;
+  background: var(--brass);
+}
+.round-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.35rem 0;
+}
+.round-bar .bars {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bar-me,
+.bar-them {
+  display: block;
+  min-width: 1.6rem;
+  font-size: 0.7rem;
+  line-height: 1.1rem;
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  color: var(--bg, #0f1115);
+  font-weight: 600;
+}
+.bar-me,
+.key-me {
+  background: var(--brass);
+}
+.bar-them,
+.key-them {
+  background: var(--opp);
+}
+.key-me,
+.key-them {
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  color: var(--bg, #0f1115);
+}
+.rivalry-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--me-line);
+  border-radius: 10px;
+  background: var(--me-soft);
+  color: var(--text);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+.rivalry-line .ico {
+  width: 1.1rem;
+  height: 1.1rem;
+  color: var(--brass);
+  flex: none;
+}
+.rivalry-line b {
+  color: var(--brass);
+}
+
+/* The coach's post-game review. */
+.review-card h2 .ico {
+  width: 1.1rem;
+  height: 1.1rem;
+  color: var(--brass);
+  vertical-align: -0.15em;
+}
+.review-verdict {
+  margin: 0.2rem 0 0.4rem;
+  font-weight: 600;
+}
+.review-lost {
+  margin: 0 0 0.5rem;
+  padding-left: 1.1rem;
+}
+.review-lost li {
+  margin: 0.2rem 0;
+}
+.review-next {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid var(--brass);
+  background: var(--me-soft);
+  border-radius: 0 8px 8px 0;
+}
+
+/* Club events. */
+.event-card {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  color: inherit;
+  text-decoration: none;
+}
+.event-card.past {
+  opacity: 0.65;
+}
+.event-card .grow small {
+  display: block;
+}
+.event-card > .ico {
+  width: 1rem;
+  height: 1rem;
+  color: var(--muted);
+}
+.event-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3.2rem;
+  border-radius: 10px;
+  border: 1px solid var(--me-line);
+  background: var(--me-soft);
+  flex: none;
+}
+.event-date b {
+  font-family: var(--display);
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--brass);
+}
+.event-date small {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.event-name {
+  font-family: var(--display);
+}
+.event-head h1 {
+  margin: 0.4rem 0 0.2rem;
+}
+.event-when {
+  margin: 0;
+}
+.event-when .ico {
+  width: 1rem;
+  height: 1rem;
+  vertical-align: -0.15em;
+  color: var(--brass);
+}
+.event-notes {
+  white-space: pre-wrap;
+  font-size: 0.92rem;
+}
+.event-head .row {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.badge.good {
+  background: var(--good-fill);
+  color: var(--good);
+}
+.two-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+.field-box textarea {
+  border: 0;
+  padding: 0.6rem 0;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+.field-box textarea:focus-visible {
+  outline: none;
+}
+.event-row {
+  grid-template-columns: 1.6rem auto 1fr auto;
+}
+.ladder-rank .ico {
+  width: 1.1rem;
+  height: 1.1rem;
+  color: var(--brass);
+}
+.tables {
+  padding: 0.2rem 0.6rem;
+}
+.event-table {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.event-table:last-child {
+  border-bottom: 0;
+}
+.event-table.mine {
+  background: linear-gradient(90deg, var(--me-soft), transparent);
+  margin: 0 -0.6rem;
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+}
+.table-no {
+  font-size: 0.72rem;
+  color: var(--muted);
+  width: 1.8rem;
+}
+.table-side {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+}
+.table-side.right {
+  justify-content: flex-end;
+  text-align: right;
+}
+.table-side .won {
+  font-weight: 700;
+  color: var(--brass);
+}
+.table-score {
+  font-family: var(--display);
+  min-width: 3rem;
+  text-align: center;
+}
+.table-actions {
+  display: flex;
+  gap: 0.3rem;
+  width: 100%;
+  justify-content: flex-end;
+}
+.table-note {
+  width: 100%;
+  text-align: right;
+}
+.organiser h2 {
+  margin-top: 0;
+}
+.organiser > * + * {
+  margin-top: 0.5rem;
+}
+.event-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--me-line);
+  background: var(--me-soft);
+  color: var(--brass);
+  font-size: 0.88rem;
+  text-decoration: none;
+}
+.event-banner .ico {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Members. */
+.member-head {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+.member-head h1 {
+  margin: 0;
+}
+.member-head p {
+  margin: 0.2rem 0 0;
+}
+
+/* Challenges. */
+.challenges {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.challenge {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+}
+.challenge > .ico {
+  width: 1.4rem;
+  height: 1.4rem;
+  color: var(--brass);
+  flex: none;
+  margin-top: 0.15rem;
+}
+.challenge.received {
+  border: 1px solid var(--me-line);
+  background: var(--me-soft);
+}
+.challenge small {
+  display: block;
+  margin: 0.15rem 0 0.4rem;
+}
+.challenge .row {
+  gap: 0.4rem;
+}
+
+/* Seasons. */
+.season-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.season-bar select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+}
+.recap {
+  background: linear-gradient(160deg, var(--me-soft), var(--panel) 60%);
+  border: 1px solid var(--me-line);
+}
+.recap-kicker {
+  margin: 0 0 0.5rem;
+  font-family: var(--display);
+  color: var(--brass);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+.recap-champion {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.7rem;
+}
+.recap-champion > .ico {
+  width: 2.4rem;
+  height: 2.4rem;
+  color: var(--brass);
+}
+.recap-champion span {
+  display: flex;
+  flex-direction: column;
+}
+.recap-champion b {
+  font-family: var(--display);
+  font-size: 1.4rem;
+}
+.recap-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+.recap-grid span {
+  display: flex;
+  flex-direction: column;
+}
+.recap-grid b {
+  font-family: var(--display);
+  font-size: 1.05rem;
+}
+.recap-grid small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* Army showcase. */
+.showcase {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.showcase-army {
+  overflow: hidden;
+}
+.showcase-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.showcase-head small {
+  display: block;
+}
+.showcase-photo {
+  position: relative;
+}
+.photo-remove {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 2rem;
+  height: 2rem;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+.photo-remove .ico {
+  width: 1rem;
+  height: 1rem;
+}
+.showcase-army .row {
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+label.button {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}

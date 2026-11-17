@@ -12,6 +12,8 @@ export interface Meta {
   source: string;
   commit: string;
   builtAt: string;
+  /** The commit this deploy was built from (short), when the host says. */
+  release?: string;
   factions: string[];
   battleTactics: { name: string; Card?: string; Affray?: string; Strike?: string; Domination?: string }[];
   coachReady: boolean;

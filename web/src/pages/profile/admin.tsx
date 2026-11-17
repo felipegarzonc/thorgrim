@@ -65,7 +65,7 @@ export const MAX_RESTORE_UPLOAD = 4 * 1024 * 1024;
 /** Put a backup's records back: pick a kept one or the emailed file, read what it would do, then type RESTORE. */
 export function RestoreBackup() {
   const [open, setOpen] = useState(false);
-  const [kept] = useLoad<string[]>(open ? "/admin/backups" : null);
+  const [kept, reloadKept] = useLoad<string[]>(open ? "/admin/backups" : null);
   const [name, setName] = useState("");
   const [file, setFile] = useState<File>();
   const [plan, setPlan] = useState<RestorePlan>();
@@ -85,7 +85,10 @@ export function RestoreBackup() {
     try {
       if (file && file.size > MAX_RESTORE_UPLOAD) throw new Error("That file is too big to upload (over 4 MB). Pick one of the kept backups instead.");
       const query = `${confirm ? "confirm=RESTORE&" : ""}${file ? "" : `name=${encodeURIComponent(name)}`}`;
-      setPlan(await api<RestorePlan>(`/admin/restore?${query}`, file ? { method: "POST", body: file, headers: { "content-type": "application/gzip" } } : { method: "POST" }));
+      const answer = await api<RestorePlan>(`/admin/restore?${query}`, file ? { method: "POST", body: file, headers: { "content-type": "application/gzip" } } : { method: "POST" });
+      setPlan(answer);
+      // A restore keeps how things were just before as one more backup: show it in the list.
+      if (answer.done) reloadKept();
       setWord("");
     } catch (e) {
       setError((e as Error).message);

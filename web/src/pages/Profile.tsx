@@ -119,6 +119,12 @@ export function ProfilePage() {
       {meta?.user?.isAdmin && me.accounts && <UsageByMonth />}
       {meta?.user?.isAdmin && me.accounts && <AccessRequests />}
       {meta?.user?.isAdmin && me.accounts && <PlayersAdmin selfId={me.user.id} />}
+      {meta?.builtAt && (
+        <p className="small muted app-version" translate="no">
+          Thorgrim · {new Date(meta.builtAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+          {meta.release ? ` · ${meta.release}` : ""}
+        </p>
+      )}
     </div>
   );
 }
