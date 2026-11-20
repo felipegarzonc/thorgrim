@@ -115,7 +115,7 @@ async function requestHeaders(): Promise<Record<string, string>> {
 
 /** A signed-in download: the file and the name the server gave it. */
 export async function apiFile(path: string): Promise<{ blob: Blob; name: string }> {
-  const res = await fetch(`/api${path}`, { headers: await requestHeaders() });
+  const res = await reach(`/api${path}`, { headers: await requestHeaders() });
   if (!res.ok) throw new Error(errorText(res, await res.json().catch(() => ({}))));
   const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "download";
   return { blob: await res.blob(), name };
@@ -127,7 +127,7 @@ export async function apiFile(path: string): Promise<{ blob: Blob; name: string 
  * "error" event rejects with its message).
  */
 export async function apiStream<T>(path: string, json: unknown, onEvent: (event: string, data: unknown) => void): Promise<T> {
-  const res = await fetch(`/api${path}`, { method: "POST", headers: { ...(await requestHeaders()), "content-type": "application/json" }, body: JSON.stringify(json) });
+  const res = await reach(`/api${path}`, { method: "POST", headers: { ...(await requestHeaders()), "content-type": "application/json" }, body: JSON.stringify(json) });
   if (!res.ok || !res.body) {
     const data = await res.json().catch(() => ({}));
     if (res.status === 401 && (data as { needsLogin?: boolean }).needsLogin) window.dispatchEvent(new Event(LOGIN_EVENT));
@@ -166,6 +166,10 @@ const OFFLINE = "thorgrim-offline:";
 const OFFLINE_INDEX = "thorgrim-offline-index";
 const OFFLINE_MAX = 120;
 export const OFFLINE_EVENT = "thorgrim-offline-copy";
+/** Any answer from the server: the signal is back (the browser's own "online" event often never comes). */
+export const ONLINE_EVENT = "thorgrim-answered";
+/** What a page says when it can't load and this phone kept nothing for it (instead of the browser's "Failed to fetch"). */
+export const NO_SIGNAL = "No signal, and this phone didn't keep this page. It loads when the signal is back.";
 const keptForTable = (path: string) => /^\/(meta|lists|games|units\/[^/?]+|games\/[a-z0-9-]+(\/lists(\?.*)?)?)$/i.test(path);
 
 function offlineIndex(): string[] {
@@ -251,7 +255,7 @@ async function apiRequest<T>(path: string, init: RequestInit & { json?: unknown 
     headers["content-type"] = "application/json";
     body = JSON.stringify(init.json);
   }
-  const res = await fetch(`/api${path}`, { ...init, body, headers: { ...headers, ...(init.headers as Record<string, string>) } });
+  const res = await reach(`/api${path}`, { ...init, body, headers: { ...headers, ...(init.headers as Record<string, string>) } });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && (data as { needsLogin?: boolean }).needsLogin) {
     if (!retried && session() && (await refresh())) return apiRequest<T>(path, init, true);
@@ -259,6 +263,23 @@ async function apiRequest<T>(path: string, init: RequestInit & { json?: unknown 
   }
   if (!res.ok) throw new Error(errorText(res, data));
   return data as T;
+}
+
+/**
+ * fetch, but with no connection it fails with a readable message (still a
+ * TypeError, so callers can tell "no signal" from an error the server
+ * answered with), and any answer tells the app the signal is back.
+ */
+async function reach(url: string, init?: RequestInit): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (e) {
+    if (e instanceof TypeError) throw new TypeError(NO_SIGNAL);
+    throw e;
+  }
+  window.dispatchEvent(new Event(ONLINE_EVENT));
+  return res;
 }
 
 /** Always a readable message, also when the host answers with no JSON (timeouts). */
@@ -271,7 +292,7 @@ function errorText(res: Response, data: unknown): string {
 
 /** Calls that work before signing in (status, login, join). */
 export async function publicApi<T>(path: string, json?: unknown): Promise<T> {
-  const res = await fetch(`/api${path}`, json === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(json) });
+  const res = await reach(`/api${path}`, json === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(json) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(errorText(res, data));
   return data as T;
