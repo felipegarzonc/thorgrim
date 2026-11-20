@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { openAtTop } from "./scrollTop.ts";
-import { api, CLUB_SEEN, LOGIN_EVENT, mediaExpiry, OFFLINE_EVENT, setMediaToken, keptCopy } from "./api.ts";
+import { api, CLUB_SEEN, LOGIN_EVENT, mediaExpiry, OFFLINE_EVENT, ONLINE_EVENT, setMediaToken, keptCopy } from "./api.ts";
 import { HomePage } from "./pages/Home.tsx";
 import { Icon, MetaContext, useOnRefresh, type IconName, type Meta } from "./ui.tsx";
 import { PullToRefresh } from "./gestures.tsx";
@@ -113,7 +113,9 @@ export function App() {
     const off = () => setOffline(false);
     window.addEventListener(OFFLINE_EVENT, on);
     window.addEventListener("online", off);
+    window.addEventListener(ONLINE_EVENT, off);
     return () => {
+      window.removeEventListener(ONLINE_EVENT, off);
       window.removeEventListener(OFFLINE_EVENT, on);
       window.removeEventListener("online", off);
     };
