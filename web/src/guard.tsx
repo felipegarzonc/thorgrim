@@ -22,6 +22,15 @@ export function tolerateExtensions() {
   };
 }
 
+/**
+ * A screen's code that didn't download (Chrome, Firefox, Safari word it differently):
+ * no signal and the phone hadn't kept it yet, or an app open since before a new version.
+ */
+export const missingScreen = (e: Error | undefined) =>
+  !!e && /dynamically imported module|Importing a module script failed|Loading chunk|Unable to preload/i.test(e.message);
+
+const RELOADED = "thorgrim-reloaded-for-screen";
+
 export class ErrorBoundary extends Component<{ children: ReactNode }, { error?: Error }> {
   state: { error?: Error } = {};
   static getDerivedStateFromError(error: Error) {
@@ -29,17 +38,28 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error?: 
   }
   componentDidCatch(error: Error) {
     console.error("Thorgrim hit an error:", error);
+    if (!missingScreen(error)) return;
+    // The browser won't try the same file again without a reload. With signal, reload at
+    // once (once: a second failure shows the message); without it, as soon as it's back.
+    if (navigator.onLine && !recentlyReloaded()) reload();
+    else window.addEventListener("online", reload, { once: true });
   }
   render() {
-    if (!this.state.error) return this.props.children;
+    const error = this.state.error;
+    if (!error) return this.props.children;
+    const screen = missingScreen(error);
     return (
       <main>
         <section className="card crash">
-          <h1>Something went wrong</h1>
-          <p className="muted">Your games are saved. Reload to carry on.</p>
-          <p className="small muted" translate="no">
-            {this.state.error.message}
+          <h1>{screen ? "This screen isn't on the phone yet" : "Something went wrong"}</h1>
+          <p className="muted">
+            {screen ? "It needs the signal once to download. It opens by itself when the signal is back; your games are saved." : "Your games are saved. Reload to carry on."}
           </p>
+          {!screen && (
+            <p className="small muted" translate="no">
+              {error.message}
+            </p>
+          )}
           <button type="button" className="primary" onClick={() => window.location.reload()}>
             Reload
           </button>
@@ -47,4 +67,20 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error?: 
       </main>
     );
   }
+}
+
+function recentlyReloaded(): boolean {
+  try {
+    return Date.now() - Number(sessionStorage.getItem(RELOADED) ?? 0) < 30_000;
+  } catch {
+    return true;
+  }
+}
+function reload() {
+  try {
+    sessionStorage.setItem(RELOADED, String(Date.now()));
+  } catch {
+    /* reload anyway */
+  }
+  window.location.reload();
 }
