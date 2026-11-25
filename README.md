@@ -84,6 +84,12 @@ Online deploys use a copy kept in the app's private Supabase bucket instead: `np
 
 A computer that already has `data/aos.json` keeps it; new installs need a copy of that file in `data/`.
 
+### Armies BSData never got (faction packs)
+
+Battletomes released after BSData went offline come as *faction packs*: `data/factions/<name>.json`, transcribed from the book (warscrolls, battle traits, formations, enhancements, lores and armies of renown, in the same shape as `aos.json`). The server merges every pack over `aos.json` when it loads. A pack can replace an older army: **Khazalite Holds** replaces **Fyreslayers**, so Fyreslayers is no longer offered for new lists, while old Fyreslayers lists and games keep their warscrolls.
+
+Like `aos.json`, packs stay out of this public repository. For deploys, put them in Supabase **Storage → thorgrim** in the folder `build-data/factions/` (e.g. `build-data/factions/khazalite-holds.json`), or run `npm run data:fetch -- --upload` next to a `data/factions/` folder; the build copies them into `data/factions/`. Points aren't in the books (GW keeps them online), so pack units cost 0 until they're filled in.
+
 ## Manual setup (for development)
 
 Requires Node 22+.

@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Ability, ArmyList, FactionRule, GameData, Unit } from "../shared/types.ts";
+import type { Ability, ArmyList, FactionPack, FactionRule, GameData, Unit } from "../shared/types.ts";
 
 // data/aos.json next to the project (local, Docker), or next to the bundled
 // server file (Vercel: dist-server/app.mjs -> ../data/aos.json). DATA_FILE
@@ -18,10 +18,53 @@ export function gameData(): GameData {
     if (!fs.existsSync(dataFile)) {
       throw new Error("data/aos.json is missing. Run `npm run data` first.");
     }
-    cached = JSON.parse(fs.readFileSync(dataFile, "utf8")) as GameData;
+    cached = withPacks(JSON.parse(fs.readFileSync(dataFile, "utf8")) as GameData, readPacks(path.join(path.dirname(dataFile), "factions")));
   }
   return cached;
 }
+
+/** The faction packs in a folder (data/factions/*.json); a broken one is skipped with a warning, not fatal. */
+export function readPacks(dir: string): FactionPack[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".json"))
+    .sort()
+    .flatMap((f) => {
+      try {
+        const p = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")) as FactionPack;
+        if (!p?.name || !p.units || !p.factions) throw new Error("no name, units or factions");
+        return [p];
+      } catch (e) {
+        console.warn(`Faction pack ${f} skipped: ${(e as Error).message}`);
+        return [];
+      }
+    });
+}
+
+/**
+ * The army data with faction packs on top: their units and factions replace
+ * any with the same id or name, and the factions they replace are marked
+ * retired (kept for old lists, not offered for new ones). Merging the same
+ * pack twice changes nothing.
+ */
+export function withPacks(base: GameData, packs: FactionPack[]): GameData {
+  if (!packs.length) return base;
+  const retired = new Set(base.retired ?? []);
+  const merged = new Map((base.packs ?? []).map((p) => [p.name, p]));
+  const d: GameData = { ...base, units: { ...base.units }, factions: { ...base.factions } };
+  for (const p of packs) {
+    Object.assign(d.units, p.units);
+    Object.assign(d.factions, p.factions);
+    for (const r of p.replaces ?? []) for (const f of Object.keys(d.factions)) if (f === r || f.startsWith(`${r} - `)) retired.add(f);
+    merged.set(p.name, { name: p.name, source: p.source });
+  }
+  for (const p of packs) for (const f of Object.keys(p.factions)) retired.delete(f);
+  return { ...d, retired: [...retired].sort(), packs: [...merged.values()] };
+}
+
+/** The factions offered for new lists: everything but the ones a newer battletome replaced. */
+export const currentFactions = (d: GameData) => Object.keys(d.factions).filter((f) => !d.retired?.includes(f)).sort();
 
 export const norm = (s: string) =>
   s.toLowerCase().replace(/[’']/g, "'").replace(/[^a-z0-9' ]+/g, " ").replace(/\s+/g, " ").trim();

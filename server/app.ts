@@ -18,7 +18,7 @@ import { askCoach, battleReport, conversations, gamePlan, PROMPTS, resetConversa
 import { addComment, deleteComment, deletePost, feed, getPost, repairSheet, markFeedSeen, postView, publicPost, publishReport, react, readPostPhoto, readPublicCard, readPublicPhoto, reportPage, saveCard, sharePost, syncPost, unread, unsharePost } from "./feed.ts";
 import { markNoticesRead, myNotices, notify } from "./notices.ts";
 import { publicKey, pushTo, subscribe, unsubscribe } from "./push.ts";
-import { gameData, listRules, warscrollText } from "./data.ts";
+import { currentFactions, gameData, listRules, warscrollText } from "./data.ts";
 import {
   accountSettings,
   accountsEnabled,
@@ -455,7 +455,7 @@ app.get("/api/meta", async (_req, res) => {
     commit: d.commit,
     builtAt: d.builtAt,
     release: release(),
-    factions: Object.keys(d.factions).sort(),
+    factions: currentFactions(d),
     battleTactics: d.core.filter((r) => r.ability.kind === "Battle Tactic Card").map((r) => ({ name: r.ability.name, ...r.ability.extra })),
     coachReady: hasCredentials(),
     backgroundJobs: backgroundJobs(),

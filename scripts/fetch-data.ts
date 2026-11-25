@@ -9,6 +9,10 @@
 //   npm run data:fetch                # data/aos.json from storage, unless it is already here
 //   npm run data:fetch -- --upload    # put the local data/aos.json in storage
 //
+// Faction packs (armies BSData never got, e.g. Khazalite Holds) travel the
+// same way: build-data/factions/<name>.json in storage <-> data/factions/ here.
+// The server merges them over aos.json when it loads (server/data.ts).
+//
 // "Storage" is the app's own: Supabase with SUPABASE_URL and
 // SUPABASE_SERVICE_ROLE_KEY set (Vercel has them at build time), else the
 // local folder (STORAGE_DIR).
@@ -20,11 +24,13 @@ import "../server/env.ts";
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
-import type { GameData } from "../shared/types.ts";
+import type { FactionPack, GameData } from "../shared/types.ts";
 import { blobs } from "../server/blobs.ts";
 
 const FILE = path.resolve("data", "aos.json");
 const STORED = "build-data/aos.json";
+const PACKS = path.resolve("data", "factions");
+const STORED_PACKS = "build-data/factions";
 const MAX_PARTS = 20;
 
 const valid = (raw: Buffer | string): GameData => {
@@ -33,19 +39,59 @@ const valid = (raw: Buffer | string): GameData => {
   return d;
 };
 
+const validPack = (raw: Buffer | string) => {
+  const p = JSON.parse(raw.toString()) as FactionPack;
+  if (!p?.name || !p.units || !p.factions || !Object.keys(p.units).length) throw new Error("not a faction pack (no name, units or factions)");
+  return p;
+};
+const localPacks = () => (fs.existsSync(PACKS) ? fs.readdirSync(PACKS).filter((f) => f.endsWith(".json")) : []);
+
 async function main() {
   if (process.argv.includes("--upload")) {
-    const raw = fs.readFileSync(FILE);
-    valid(raw);
-    await blobs().write(STORED, raw, "application/json");
-    console.log(`Uploaded ${FILE} to ${blobs().kind === "supabase" ? "Supabase storage" : "local storage"} at ${STORED}.`);
+    const where = blobs().kind === "supabase" ? "Supabase storage" : "local storage";
+    if (fs.existsSync(FILE)) {
+      const raw = fs.readFileSync(FILE);
+      valid(raw);
+      await blobs().write(STORED, raw, "application/json");
+      console.log(`Uploaded ${FILE} to ${where} at ${STORED}.`);
+    }
+    for (const f of localPacks()) {
+      const raw = fs.readFileSync(path.join(PACKS, f));
+      validPack(raw);
+      await blobs().write(`${STORED_PACKS}/${f}`, raw, "application/json");
+      console.log(`Uploaded faction pack ${f} to ${where} at ${STORED_PACKS}/${f}.`);
+    }
     return;
   }
+  await fetchPacks();
   const data = fs.existsSync(FILE) ? valid(fs.readFileSync(FILE)) : await fromStorage();
   data.builtAt = new Date().toISOString();
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
   fs.writeFileSync(FILE, JSON.stringify(data));
   console.log(`Army data ready: ${Object.keys(data.units).length} units, ${Object.keys(data.factions).length} factions.`);
+}
+
+/** Faction packs from storage that aren't here yet. One that can't be read is skipped: the rest of the army data still works. */
+async function fetchPacks() {
+  let names: string[] = [];
+  try {
+    names = (await blobs().list(STORED_PACKS)).filter((f) => f.endsWith(".json"));
+  } catch (e) {
+    console.warn(`Faction packs not listed: ${(e as Error).message}`);
+  }
+  const here = new Set(localPacks());
+  for (const f of names.filter((n) => !here.has(n))) {
+    try {
+      const raw = await blobs().read(`${STORED_PACKS}/${f}`);
+      if (!raw) continue;
+      const p = validPack(raw);
+      fs.mkdirSync(PACKS, { recursive: true });
+      fs.writeFileSync(path.join(PACKS, f), raw);
+      console.log(`Faction pack ready: ${p.name} (${Object.keys(p.units).length} units).`);
+    } catch (e) {
+      console.warn(`Faction pack ${f} skipped: ${(e as Error).message}`);
+    }
+  }
 }
 
 /**
