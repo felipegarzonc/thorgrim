@@ -114,6 +114,9 @@ describe("season lookups", () => {
     expect(allianceOf("Ogor Mawtribes - Beastclaw Alfrostun")).toBe("Destruction");
     expect(allianceOf("Bonesplitterz [LEGENDS]")).toBe("Destruction");
     expect(allianceOf("Helsmiths of Hashut")).toBe("Chaos");
+    expect(allianceOf("Khazalite Holds - Valankrom's War Throng")).toBe("Order");
+    // Replaced by Khazalite Holds, but old lists and games keep their alliance.
+    expect(allianceOf("Fyreslayers")).toBe("Order");
   });
   it("matches battleplan cards and maps by title", () => {
     expect(isBattleplanDoc({ title: "Into the Fire - map", category: "map" }, "Into the Fire")).toBe(true);

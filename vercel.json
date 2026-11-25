@@ -7,7 +7,7 @@
   "functions": {
     "api/index.mjs": {
       "maxDuration": 800,
-      "includeFiles": "{data/aos.json,dist-server/**}"
+      "includeFiles": "{data/aos.json,data/factions/**,dist-server/**}"
     }
   },
   "rewrites": [

@@ -63,6 +63,24 @@ export interface GameData {
   factions: Record<string, Faction>;
   /** Rules from the game system file: battle tactics, core abilities, etc. */
   core: FactionRule[];
+  /** Factions a newer battletome replaced (from faction packs): kept for old lists, not offered for new ones. */
+  retired?: string[];
+  /** Faction packs merged into this data (see FactionPack). */
+  packs?: { name: string; source: string }[];
+}
+
+/**
+ * A faction added on top of the BSData snapshot, for battletomes BSData never
+ * got (it went offline in November 2026): data/factions/<name>.json, built
+ * from the book. Its units and factions replace any with the same id or name.
+ */
+export interface FactionPack {
+  name: string;
+  source: string;
+  /** Factions this one replaces (e.g. Khazalite Holds replaces Fyreslayers). */
+  replaces?: string[];
+  units: Record<string, Unit>;
+  factions: Record<string, Faction>;
 }
 
 // ---- Persisted app objects ----

@@ -143,7 +143,7 @@ export const SEASON_TACTICS = ["Blazing Onslaught", "Siege of Ashes", "Flanking 
 export const NUMBERED_BATTLEPLANS = Object.values(BATTLEPLANS).flatMap((names, t) => names.map((name, i) => ({ number: (t + 1) * 10 + i + 1, name })));
 
 export const ALLIANCES = {
-  Order: ["Cities of Sigmar", "Daughters of Khaine", "Fyreslayers", "Idoneth Deepkin", "Kharadron Overlords", "Lumineth Realm-lords", "Seraphon", "Stormcast Eternals", "Sylvaneth"],
+  Order: ["Cities of Sigmar", "Daughters of Khaine", "Idoneth Deepkin", "Khazalite Holds", "Kharadron Overlords", "Lumineth Realm-lords", "Seraphon", "Stormcast Eternals", "Sylvaneth"],
   Chaos: ["Beasts of Chaos", "Blades of Khorne", "Disciples of Tzeentch", "Hedonites of Slaanesh", "Helsmiths of Hashut", "Maggotkin of Nurgle", "Skaven", "Slaves to Darkness"],
   Death: ["Flesh-eater Courts", "Nighthaunt", "Ossiarch Bonereapers", "Soulblight Gravelords"],
   Destruction: ["Bonesplitterz", "Gloomspite Gitz", "Ironjawz", "Kruleboyz", "Ogor Mawtribes", "Sons of Behemat"],
@@ -153,8 +153,11 @@ export type Alliance = keyof typeof ALLIANCES;
 /** "Ogor Mawtribes - Beastclaw Alfrostun" -> "Ogor Mawtribes". */
 export const baseFaction = (f: string) => f.replace(/\s*\[LEGENDS\]/, "").split(" - ")[0].trim();
 
+/** Armies a newer battletome replaced: kept for old lists and games, no longer offered for new ones. */
+export const REPLACED_FACTIONS: Record<string, string> = { Fyreslayers: "Khazalite Holds" };
+
 export function allianceOf(faction: string): Alliance | undefined {
-  const base = baseFaction(faction);
+  const base = REPLACED_FACTIONS[baseFaction(faction)] ?? baseFaction(faction);
   return (Object.keys(ALLIANCES) as Alliance[]).find((a) => (ALLIANCES[a] as readonly string[]).includes(base));
 }
 
